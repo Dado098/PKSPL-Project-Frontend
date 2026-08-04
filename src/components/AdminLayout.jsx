@@ -1,20 +1,23 @@
+import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Navbar from './Navbar'
 
 function AdminLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
   return (
     <div className="min-h-screen bg-gray-100 font-inter">
       {/* Sidebar */}
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main Content Area */}
-      <div className="ml-[220px] flex flex-col min-h-screen">
+      <div className="lg:ml-[220px] flex flex-col min-h-screen transition-all duration-300">
         {/* Navbar */}
-        <Navbar />
+        <Navbar onMenuToggle={() => setSidebarOpen(true)} />
 
         {/* Page Content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-4 md:p-6">
           <Outlet />
         </main>
       </div>

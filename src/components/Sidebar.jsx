@@ -58,55 +58,80 @@ const menuItems = [
   },
 ]
 
-function Sidebar() {
+function Sidebar({ isOpen, onClose }) {
   return (
-    <aside
-      id="sidebar"
-      className="fixed top-0 left-0 h-screen w-[220px] bg-[#0A4BCB] flex flex-col z-50"
-    >
-      {/* Logo */}
-      <div className="px-4 py-5 flex items-center justify-center border-b border-white/10">
-        <img src={logo} alt="PKSPL IPB University" className="h-14 w-auto" />
-      </div>
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
+          onClick={onClose}
+        />
+      )}
 
-      {/* Navigation Menu */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            id={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
-                isActive
-                  ? 'bg-white/20 text-white shadow-sm'
-                  : 'text-white/80 hover:bg-white/10 hover:text-white'
-              }`
-            }
+      {/* Sidebar */}
+      <aside
+        id="sidebar"
+        className={`fixed top-0 left-0 h-screen w-[220px] bg-[#0A4BCB] flex flex-col z-50 transition-transform duration-300 ease-in-out ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0`}
+      >
+        {/* Close Button (mobile only) */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-3 text-white/70 hover:text-white lg:hidden cursor-pointer"
+          aria-label="Close sidebar"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Logo */}
+        <div className="px-4 py-5 flex items-center justify-center border-b border-white/10">
+          <img src={logo} alt="PKSPL IPB University" className="h-14 w-auto" />
+        </div>
+
+        {/* Navigation Menu */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {menuItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              id={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                  isActive
+                    ? 'bg-white/20 text-white shadow-sm'
+                    : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`
+              }
+            >
+              <span className="transition-transform duration-200 group-hover:scale-110">
+                {item.icon}
+              </span>
+              {item.name}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Log Out */}
+        <div className="px-3 pb-5 border-t border-white/10 pt-3">
+          <button
+            id="logout-button"
+            className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-all duration-200 w-full cursor-pointer group"
           >
             <span className="transition-transform duration-200 group-hover:scale-110">
-              {item.icon}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
             </span>
-            {item.name}
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Log Out */}
-      <div className="px-3 pb-5 border-t border-white/10 pt-3">
-        <button
-          id="logout-button"
-          className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-all duration-200 w-full cursor-pointer group"
-        >
-          <span className="transition-transform duration-200 group-hover:scale-110">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-            </svg>
-          </span>
-          Log Out
-        </button>
-      </div>
-    </aside>
+            Log Out
+          </button>
+        </div>
+      </aside>
+    </>
   )
 }
 
