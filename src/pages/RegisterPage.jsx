@@ -20,9 +20,20 @@ function RegisterPage() {
         className="w-full max-w-[960px] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[560px]"
       >
         {/* Left Side - Register Form */}
-        <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Register</h1>
+        <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative">
+          {/* Back to Home Link */}
+          <Link
+            to="/"
+            className="absolute top-6 left-8 text-sm font-medium text-gray-500 hover:text-[#1a56db] flex items-center gap-1 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+            </svg>
+            Kembali ke Beranda
+          </Link>
+
+          <div className="mb-8 mt-4">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
             <p className="text-gray-500 text-sm">Please enter your details to sign up</p>
           </div>
 
@@ -115,7 +126,7 @@ function RegisterPage() {
           <p className="mt-6 text-center text-sm text-gray-600">
             Already have an Account?{' '}
             <Link
-              to="/"
+              to="/login"
               id="login-link"
               className="text-[#1a56db] font-semibold hover:text-[#1545b8] hover:underline transition-colors"
             >

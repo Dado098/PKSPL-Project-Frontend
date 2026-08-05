@@ -1,74 +1,126 @@
-function Navbar({ onMenuToggle }) {
-  return (
-    <header
-      id="navbar"
-      className="h-16 bg-white flex items-center justify-between px-4 md:px-6 border-b border-gray-200"
-    >
-      <div className="flex items-center gap-3 flex-1">
-        {/* Hamburger Button (mobile only) */}
-        <button
-          id="menu-toggle"
-          onClick={onMenuToggle}
-          className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-          aria-label="Open menu"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </button>
+import React, { useState, useEffect } from 'react';
+import { Menu, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-        {/* Search Bar */}
-        <div className="relative w-full max-w-md">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-              />
-            </svg>
+const Navbar = () => {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const navLinks = [
+    { name: 'Beranda', href: '#hero' },
+    { name: 'Kawasan', href: '#about' },
+    { name: 'Valuasi', href: '#stats' },
+    { name: 'Analisis', href: '#workflow' },
+    { name: 'Bantuan / Kontak', href: '#map' },
+  ];
+
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4 sm:px-6 lg:px-8">
+      <div
+        className={`
+          w-full max-w-5xl rounded-full px-3 sm:px-5 py-2.5
+          transition-all duration-500
+          ${isScrolled
+            ? 'bg-black/12 shadow-xl shadow-black/10'
+            : 'bg-black/12 shadow-lg shadow-black/5'
+          }
+          backdrop-blur-md border border-white/10
+        `}
+      >
+        <div className="flex items-center justify-between">
+          {/* Logo */}
+          <a href="#hero" className="flex items-center gap-2.5 flex-shrink-0">
+            <img
+              src="/images/ipb-logo.png"
+              alt="IPB Logo"
+              className="w-9 h-9 rounded-full object-cover ring-2 ring-white/30"
+            />
+            <span className="font-bold text-white text-sm sm:text-base tracking-wide whitespace-nowrap">
+              PKSPL IPB
+            </span>
+          </a>
+
+          {/* Desktop Navigation Links */}
+          <div className="hidden lg:flex items-center gap-1 xl:gap-2">
+            {navLinks.map((link) => (
+              <a
+                key={link.name}
+                href={link.href}
+                className="px-3 xl:px-4 py-1.5 text-sm font-medium text-white/90 hover:text-white
+                           hover:bg-white/10 rounded-full transition-all duration-200 whitespace-nowrap"
+              >
+                {link.name}
+              </a>
+            ))}
           </div>
-          <input
-            id="search-input"
-            type="text"
-            placeholder="Search"
-            className="w-full pl-10 pr-4 py-2 bg-gray-100 border border-transparent rounded-full text-sm text-gray-700 placeholder-gray-400 outline-none transition-all duration-200 focus:bg-white focus:border-gray-300 focus:ring-2 focus:ring-[#1a56db]/10 hover:bg-gray-200/70"
-          />
+
+          {/* Daftar / Masuk Button */}
+          <div className="hidden lg:block flex-shrink-0">
+            <Link
+              to="/login"
+              className="px-5 py-2 text-sm font-semibold text-white bg-white/15 hover:bg-white/25
+                         rounded-full transition-all duration-200 border border-white/20
+                         hover:border-white/40 whitespace-nowrap"
+            >
+              Daftar / Masuk
+            </Link>
+          </div>
+
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="lg:hidden text-white/90 hover:text-white p-1.5 rounded-full
+                       hover:bg-white/10 transition-all"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
       </div>
 
-      {/* Profile Avatar */}
-      <div className="ml-4 flex-shrink-0">
-        <button
-          id="profile-button"
-          className="w-10 h-10 rounded-full border-2 border-gray-300 bg-gray-100 flex items-center justify-center hover:border-[#1a56db] hover:bg-gray-200 transition-all duration-200 cursor-pointer"
-          aria-label="Profile menu"
+      {/* Mobile Navigation Dropdown */}
+      {isMobileMenuOpen && (
+        <div
+          className="lg:hidden fixed top-[72px] left-4 right-4 sm:left-6 sm:right-6
+                     bg-black/80 backdrop-blur-md
+                     rounded-2xl shadow-2xl shadow-black/20 border border-white/10
+                     overflow-hidden animate-fade-in"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
-            />
-          </svg>
-        </button>
-      </div>
-    </header>
-  )
-}
+          <div className="px-4 py-3 space-y-1">
+            {navLinks.map((link) => (
+              <a
+                key={link.name}
+                href={link.href}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block px-4 py-2.5 rounded-xl text-sm font-medium text-white/90
+                           hover:text-white hover:bg-white/10 transition-all duration-200"
+              >
+                {link.name}
+              </a>
+            ))}
+            <div className="pt-2 pb-1 border-t border-white/10 mt-2">
+              <Link
+                to="/login"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block px-4 py-2.5 rounded-xl text-sm font-semibold text-white
+                           bg-white/15 hover:bg-white/25 text-center transition-all duration-200"
+              >
+                Daftar / Masuk
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+};
 
-export default Navbar
+export default Navbar;
