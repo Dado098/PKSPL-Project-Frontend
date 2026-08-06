@@ -41,9 +41,9 @@ const WorkflowSection = () => {
                 1
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Pilih Jenis Ekosistem</h3>
+                <h3 className="font-semibold text-white text-lg">Buat Proyek Baru</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Pilih jenis ekosistem yang akan dianalisis: Mangrove, Terumbu Karang, atau Padang Lamun.
+                  Mulai dengan membuat proyek valuasi baru dan isi informasi dasar terkait lokasi serta identitas proyek yang akan dianalisis.
                 </p>
               </div>
             </div>
@@ -53,9 +53,9 @@ const WorkflowSection = () => {
                 2
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Pilih Komponen Nilai</h3>
+                <h3 className="font-semibold text-white text-lg">Pengisian Indeks (Index)</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Tentukan komponen Use Value dan manfaat langsung maupun tidak langsung yang relevan.
+                  Input data indikator dan kriteria indeks penilaian sesuai dengan parameter wilayah yang sedang dikaji.
                 </p>
               </div>
             </div>
@@ -65,9 +65,9 @@ const WorkflowSection = () => {
                 3
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Masukkan Data Parameter</h3>
+                <h3 className="font-semibold text-white text-lg">Tentukan Area Reklamasi</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Input data parameter kuantitatif dan kalkulasi sesuai panduan pengisian form.
+                  Pilih jenis lokasi kajian yang sesuai, baik berupa ekosistem Mangrove maupun tipe area pesisir/reklamasi lainnya.
                 </p>
               </div>
             </div>
@@ -77,21 +77,28 @@ const WorkflowSection = () => {
                 4
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Kalkulasi Otomatis TEV</h3>
+                <h3 className="font-semibold text-white text-lg">Input Jasa Ekosistem (Provisioning & Services)</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Sistem menghitung otomatis nilai Total Economic Value berdasarkan data yang dimasukkan.
+                  Masukkan data nilai manfaat ekosistem, mulai dari fungsi penyedia (Provisioning Services) hingga manfaat lingkungan lainnya.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-row gap-4">
+              <div className="w-10 h-10 rounded-full bg-white/20 text-white font-bold flex items-center justify-center flex-shrink-0 border border-white/30">
+                5
+              </div>
+              <div>
+                <h3 className="font-semibold text-white text-lg">Data Flora dan Fauna</h3>
+                <p className="text-blue-100 text-sm mt-1">
+                  Lengkapi data keanekaragaman hayati dengan menginput jenis serta populasi flora dan fauna yang ada di lokasi studi.
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-12 flex justify-center">
-          <button className="bg-white text-blue-700 hover:bg-blue-50 px-10 py-3 rounded-full font-semibold text-lg transition-all hover:shadow-lg inline-flex items-center gap-2">
-            Lanjut
-            <ArrowRight size={20} />
-          </button>
-        </div>
+
       </div>
     </section>
   );

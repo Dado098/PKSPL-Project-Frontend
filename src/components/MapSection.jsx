@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Search, MapPin, ChevronRight, Navigation2 } from 'lucide-react';
+import { Search, MapPin, ChevronRight, Navigation2, RefreshCw } from 'lucide-react';
 import { categories, locations, getCategoryInfo, PROVINCE_GEOJSON_URL } from './map/mapData';
 
 // Fix default marker icon issues in Vite/Webpack
@@ -272,6 +272,21 @@ export default function MapSection() {
                 );
               })}
             </MapContainer>
+
+            {/* Reset View Button */}
+            <button 
+              onClick={() => {
+                setSelectedLocId(null);
+                if (mapRef.current) {
+                  mapRef.current.flyTo([-2.5, 118.0], 5, { duration: 1.5 });
+                }
+              }}
+              title="Reset ke posisi semula"
+              className="absolute top-4 right-4 z-[400] bg-white text-slate-700 px-3 py-2 rounded-lg shadow-md border border-slate-200 hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center gap-2 text-sm font-semibold group"
+            >
+              <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+              <span className="hidden sm:inline">Reset Zoom</span>
+            </button>
           </div>
 
           {/* Sidebar */}

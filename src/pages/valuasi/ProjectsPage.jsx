@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import logo from '../../assets/logo-pkspl.svg'
 
 // Static project data matching UI
@@ -61,7 +61,7 @@ const initialProjects = [
 ]
 
 // New Project Modal
-function NewProjectModal({ isOpen, onClose }) {
+function NewProjectModal({ isOpen, onClose, onCreateProject }) {
   const [namaProyek, setNamaProyek] = useState('')
   const [tahun, setTahun] = useState('')
   const [lokasi, setLokasi] = useState('')
@@ -167,7 +167,7 @@ function NewProjectModal({ isOpen, onClose }) {
         <button
           id="create-project-button"
           type="button"
-          onClick={onClose}
+          onClick={onCreateProject}
           className="w-full sm:w-auto sm:min-w-[280px] mx-auto block mt-8 py-3 px-8 bg-[#1a56db] text-white text-sm font-semibold rounded-full hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98] transition-all duration-200 cursor-pointer"
         >
           Buat Penelitian Baru
@@ -178,6 +178,7 @@ function NewProjectModal({ isOpen, onClose }) {
 }
 
 function ProjectsPage() {
+  const navigate = useNavigate()
   const [projects] = useState(initialProjects)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProject, setSelectedProject] = useState(3) // Row 3 highlighted by default
@@ -191,7 +192,7 @@ function ProjectsPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50 font-inter flex flex-col">
+    <div className="min-h-screen bg-gray-50 font-inter flex flex-col animate-fade-in-up">
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between">
         <Link
@@ -337,6 +338,7 @@ function ProjectsPage() {
                             onClick={(e) => {
                               e.stopPropagation()
                               setOpenActionMenu(null)
+                              navigate(`/valuasi/detail/${project.id}`)
                             }}
                             className="w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                           >
@@ -375,6 +377,10 @@ function ProjectsPage() {
       <NewProjectModal
         isOpen={showNewProjectModal}
         onClose={() => setShowNewProjectModal(false)}
+        onCreateProject={() => {
+          setShowNewProjectModal(false)
+          navigate('/valuasi/detail/new')
+        }}
       />
     </div>
   )

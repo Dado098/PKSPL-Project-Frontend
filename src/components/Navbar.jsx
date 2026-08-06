@@ -18,7 +18,6 @@ const Navbar = () => {
     { name: 'Beranda', href: '#hero' },
     { name: 'Kawasan', href: '#about' },
     { name: 'Valuasi', href: '/valuasi/projects' },
-    { name: 'Analisis', href: '#workflow' },
     { name: 'Bantuan / Kontak', href: '#map' },
   ];
 
@@ -29,7 +28,7 @@ const Navbar = () => {
           w-full max-w-5xl rounded-full px-3 sm:px-5 py-2.5
           transition-all duration-500
           ${isScrolled
-            ? 'bg-black/12 shadow-xl shadow-black/10'
+            ? 'bg-white shadow-xl shadow-black/10'
             : 'bg-black/12 shadow-lg shadow-black/5'
           }
           backdrop-blur-md border border-white/10
@@ -43,7 +42,7 @@ const Navbar = () => {
               alt="IPB Logo"
               className="w-9 h-9 rounded-full object-cover ring-2 ring-white/30"
             />
-            <span className="font-bold text-white text-sm sm:text-base tracking-wide whitespace-nowrap">
+            <span className={`font-bold ${isScrolled ? 'text-slate-900' : 'text-white'} text-sm sm:text-base tracking-wide whitespace-nowrap`}>
               PKSPL IPB
             </span>
           </a>
@@ -55,8 +54,11 @@ const Navbar = () => {
                 <Link
                   key={link.name}
                   to={link.href}
-                  className="px-3 xl:px-4 py-1.5 text-sm font-medium text-white/90 hover:text-white
-                             hover:bg-white/10 rounded-full transition-all duration-200 whitespace-nowrap"
+                  className={`px-3 xl:px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
+                    isScrolled
+                      ? 'text-slate-700 hover:text-blue-600 hover:bg-slate-100'
+                      : 'text-white/90 hover:text-white hover:bg-white/10'
+                  }`}
                 >
                   {link.name}
                 </Link>
@@ -64,8 +66,11 @@ const Navbar = () => {
                 <a
                   key={link.name}
                   href={link.href}
-                  className="px-3 xl:px-4 py-1.5 text-sm font-medium text-white/90 hover:text-white
-                             hover:bg-white/10 rounded-full transition-all duration-200 whitespace-nowrap"
+                  className={`px-3 xl:px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
+                    isScrolled
+                      ? 'text-slate-700 hover:text-blue-600 hover:bg-slate-100'
+                      : 'text-white/90 hover:text-white hover:bg-white/10'
+                  }`}
                 >
                   {link.name}
                 </a>
@@ -77,9 +82,11 @@ const Navbar = () => {
           <div className="hidden lg:block flex-shrink-0">
             <Link
               to="/login"
-              className="px-5 py-2 text-sm font-semibold text-white bg-white/15 hover:bg-white/25
-                         rounded-full transition-all duration-200 border border-white/20
-                         hover:border-white/40 whitespace-nowrap"
+              className={`px-5 py-2 text-sm font-semibold rounded-full transition-all duration-200 border whitespace-nowrap ${
+                isScrolled
+                  ? 'text-white bg-blue-600 hover:bg-blue-700 border-blue-600'
+                  : 'text-white bg-white/15 hover:bg-white/25 border-white/20 hover:border-white/40'
+              }`}
             >
               Daftar / Masuk
             </Link>
@@ -88,8 +95,11 @@ const Navbar = () => {
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="lg:hidden text-white/90 hover:text-white p-1.5 rounded-full
-                       hover:bg-white/10 transition-all"
+            className={`lg:hidden p-1.5 rounded-full transition-all ${
+              isScrolled
+                ? 'text-slate-700 hover:text-blue-600 hover:bg-slate-100'
+                : 'text-white/90 hover:text-white hover:bg-white/10'
+            }`}
             aria-label="Toggle menu"
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
