@@ -17,7 +17,7 @@ const Navbar = () => {
   const navLinks = [
     { name: 'Beranda', href: '#hero' },
     { name: 'Kawasan', href: '#about' },
-    { name: 'Valuasi', href: '#stats' },
+    { name: 'Valuasi', href: '/valuasi/projects' },
     { name: 'Analisis', href: '#workflow' },
     { name: 'Bantuan / Kontak', href: '#map' },
   ];
@@ -50,16 +50,27 @@ const Navbar = () => {
 
           {/* Desktop Navigation Links */}
           <div className="hidden lg:flex items-center gap-1 xl:gap-2">
-            {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                className="px-3 xl:px-4 py-1.5 text-sm font-medium text-white/90 hover:text-white
-                           hover:bg-white/10 rounded-full transition-all duration-200 whitespace-nowrap"
-              >
-                {link.name}
-              </a>
-            ))}
+          {navLinks.map((link) =>
+              link.href.startsWith('/') ? (
+                <Link
+                  key={link.name}
+                  to={link.href}
+                  className="px-3 xl:px-4 py-1.5 text-sm font-medium text-white/90 hover:text-white
+                             hover:bg-white/10 rounded-full transition-all duration-200 whitespace-nowrap"
+                >
+                  {link.name}
+                </Link>
+              ) : (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  className="px-3 xl:px-4 py-1.5 text-sm font-medium text-white/90 hover:text-white
+                             hover:bg-white/10 rounded-full transition-all duration-200 whitespace-nowrap"
+                >
+                  {link.name}
+                </a>
+              )
+            )}
           </div>
 
           {/* Daftar / Masuk Button */}
@@ -95,17 +106,29 @@ const Navbar = () => {
                      overflow-hidden animate-fade-in"
         >
           <div className="px-4 py-3 space-y-1">
-            {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block px-4 py-2.5 rounded-xl text-sm font-medium text-white/90
-                           hover:text-white hover:bg-white/10 transition-all duration-200"
-              >
-                {link.name}
-              </a>
-            ))}
+            {navLinks.map((link) =>
+              link.href.startsWith('/') ? (
+                <Link
+                  key={link.name}
+                  to={link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium text-white/90
+                             hover:text-white hover:bg-white/10 transition-all duration-200"
+                >
+                  {link.name}
+                </Link>
+              ) : (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium text-white/90
+                             hover:text-white hover:bg-white/10 transition-all duration-200"
+                >
+                  {link.name}
+                </a>
+              )
+            )}
             <div className="pt-2 pb-1 border-t border-white/10 mt-2">
               <Link
                 to="/login"

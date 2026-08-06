@@ -18,6 +18,7 @@ import ManajemenPenggunaPage from './pages/admin/ManajemenPenggunaPage'
 import VerifikasiDataPage from './pages/admin/VerifikasiDataPage'
 import RiwayatAktivitasPage from './pages/admin/RiwayatAktivitasPage'
 import KebijakanPage from './pages/admin/KebijakanPage'
+import ProjectsPage from './pages/valuasi/ProjectsPage'
 
 function LandingPageContent() {
   const [currentView, setCurrentView] = useState('home')
@@ -100,6 +101,7 @@ function App() {
         <Route path="/" element={<LandingPageContent />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/valuasi/projects" element={<ProjectsPage />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
