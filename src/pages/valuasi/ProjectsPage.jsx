@@ -184,7 +184,6 @@ function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState(3) // Row 3 highlighted by default
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [openActionMenu, setOpenActionMenu] = useState(null)
-  const navigate = useNavigate()
 
   const filteredProjects = projects.filter(
     (p) =>
