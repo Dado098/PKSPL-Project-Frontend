@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import logo from '../../assets/logo-pkspl.svg'
 
 // Static project data matching UI
@@ -183,6 +183,7 @@ function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState(3) // Row 3 highlighted by default
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [openActionMenu, setOpenActionMenu] = useState(null)
+  const navigate = useNavigate()
 
   const filteredProjects = projects.filter(
     (p) =>
@@ -273,12 +274,13 @@ function ProjectsPage() {
               {filteredProjects.map((project) => (
                 <tr
                   key={project.id}
-                  onClick={() => setSelectedProject(project.id)}
+                  onClick={() => navigate(`/valuasi/projects/${project.id}`)}
                   className={`cursor-pointer transition-colors ${
                     selectedProject === project.id
                       ? 'bg-[#1a56db] text-white'
                       : 'hover:bg-gray-50 text-gray-700'
                   }`}
+                  onMouseEnter={() => setSelectedProject(project.id)}
                 >
                   {/* Number */}
                   <td className={`px-4 py-4 text-center text-sm font-medium ${
@@ -337,6 +339,7 @@ function ProjectsPage() {
                             onClick={(e) => {
                               e.stopPropagation()
                               setOpenActionMenu(null)
+                              navigate(`/valuasi/projects/${project.id}`)
                             }}
                             className="w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                           >
