@@ -20,6 +20,7 @@ import RiwayatAktivitasPage from './pages/admin/RiwayatAktivitasPage'
 import KebijakanPage from './pages/admin/KebijakanPage'
 import ProjectsPage from './pages/valuasi/ProjectsPage'
 import ValuasiDetailPage from './pages/valuasi/ValuasiDetailPage'
+import ProjectIndexPage from './pages/valuasi/ProjectIndexPage'
 
 function LandingPageContent() {
   const [currentView, setCurrentView] = useState('home')
@@ -104,6 +105,7 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/valuasi/projects" element={<ProjectsPage />} />
         <Route path="/valuasi/detail/:projectId" element={<ValuasiDetailPage />} />
+        <Route path="/valuasi/projects/:projectId" element={<ProjectIndexPage />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
