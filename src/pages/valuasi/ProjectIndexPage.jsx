@@ -213,8 +213,22 @@ function ProjectIndexPage() {
                     <span className="text-sm font-medium text-gray-900">{idx.name}</span>
                   </div>
 
-                  {/* Date */}
-                  <span className="text-sm text-gray-500 hidden sm:inline">{idx.date}</span>
+                  <div className="flex items-center gap-3">
+                    {/* Date */}
+                    <span className="text-sm text-gray-500 hidden sm:inline">{idx.date}</span>
+
+                    {/* Open Index Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        // TODO: navigate to valuasi table page
+                        console.log(`Open index ${idx.id} table`)
+                      }}
+                      className="px-4 py-1.5 bg-[#1a56db] text-white text-xs font-semibold rounded-lg hover:bg-[#1545b8] active:scale-[0.97] transition-all duration-200 cursor-pointer whitespace-nowrap"
+                    >
+                      Buka Index
+                    </button>
+                  </div>
                 </div>
 
                 {/* Expandable Edit Panel */}
