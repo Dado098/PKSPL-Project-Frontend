@@ -21,6 +21,7 @@ import KebijakanPage from './pages/admin/KebijakanPage'
 import ProjectsPage from './pages/valuasi/ProjectsPage'
 import ValuasiDetailPage from './pages/valuasi/ValuasiDetailPage'
 import ProjectIndexPage from './pages/valuasi/ProjectIndexPage'
+import ModuleDashboardPage from './pages/valuasi/ModuleDashboardPage'
 
 function LandingPageContent() {
   const [currentView, setCurrentView] = useState('home')
@@ -104,8 +105,10 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/valuasi/projects" element={<ProjectsPage />} />
-        <Route path="/valuasi/detail/:projectId" element={<ValuasiDetailPage />} />
-        <Route path="/valuasi/projects/:projectId" element={<ProjectIndexPage />} />
+        <Route path="/valuasi/projects/:projectId/index/:indexId" element={<ValuasiDetailPage />} />
+        <Route path="/valuasi/projects/:projectId/modules/:moduleId" element={<ProjectIndexPage />} />
+        <Route path="/valuasi/projects/:projectId/modules" element={<ModuleDashboardPage />} />
+        <Route path="/valuasi/projects/:projectId" element={<ModuleDashboardPage />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />

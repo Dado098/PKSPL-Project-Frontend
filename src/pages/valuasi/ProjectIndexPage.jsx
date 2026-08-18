@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 
 // Static project data (would come from API/context later)
 const projectsData = {
@@ -49,7 +49,8 @@ const defaultIndexes = [
 ]
 
 function ProjectIndexPage() {
-  const { projectId } = useParams()
+  const { projectId, moduleId } = useParams()
+  const navigate = useNavigate()
   const project = projectsData[projectId] || projectsData[3]
 
   const [indexes, setIndexes] = useState(defaultIndexes)
@@ -124,14 +125,14 @@ function ProjectIndexPage() {
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between">
         <Link
-          to="/valuasi/projects"
-          id="back-to-projects"
+          to={`/valuasi/projects/${projectId}/modules`}
+          id="back-to-modules"
           className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
           </svg>
-          Kembali ke Beranda
+          Kembali ke Modul
         </Link>
 
         {/* Profile */}
@@ -221,8 +222,7 @@ function ProjectIndexPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        // TODO: navigate to valuasi table page
-                        console.log(`Open index ${idx.id} table`)
+                        navigate(`/valuasi/projects/${projectId}/index/${idx.id}`)
                       }}
                       className="px-4 py-1.5 bg-[#1a56db] text-white text-xs font-semibold rounded-lg hover:bg-[#1545b8] active:scale-[0.97] transition-all duration-200 cursor-pointer whitespace-nowrap"
                     >

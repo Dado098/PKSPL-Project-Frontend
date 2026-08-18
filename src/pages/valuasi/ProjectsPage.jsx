@@ -8,54 +8,63 @@ const initialProjects = [
     id: 1,
     name: 'Pulau Tidung',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Accepted',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
   {
     id: 2,
     name: 'Pulau Seribu',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Draft',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
   {
     id: 3,
     name: 'Mangrove',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Accepted',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
   {
     id: 4,
     name: 'Ujung Kulon',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Pending',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
   {
     id: 5,
     name: 'Dark Forest',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Draft',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
   {
     id: 6,
     name: 'Lombok Utara',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Accepted',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
   {
     id: 7,
     name: 'Malaysia',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Pending',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
   {
     id: 8,
     name: 'Sulawesi Selatan',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Draft',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
   {
     id: 9,
     name: 'Pulau Komodo',
     description: 'analisis Komoditas yang terdapat di pesisir',
+    status: 'Accepted',
     lastUpdate: 'Juli 5, 2026 at 10:08',
   },
 ]
@@ -266,6 +275,7 @@ function ProjectsPage() {
                 <th className="w-16 px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">#</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Penelitian</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Deskripsi</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Update</th>
                 <th className="w-20 px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
@@ -301,6 +311,19 @@ function ProjectsPage() {
                     selectedProject === project.id ? 'text-white/90' : 'text-gray-500'
                   }`}>
                     {project.description}
+                  </td>
+
+                  {/* Status Badge */}
+                  <td className="px-4 py-4 text-center">
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      project.status === 'Accepted'
+                        ? 'bg-green-100 text-green-700'
+                        : project.status === 'Pending'
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {project.status}
+                    </span>
                   </td>
 
                   {/* Last Update */}
