@@ -426,39 +426,7 @@ function ServiceSection({ label, prefix, rows, setRows, color, isOpen, onToggle 
             </table>
           </div>
 
-          {/* Add Button with Dropdown */}
-          <div ref={addMenuRef} className="relative inline-block mt-4">
-            <button
-              onClick={() => setShowAddMenu(!showAddMenu)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all duration-200 border border-blue-200 hover:border-blue-300 hover:shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              Tambah
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAddMenu ? 'rotate-180' : ''}`} />
-            </button>
-            {showAddMenu && (
-              <div className="absolute z-50 left-0 bottom-full mb-2 bg-white border border-gray-200 rounded-xl shadow-xl w-44 overflow-hidden animate-fade-in">
-                <button
-                  onClick={handleAddRow}
-                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2.5"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m0 0H4m8 0h8" />
-                  </svg>
-                  <span>Baris</span>
-                </button>
-                <button
-                  onClick={handleAddColumn}
-                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-purple-50 transition-colors flex items-center gap-2.5 border-t border-gray-100"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h16m0 0v-8m0 8v8" />
-                  </svg>
-                  <span>Kolom</span>
-                </button>
-              </div>
-            )}
-          </div>
+
         </div>
       </div>
     </div>
@@ -467,7 +435,7 @@ function ServiceSection({ label, prefix, rows, setRows, color, isOpen, onToggle 
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
-export default function ValuasiDetailPage() {
+export default function ValuasiPreviewPage() {
   const { projectId } = useParams()
   const navigate = useNavigate()
 
@@ -480,7 +448,7 @@ export default function ValuasiDetailPage() {
   const [supportingRows, setSupportingRows] = useState(createSupportingRows)
 
   const [openSections, setOpenSections] = useState({
-    provisioning: true,
+    provisioning: false,
     regulating: false,
     supporting: false,
   })
@@ -503,7 +471,7 @@ export default function ValuasiDetailPage() {
           className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
           Kembali ke Beranda
         </Link>
@@ -571,31 +539,7 @@ export default function ValuasiDetailPage() {
           />
         </div>
 
-        {/* Grand Total Card */}
-        <div className="mt-8 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 shadow-lg shadow-blue-500/20">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-white/80 text-sm font-medium uppercase tracking-wider">Total Nilai Ekonomi (Seluruh Jasa Ekosistem)</h3>
-              <p className="text-white text-3xl md:text-4xl font-extrabold mt-1 font-mono tracking-tight">
-                Rp {formatNumber(grandTotal)}
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 text-xs text-white/70">
-              <div className="flex items-center gap-2 bg-white/10 rounded-xl px-4 py-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-300" />
-                Provisioning: <span className="font-semibold text-white">{formatNumber(provisioningRows.reduce((s, r) => s + (r.total || 0), 0))}</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/10 rounded-xl px-4 py-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-300" />
-                Regulating: <span className="font-semibold text-white">{formatNumber(regulatingRows.reduce((s, r) => s + (r.total || 0), 0))}</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/10 rounded-xl px-4 py-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-300" />
-                Supporting: <span className="font-semibold text-white">{formatNumber(supportingRows.reduce((s, r) => s + (r.total || 0), 0))}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+
 
         {/* Action Buttons */}
         <div className="mt-8 mb-12 flex items-center justify-end gap-4">

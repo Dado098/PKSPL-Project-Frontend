@@ -4,7 +4,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 const projectNames = {
   1: 'Pulau Tidung',
   2: 'Pulau Seribu',
-  3: 'Mangrove',
+  3: 'Cirebon',
   4: 'Ujung Kulon',
   5: 'Dark Forest',
   6: 'Lombok Utara',
@@ -14,7 +14,7 @@ const projectNames = {
 }
 
 // Module data grouped by category
-const moduleCategories = [
+export const moduleCategories = [
   {
     category: 'Provisioning',
     color: 'green',
@@ -55,7 +55,7 @@ const moduleCategories = [
 ]
 
 // Icon components for each module type
-function ModuleIcon({ type, color }) {
+export function ModuleIcon({ type, color }) {
   const bgColors = {
     green: 'bg-green-100 text-green-600',
     blue: 'bg-blue-100 text-blue-600',

@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
+import { MapContainer, TileLayer, Polygon, Marker } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 
 // Static project data (would come from API/context later)
 const projectsData = {
   1: { name: 'Pulau Tidung', description: 'analisis Komoditas yang terdapat di pesisir', createdAt: 'July 5, 2026  08:42' },
   2: { name: 'Pulau Seribu', description: 'analisis Komoditas yang terdapat di pesisir', createdAt: 'July 5, 2026  08:42' },
-  3: { name: 'Mangrove', description: 'analisis Komoditas yang terdapat di pesisir', createdAt: 'July 5, 2026  08:42' },
+  3: { name: 'Cirebon', description: 'analisis Komoditas yang terdapat di pesisir', createdAt: 'July 5, 2026  08:42' },
   4: { name: 'Ujung Kulon', description: 'analisis Komoditas yang terdapat di pesisir', createdAt: 'July 5, 2026  08:42' },
   5: { name: 'Dark Forest', description: 'analisis Komoditas yang terdapat di pesisir', createdAt: 'July 5, 2026  08:42' },
   6: { name: 'Lombok Utara', description: 'analisis Komoditas yang terdapat di pesisir', createdAt: 'July 5, 2026  08:42' },
@@ -14,21 +17,23 @@ const projectsData = {
   9: { name: 'Pulau Komodo', description: 'analisis Komoditas yang terdapat di pesisir', createdAt: 'July 5, 2026  08:42' },
 }
 
-// Initial indexes for project 3 (Mangrove) as default demo
+import { moduleCategories, ModuleIcon } from './ModuleDashboardPage'
+
+// Initial indexes for project 3 (Cirebon) as default demo
 const defaultIndexes = [
   {
     id: 1,
-    name: 'Mangrove Utara',
+    name: 'Index 1',
     code: 'IDX-001',
     date: 'Juli 5, 2026 at 10:08',
-    jumlahArea: 3,
+    jumlahArea: 1,
     luasTotal: '154.72 Ha',
     dibuat: '5 Agustus 2026',
     status: 'Draft',
   },
   {
     id: 2,
-    name: 'Mangrove Selatan',
+    name: 'Index 2',
     code: 'IDX-002',
     date: 'Juli 5, 2026 at 10:08',
     jumlahArea: 3,
@@ -38,7 +43,7 @@ const defaultIndexes = [
   },
   {
     id: 3,
-    name: 'Mangrove Barat',
+    name: 'Index 3',
     code: 'IDX-003',
     date: 'Juli 5, 2026 at 10:08',
     jumlahArea: 3,
@@ -46,6 +51,120 @@ const defaultIndexes = [
     dibuat: '5 Agustus 2026',
     status: 'Draft',
   },
+  {
+    id: 4,
+    name: 'Index 4',
+    code: 'IDX-004',
+    date: 'Juli 5, 2026 at 10:08',
+    jumlahArea: 3,
+    luasTotal: '154.72 Ha',
+    dibuat: '5 Agustus 2026',
+    status: 'Draft',
+  },
+]
+
+function NewIndexModal({ isOpen, onClose, onCreateIndex, projectId, navigate }) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      <div className="relative bg-[#eef2f7] rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-y-auto animate-in flex flex-col">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+          <h2 className="text-xl font-bold text-gray-900">Status Modul</h2>
+          <div className="flex gap-3">
+            <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+              Kelola Modul →
+            </button>
+            <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors">
+              Tutup
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 md:p-8 flex-1">
+          <div className="space-y-6">
+            {moduleCategories.map((cat) => (
+              <div
+                key={cat.category}
+                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+              >
+                {cat.modules.map((mod) => (
+                  <div
+                    key={mod.id}
+                    className={`bg-white rounded-xl border border-gray-200 border-t-4 ${cat.borderColor} shadow-sm hover:shadow-md transition-all duration-200 flex flex-col`}
+                  >
+                    {/* Card Header */}
+                    <div className="p-4 pb-3">
+                      <div className="flex items-start justify-between mb-1">
+                        <div className="flex items-center gap-3">
+                          <ModuleIcon type={mod.icon} color={cat.color} />
+                          <div>
+                            <h3 className="text-sm font-bold text-gray-900 leading-tight">{mod.name}</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">{mod.records} records</p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full flex-shrink-0">
+                          Draft
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Card Footer */}
+                    <div className="px-4 pb-4 mt-auto">
+                      <p className="text-xs text-gray-400 mb-0.5">Cakupan jasa ekosistem:</p>
+                      <p className={`text-xs font-bold ${cat.textColor} mb-3`}>{cat.category}</p>
+
+                      <button
+                        onClick={() => {
+                          if (mod.id === 'direct-use-value') {
+                            onClose()
+                            navigate(`/valuasi/projects/${projectId}/modules/direct-use-value/input`)
+                          } else {
+                            onCreateIndex({ namaProyek: mod.name, kodeProyek: `MOD-${mod.id.substring(0,3).toUpperCase()}` })
+                          }
+                        }}
+                        className={`w-full py-2 border rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer hover:shadow-sm active:scale-[0.97] border-[#1a56db] text-[#1a56db] hover:bg-blue-50`}
+                      >
+                        Buka Modul →
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const createLabelIcon = (text) => L.divIcon({
+  html: `<div style="background-color: white; border: 2px solid #1a56db; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; color: #1a56db; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; text-align: center;">${text}</div>`,
+  className: '',
+  iconSize: [80, 30],
+  iconAnchor: [40, 15]
+})
+
+const cirebonCenter = [-6.68, 108.55]
+const cirebonPolygon = [
+  [-6.65, 108.52],
+  [-6.65, 108.58],
+  [-6.71, 108.58],
+  [-6.71, 108.52]
+]
+const areaMarkers = [
+  { pos: [-6.68, 108.57], label: 'Area 1' },
+  { pos: [-6.68, 108.53], label: 'Area 2' },
+  { pos: [-6.70, 108.55], label: 'Area 3' },
+  { pos: [-6.66, 108.55], label: 'Area 4' }
 ]
 
 function ProjectIndexPage() {
@@ -57,17 +176,18 @@ function ProjectIndexPage() {
   const [expandedIndex, setExpandedIndex] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [editData, setEditData] = useState({})
+  const [showModal, setShowModal] = useState(false)
 
   const filteredIndexes = indexes.filter((idx) =>
     idx.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const handleAddIndex = () => {
+  const handleAddIndex = (data) => {
     const newId = indexes.length > 0 ? Math.max(...indexes.map((i) => i.id)) + 1 : 1
     const newIndex = {
       id: newId,
-      name: `Index Baru ${newId}`,
-      code: `IDX-${String(newId).padStart(3, '0')}`,
+      name: data?.namaProyek || `Index Baru ${newId}`,
+      code: data?.kodeProyek || `IDX-${String(newId).padStart(3, '0')}`,
       date: new Date().toLocaleDateString('id-ID', {
         month: 'long',
         day: 'numeric',
@@ -125,14 +245,14 @@ function ProjectIndexPage() {
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between">
         <Link
-          to={`/valuasi/projects/${projectId}/modules`}
+          to={`/valuasi/projects`}
           id="back-to-modules"
           className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
           </svg>
-          Kembali ke Modul
+          Kembali ke Proyek
         </Link>
 
         {/* Profile */}
@@ -181,10 +301,25 @@ function ProjectIndexPage() {
 
         {/* Index Container */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6">
+          
+          {/* Map Preview */}
+          <div className="w-full h-64 md:h-80 rounded-xl overflow-hidden border border-gray-200 mb-6 relative z-0">
+            <MapContainer center={cirebonCenter} zoom={12} scrollWheelZoom={false} className="w-full h-full">
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+              <Polygon positions={cirebonPolygon} pathOptions={{ color: '#1a56db', fillColor: '#1a56db', fillOpacity: 0.2 }} />
+              {areaMarkers.map((marker, i) => (
+                <Marker key={i} position={marker.pos} icon={createLabelIcon(marker.label)} />
+              ))}
+            </MapContainer>
+          </div>
+
           {/* Add Index Button */}
           <button
             id="tambah-index-button"
-            onClick={handleAddIndex}
+            onClick={() => setShowModal(true)}
             className="w-full py-3.5 bg-[#1a56db] text-white text-base font-semibold rounded-xl hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.99] transition-all duration-200 cursor-pointer mb-6"
           >
             + Tambah Index
@@ -222,7 +357,11 @@ function ProjectIndexPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigate(`/valuasi/projects/${projectId}/index/${idx.id}`)
+                        if (idx.id === 1) {
+                          navigate(`/valuasi/projects/${projectId}/index/${idx.id}/areas`)
+                        } else {
+                          navigate(`/valuasi/projects/${projectId}/index/${idx.id}`)
+                        }
                       }}
                       className="px-4 py-1.5 bg-[#1a56db] text-white text-xs font-semibold rounded-lg hover:bg-[#1545b8] active:scale-[0.97] transition-all duration-200 cursor-pointer whitespace-nowrap"
                     >
@@ -328,6 +467,17 @@ function ProjectIndexPage() {
           </div>
         </div>
       </div>
+
+      <NewIndexModal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)}
+        projectId={projectId}
+        navigate={navigate}
+        onCreateIndex={(data) => {
+          handleAddIndex(data)
+          setShowModal(false)
+        }}
+      />
     </div>
   )
 }
