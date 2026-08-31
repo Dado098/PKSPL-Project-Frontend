@@ -313,13 +313,39 @@ function NewProjectModal({ isOpen, onClose, onCreateProject }) {
 }
 
 
+// Static index data for context menu (same for all projects as mockup)
+const mockIndexes = [
+  { id: 'IDX-001', name: 'IDX-001' },
+  { id: 'IDX-002', name: 'IDX-002' },
+  { id: 'IDX-003', name: 'IDX-003' },
+  { id: 'IDX-004', name: 'IDX-004' },
+  { id: 'IDX-005', name: 'IDX-005' },
+  { id: 'IDX-006', name: 'IDX-006' },
+  { id: 'IDX-006b', name: 'IDX-006' },
+]
+
+// Static area data for sub-menu
+const mockAreas = [
+  'Sawah',
+  'Pesisir Pantai',
+  'Rawa-Rawa',
+  'Bekas Tambang',
+  'Lahan Kering',
+  'Perkebunan',
+  'Padang Rumput',
+]
+
 function ProjectsPage() {
   const navigate = useNavigate()
   const [projects] = useState(initialProjects)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedProject, setSelectedProject] = useState(3) // Row 3 highlighted by default
+  const [selectedProject, setSelectedProject] = useState(3)
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [openActionMenu, setOpenActionMenu] = useState(null)
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState(null)
+  const [hoveredIndex, setHoveredIndex] = useState(null)
 
   const filteredProjects = projects.filter(
     (p) =>
@@ -327,20 +353,53 @@ function ProjectsPage() {
       p.description.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  // Right-click handler
+  const handleContextMenu = (e, project) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setOpenActionMenu(null)
+    setContextMenu({ x: e.clientX, y: e.clientY, project })
+    setHoveredIndex(null)
+  }
+
+  // Close context menu
+  const closeContextMenu = () => {
+    setContextMenu(null)
+    setHoveredIndex(null)
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 font-inter flex flex-col animate-fade-in-up">
+    <div
+      className="min-h-screen bg-gray-50 font-inter flex flex-col animate-fade-in-up"
+      onClick={closeContextMenu}
+    >
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between">
-        <Link
-          to="/"
-          id="back-to-home"
-          className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-          </svg>
-          Kembali ke Beranda
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link
+            to="/"
+            id="back-to-home"
+            className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+            </svg>
+            Kembali ke Landing Page
+          </Link>
+
+          {/* Breadcrumb Tabs */}
+          <div className="hidden md:flex items-center gap-1">
+            <span className="px-3 py-1.5 text-sm font-semibold text-[#1a56db] border-b-2 border-[#1a56db]">
+              Project Page
+            </span>
+            <span className="px-3 py-1.5 text-sm text-gray-400 cursor-default">
+              Index
+            </span>
+            <span className="px-3 py-1.5 text-sm text-gray-400 cursor-default">
+              Area Reklamasi
+            </span>
+          </div>
+        </div>
 
         {/* Profile */}
         <div className="flex items-center gap-3">
@@ -363,7 +422,6 @@ function ProjectsPage() {
           {/* Logo */}
           <div className="flex items-center gap-2">
             <img src={logo} alt="PKSPL IPB" className="h-10 w-auto" style={{ filter: 'brightness(0) saturate(100%)' }} />
-      
           </div>
 
           {/* Search + Button */}
@@ -396,7 +454,7 @@ function ProjectsPage() {
 
         {/* Projects Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-          <table className="w-full min-w-[700px]">
+          <table className="w-full min-w-[750px]">
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="w-16 px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">#</th>
@@ -411,7 +469,8 @@ function ProjectsPage() {
               {filteredProjects.map((project) => (
                 <tr
                   key={project.id}
-                  onClick={() => navigate(`/valuasi/projects/${project.id}/modules/direct-use-value`)}
+                  onClick={() => navigate(`/valuasi/projects/${project.id}`)}
+                  onContextMenu={(e) => handleContextMenu(e, project)}
                   className={`cursor-pointer transition-colors ${
                     selectedProject === project.id
                       ? 'bg-[#1a56db] text-white'
@@ -419,28 +478,18 @@ function ProjectsPage() {
                   }`}
                   onMouseEnter={() => setSelectedProject(project.id)}
                 >
-                  {/* Number */}
                   <td className={`px-4 py-4 text-center text-sm font-medium ${
                     selectedProject === project.id ? 'text-white' : 'text-gray-500'
-                  }`}>
-                    {project.id}
-                  </td>
+                  }`}>{project.id}</td>
 
-                  {/* Name */}
                   <td className={`px-4 py-4 text-sm font-medium ${
                     selectedProject === project.id ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    {project.name}
-                  </td>
+                  }`}>{project.name}</td>
 
-                  {/* Description */}
                   <td className={`px-4 py-4 text-sm ${
                     selectedProject === project.id ? 'text-white/90' : 'text-gray-500'
-                  }`}>
-                    {project.description}
-                  </td>
+                  }`}>{project.description}</td>
 
-                  {/* Status Badge */}
                   <td className="px-4 py-4 text-center">
                     <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                       project.status === 'Accepted'
@@ -448,19 +497,13 @@ function ProjectsPage() {
                         : project.status === 'Pending'
                         ? 'bg-yellow-100 text-yellow-700'
                         : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {project.status}
-                    </span>
+                    }`}>{project.status}</span>
                   </td>
 
-                  {/* Last Update */}
                   <td className={`px-4 py-4 text-sm ${
                     selectedProject === project.id ? 'text-white/90' : 'text-gray-500'
-                  }`}>
-                    {project.lastUpdate}
-                  </td>
+                  }`}>{project.lastUpdate}</td>
 
-                  {/* Action */}
                   <td className="px-4 py-4 text-center">
                     <div className="relative">
                       <button
@@ -482,37 +525,20 @@ function ProjectsPage() {
                         </svg>
                       </button>
 
-                      {/* Dropdown Action Menu */}
                       {openActionMenu === project.id && (
                         <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 min-w-[140px]">
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setOpenActionMenu(null)
-                              navigate(`/valuasi/projects/${project.id}/modules/direct-use-value`)
-                            }}
+                            onClick={(e) => { e.stopPropagation(); setOpenActionMenu(null); navigate(`/valuasi/projects/${project.id}`) }}
                             className="w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-                          >
-                            Buka Proyek
-                          </button>
+                          >Buka Proyek</button>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setOpenActionMenu(null)
-                            }}
+                            onClick={(e) => { e.stopPropagation(); setOpenActionMenu(null) }}
                             className="w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-                          >
-                            Edit
-                          </button>
+                          >Edit</button>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setOpenActionMenu(null)
-                            }}
+                            onClick={(e) => { e.stopPropagation(); setOpenActionMenu(null) }}
                             className="w-full px-4 py-2 text-sm text-left text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                          >
-                            Hapus
-                          </button>
+                          >Hapus</button>
                         </div>
                       )}
                     </div>
@@ -523,6 +549,88 @@ function ProjectsPage() {
           </table>
         </div>
       </div>
+
+      {/* ===== Right-Click Context Menu ===== */}
+      {contextMenu && (
+        <div
+          className="fixed z-[200]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseLeave={closeContextMenu}
+        >
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-visible min-w-[200px] animate-in">
+            {/* Project Name Header */}
+            <div className="bg-[#1a56db] px-4 py-2.5 rounded-t-xl">
+              <h3 className="text-white font-bold text-sm">{contextMenu.project.name}</h3>
+            </div>
+
+            {/* Index Section Header */}
+            <div className="px-4 py-2.5 flex items-center gap-2.5 border-b border-gray-100">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+              <span className="text-sm font-semibold text-gray-700">Index</span>
+            </div>
+
+            {/* Index List */}
+            <div className="py-1">
+              {mockIndexes.map((idx, i) => (
+                <div
+                  key={`${idx.id}-${i}`}
+                  className="relative"
+                  onMouseEnter={() => setHoveredIndex(i)}
+                >
+                  <button
+                    onClick={() => {
+                      closeContextMenu()
+                      navigate(`/valuasi/projects/${contextMenu.project.id}/modules/direct-use-value`)
+                    }}
+                    className={`w-full px-4 py-2 text-sm text-left flex items-center justify-between transition-colors cursor-pointer ${
+                      hoveredIndex === i ? 'bg-[#1a56db] text-white' : 'text-gray-700 hover:bg-blue-50'
+                    }`}
+                  >
+                    <span>{idx.name}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 flex-shrink-0 ${hoveredIndex === i ? 'text-white' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </button>
+
+                  {/* Sub-menu: Area Reklamasi */}
+                  {hoveredIndex === i && (
+                    <div
+                      className="absolute left-full top-0 ml-0.5 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden min-w-[170px] animate-in"
+                      onMouseEnter={() => setHoveredIndex(i)}
+                    >
+                      {/* Sub-menu header */}
+                      <div className="px-3.5 py-2 flex items-center gap-2 border-b border-gray-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                        </svg>
+                        <span className="text-xs font-semibold text-gray-600">Area Reklamasi</span>
+                      </div>
+
+                      <div className="py-1">
+                        {mockAreas.map((area) => (
+                          <button
+                            key={area}
+                            onClick={() => {
+                              closeContextMenu()
+                              navigate(`/valuasi/projects/${contextMenu.project.id}/modules/direct-use-value`)
+                            }}
+                            className="w-full px-3.5 py-1.5 text-sm text-left text-gray-600 hover:bg-[#1a56db] hover:text-white transition-colors cursor-pointer"
+                          >
+                            {area}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Project Modal */}
       <NewProjectModal
@@ -538,3 +646,4 @@ function ProjectsPage() {
 }
 
 export default ProjectsPage
+

@@ -240,20 +240,53 @@ function ProjectIndexPage() {
     setEditData({})
   }
 
+  // Sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [expandedSidebarIndex, setExpandedSidebarIndex] = useState(0) // First index expanded by default
+
+  // Static sidebar area data per index (same for all as mockup)
+  const sidebarAreas = [
+    { name: 'Padang Rumput', color: '#F5FF69' },
+    { name: 'Sawah', color: '#69B9FF' },
+    { name: 'Hutan Mangrove', color: '#69FF89' },
+    { name: 'Pertambangan', color: '#FF696B' },
+  ]
+
+  const sidebarAreas2 = [
+    { name: 'Savana', color: '#F5FF69' },
+    { name: 'Danau', color: '#69B9FF' },
+    { name: 'Hutan Cemara', color: '#69FF89' },
+    { name: 'Bekas Pertambangan', color: '#FF696B' },
+  ]
+
+  // Sidebar indexes (static mockup, same labels as context menu)
+  const sidebarIndexes = [
+    { id: 'IDX-001', areas: sidebarAreas },
+    { id: 'IDX-002', areas: sidebarAreas2 },
+    { id: 'IDX-003', areas: sidebarAreas2 },
+    { id: 'IDX-004', areas: sidebarAreas },
+    { id: 'IDX-005', areas: sidebarAreas },
+    { id: 'IDX-006', areas: sidebarAreas2 },
+  ]
+
   return (
     <div className="min-h-screen bg-[#eef2f7] font-inter flex flex-col">
-      {/* Top Bar */}
+      {/* Top Navbar with Tabs */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between">
-        <Link
-          to={`/valuasi/projects`}
-          id="back-to-modules"
-          className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-          </svg>
-          Kembali ke Proyek
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            to="/valuasi/projects"
+            className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Project Page
+          </Link>
+          <span className="px-3 py-1.5 text-sm font-semibold text-[#1a56db] border-b-2 border-[#1a56db]">
+            Index
+          </span>
+          <span className="px-3 py-1.5 text-sm text-gray-400 cursor-default">
+            Area Reklamasi
+          </span>
+        </div>
 
         {/* Profile */}
         <div className="flex items-center gap-3">
@@ -269,201 +302,279 @@ function ProjectIndexPage() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 px-4 md:px-8 lg:px-12 py-6 max-w-5xl mx-auto w-full">
-        {/* Project Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-[#1a56db] mb-1">{project.name}</h1>
-            <p className="text-sm text-gray-500">
-              {project.description}
-              <span className="ml-4 text-gray-400">Created at : {project.createdAt}</span>
-            </p>
-          </div>
+      {/* Main Layout: Sidebar + Content */}
+      <div className="flex flex-1 relative">
 
-          {/* Search */}
-          <div className="relative flex-shrink-0">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
+        {/* Sidebar Toggle Button (closed state) */}
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="fixed left-0 top-[72px] z-30 w-10 h-10 bg-[#1a56db] rounded-r-lg flex items-center justify-center shadow-lg hover:bg-[#1545b8] transition-colors cursor-pointer"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+        )}
+
+        {/* Sidebar (open state) */}
+        <div className={`bg-white border-r border-gray-200 flex-shrink-0 transition-all duration-300 overflow-hidden ${
+          sidebarOpen ? 'w-56 md:w-60' : 'w-0'
+        }`}>
+          <div className="w-56 md:w-60 h-full flex flex-col">
+            {/* Sidebar Header */}
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <span className="text-sm font-bold text-gray-900 truncate">Index - {project.name}</span>
+              </div>
+              <button className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+              </button>
             </div>
-            <input
-              id="search-index"
-              type="text"
-              placeholder="Find Index"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-56 pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20 bg-white"
-            />
+
+            {/* Sidebar Index List */}
+            <div className="flex-1 overflow-y-auto py-2">
+              {sidebarIndexes.map((sIdx, i) => (
+                <div key={sIdx.id} className="border-b border-gray-100 last:border-0">
+                  {/* Index Header */}
+                  <button
+                    onClick={() => setExpandedSidebarIndex(expandedSidebarIndex === i ? null : i)}
+                    className={`w-full px-4 py-2.5 flex items-center justify-between text-left transition-colors cursor-pointer ${
+                      expandedSidebarIndex === i ? 'bg-gray-50' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold text-gray-800">{sIdx.id}</span>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${
+                        expandedSidebarIndex === i ? 'rotate-180' : ''
+                      }`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+
+                  {/* Area List (expandable) */}
+                  <div className={`overflow-hidden transition-all duration-200 ${
+                    expandedSidebarIndex === i ? 'max-h-[300px]' : 'max-h-0'
+                  }`}>
+                    <div className="pl-6 pr-4 pb-2 space-y-1">
+                      {sIdx.areas.map((area) => (
+                        <div
+                          key={area.name}
+                          className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-gray-100 transition-colors cursor-pointer"
+                        >
+                          <div
+                            className="w-3.5 h-3.5 rounded-sm flex-shrink-0"
+                            style={{ backgroundColor: area.color }}
+                          />
+                          <span className="text-xs text-gray-600">{area.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Index Container */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6">
-          
-          {/* Map Preview */}
-          <div className="w-full h-64 md:h-80 rounded-xl overflow-hidden border border-gray-200 mb-6 relative z-0">
-            <MapContainer center={cirebonCenter} zoom={12} scrollWheelZoom={false} className="w-full h-full">
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        {/* Content */}
+        <div className="flex-1 px-4 md:px-8 lg:px-12 py-6 max-w-5xl mx-auto w-full">
+          {/* Project Header */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-[#1a56db] mb-1">{project.name}</h1>
+              <p className="text-sm text-gray-500">
+                {project.description}
+                <span className="ml-4 text-gray-400">Created at : {project.createdAt}</span>
+              </p>
+            </div>
+
+            {/* Search */}
+            <div className="relative flex-shrink-0">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+              </div>
+              <input
+                id="search-index"
+                type="text"
+                placeholder="Find Index"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full sm:w-56 pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20 bg-white"
               />
-              <Polygon positions={cirebonPolygon} pathOptions={{ color: '#1a56db', fillColor: '#1a56db', fillOpacity: 0.2 }} />
-              {areaMarkers.map((marker, i) => (
-                <Marker key={i} position={marker.pos} icon={createLabelIcon(marker.label)} />
-              ))}
-            </MapContainer>
+            </div>
           </div>
 
-          {/* Add Index Button */}
-          <button
-            id="tambah-index-button"
-            onClick={() => setShowModal(true)}
-            className="w-full py-3.5 bg-[#1a56db] text-white text-base font-semibold rounded-xl hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.99] transition-all duration-200 cursor-pointer mb-6"
-          >
-            + Tambah Index
-          </button>
+          {/* Index Container */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6">
+            
+            {/* Map Preview */}
+            <div className="w-full h-64 md:h-80 rounded-xl overflow-hidden border border-gray-200 mb-6 relative z-0">
+              <MapContainer center={cirebonCenter} zoom={12} scrollWheelZoom={false} className="w-full h-full">
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                />
+                <Polygon positions={cirebonPolygon} pathOptions={{ color: '#1a56db', fillColor: '#1a56db', fillOpacity: 0.2 }} />
+                {areaMarkers.map((marker, i) => (
+                  <Marker key={i} position={marker.pos} icon={createLabelIcon(marker.label)} />
+                ))}
+              </MapContainer>
+            </div>
 
-          {/* Index List */}
-          <div className="space-y-3">
-            {filteredIndexes.map((idx) => (
-              <div key={idx.id}>
-                {/* Index Row */}
-                <div
-                  onClick={() => handleExpandToggle(idx.id)}
-                  className={`flex items-center justify-between px-4 md:px-6 py-4 rounded-xl border cursor-pointer transition-all duration-200 ${
-                    expandedIndex === idx.id
-                      ? 'border-[#1a56db]/30 bg-blue-50/50 shadow-sm'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-4 md:gap-6">
-                    {/* Number */}
-                    <span className="text-sm font-semibold text-gray-500 w-8 text-center flex-shrink-0">
-                      {idx.id}
-                    </span>
-                    {/* Divider */}
-                    <div className="w-px h-6 bg-gray-200 flex-shrink-0" />
-                    {/* Name */}
-                    <span className="text-sm font-medium text-gray-900">{idx.name}</span>
+            {/* Add Index Button */}
+            <button
+              id="tambah-index-button"
+              onClick={() => setShowModal(true)}
+              className="w-full py-3.5 bg-[#1a56db] text-white text-base font-semibold rounded-xl hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.99] transition-all duration-200 cursor-pointer mb-6"
+            >
+              + Tambah Index
+            </button>
+
+            {/* Index List */}
+            <div className="space-y-3">
+              {filteredIndexes.map((idx) => (
+                <div key={idx.id}>
+                  {/* Index Row */}
+                  <div
+                    onClick={() => handleExpandToggle(idx.id)}
+                    className={`flex items-center justify-between px-4 md:px-6 py-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+                      expandedIndex === idx.id
+                        ? 'border-[#1a56db]/30 bg-blue-50/50 shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4 md:gap-6">
+                      <span className="text-sm font-semibold text-gray-500 w-8 text-center flex-shrink-0">{idx.id}</span>
+                      <div className="w-px h-6 bg-gray-200 flex-shrink-0" />
+                      <span className="text-sm font-medium text-gray-900">{idx.name}</span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-gray-500 hidden sm:inline">{idx.date}</span>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (idx.id === 1) {
+                            navigate(`/valuasi/projects/${projectId}/index/${idx.id}/areas`)
+                          } else {
+                            navigate(`/valuasi/projects/${projectId}/index/${idx.id}`)
+                          }
+                        }}
+                        className="px-4 py-1.5 bg-[#1a56db] text-white text-xs font-semibold rounded-lg hover:bg-[#1545b8] active:scale-[0.97] transition-all duration-200 cursor-pointer whitespace-nowrap"
+                      >
+                        Buka Index
+                      </button>
+
+                      {/* Expand Arrow */}
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+                          expandedIndex === idx.id ? 'rotate-180' : ''
+                        }`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    {/* Date */}
-                    <span className="text-sm text-gray-500 hidden sm:inline">{idx.date}</span>
-
-                    {/* Open Index Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (idx.id === 1) {
-                          navigate(`/valuasi/projects/${projectId}/index/${idx.id}/areas`)
-                        } else {
-                          navigate(`/valuasi/projects/${projectId}/index/${idx.id}`)
-                        }
-                      }}
-                      className="px-4 py-1.5 bg-[#1a56db] text-white text-xs font-semibold rounded-lg hover:bg-[#1545b8] active:scale-[0.97] transition-all duration-200 cursor-pointer whitespace-nowrap"
-                    >
-                      Buka Index
-                    </button>
-                  </div>
-                </div>
-
-                {/* Expandable Edit Panel */}
-                <div
-                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                    expandedIndex === idx.id ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
-                  }`}
-                >
-                  <div className="mt-1 px-4 md:px-6 py-5 border border-t-0 border-gray-200 rounded-b-xl bg-white">
-                    <div className="flex flex-col md:flex-row gap-6">
-                      {/* Left - Edit Fields */}
-                      <div className="flex-1 space-y-4">
-                        {/* Nama Index */}
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-900 mb-1.5">
-                            Nama Index
-                          </label>
-                          <input
-                            type="text"
-                            value={editData.name || ''}
-                            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20"
-                          />
-                        </div>
-
-                        {/* Kode */}
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-900 mb-1.5">
-                            Kode
-                          </label>
-                          <input
-                            type="text"
-                            value={editData.code || ''}
-                            onChange={(e) => setEditData({ ...editData, code: e.target.value })}
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Right - Info & Actions */}
-                      <div className="flex-1">
-                        {/* Keterangan */}
-                        <div className="flex items-start justify-between mb-4">
+                  {/* Expandable Edit Panel */}
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                      expandedIndex === idx.id ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+                    }`}
+                  >
+                    <div className="mt-1 px-4 md:px-6 py-5 border border-t-0 border-gray-200 rounded-b-xl bg-white">
+                      <div className="flex flex-col md:flex-row gap-6">
+                        {/* Left - Edit Fields */}
+                        <div className="flex-1 space-y-4">
                           <div>
-                            <h4 className="text-sm font-semibold text-gray-900 mb-2">Keterangan</h4>
-                            <div className="space-y-1 text-sm text-gray-500">
-                              <p>Jumlah Area {idx.jumlahArea}</p>
-                              <p>Luas Total {idx.luasTotal}</p>
-                              <p>Dibuat {idx.dibuat}</p>
+                            <label className="block text-sm font-semibold text-gray-900 mb-1.5">Nama</label>
+                            <input
+                              type="text"
+                              value={editData.name || ''}
+                              onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-1.5">Kod</label>
+                            <input
+                              type="text"
+                              value={editData.code || ''}
+                              onChange={(e) => setEditData({ ...editData, code: e.target.value })}
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Right - Info & Actions */}
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between mb-4">
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Keterangan</h4>
+                              <div className="space-y-1 text-sm text-gray-500">
+                                <p>Jumlah Area {idx.jumlahArea}</p>
+                                <p>Luas Total {idx.luasTotal}</p>
+                                <p>Dibuat {idx.dibuat}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-sm font-semibold text-gray-900">Status : </span>
+                              <span className="text-sm text-gray-500">{idx.status}</span>
                             </div>
                           </div>
 
-                          {/* Status */}
-                          <div className="text-right">
-                            <span className="text-sm font-semibold text-gray-900">Status : </span>
-                            <span className="text-sm text-gray-500">{idx.status}</span>
+                          <div className="flex items-center justify-end gap-3 mt-6">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDelete(idx.id) }}
+                              className="px-5 py-2 border border-red-400 text-red-500 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSave(idx.id) }}
+                              className="px-5 py-2 border border-[#1a56db] text-[#1a56db] text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+                            >
+                              Simpan
+                            </button>
                           </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center justify-end gap-3 mt-6">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDelete(idx.id)
-                            }}
-                            className="px-5 py-2 border border-red-400 text-red-500 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                          >
-                            Hapus
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleSave(idx.id)
-                            }}
-                            className="px-5 py-2 border border-[#1a56db] text-[#1a56db] text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
-                          >
-                            Simpan
-                          </button>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {/* Empty State */}
-            {filteredIndexes.length === 0 && (
-              <div className="text-center py-12 text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                </svg>
-                <p className="text-sm">Belum ada index. Klik "+ Tambah Index" untuk membuat.</p>
-              </div>
-            )}
+              {/* Empty State */}
+              {filteredIndexes.length === 0 && (
+                <div className="text-center py-12 text-gray-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                  <p className="text-sm">Belum ada index. Klik "+ Tambah Index" untuk membuat.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
