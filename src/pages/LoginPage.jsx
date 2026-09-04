@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { toast } from 'react-hot-toast'
+import { useAuth } from '../contexts/AuthContext'
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -11,17 +13,55 @@ const GoogleIcon = () => (
 )
 
 function LoginPage() {
-  const [email, setEmail] = useState('')
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { login, loginWithGoogle } = useAuth()
+
+  const [identity, setIdentity] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState(location.state?.error || '')
+  const [isLoading, setIsLoading] = useState(false)
+  
+  const from = location.state?.from?.pathname || '/'
 
-  const navigate = useNavigate()
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Login attempt:', { email, password, rememberMe })
-    navigate('/admin')
+    setError('')
+    setIsLoading(true)
+    try {
+      const user = await login(identity, password)
+      toast.success(`Login berhasil. Selamat datang, ${user.nama || 'User'}!`)
+      
+      let redirectPath = from
+      if (from === '/') {
+        const role = user?.role?.nama_role
+        if (role === 'Admin' || role === 'Administrator') {
+          redirectPath = '/admin'
+        } else if (role === 'Peneliti') {
+          redirectPath = '/valuasi/projects'
+        }
+      }
+      
+      navigate(redirectPath, { replace: true })
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'Login gagal. Silakan coba lagi.'
+      setError(errorMessage)
+      toast.error(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    sessionStorage.setItem('auth_redirect', from)
+    try {
+      await loginWithGoogle()
+    } catch (err) {
+      setError('Failed to initialize Google login.')
+    }
   }
 
   return (
@@ -49,21 +89,28 @@ function LoginPage() {
             <p className="text-gray-500 text-sm">Welcome back! Please enter your details</p>
           </div>
 
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Field */}
+            {/* Identity Field */}
             <div>
               <label
-                htmlFor="email-input"
+                htmlFor="identity-input"
                 className="block text-sm font-medium text-gray-900 mb-1.5"
               >
-                Email
+                Email / Username
               </label>
               <input
-                id="email-input"
-                type="email"
-                placeholder="Enter your Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identity-input"
+                type="text"
+                placeholder="Masukkan email atau username"
+                value={identity}
+                onChange={(e) => setIdentity(e.target.value)}
+                required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20 hover:border-gray-400"
               />
             </div>
@@ -83,6 +130,7 @@ function LoginPage() {
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20 hover:border-gray-400"
                 />
                 <button
@@ -127,15 +175,17 @@ function LoginPage() {
             <button
               id="sign-in-button"
               type="submit"
-              className="w-full py-2.5 bg-[#1a56db] text-white text-sm font-semibold rounded-lg transition-all duration-200 hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98] cursor-pointer"
+              disabled={isLoading}
+              className={`w-full py-2.5 bg-[#1a56db] text-white text-sm font-semibold rounded-lg transition-all duration-200 hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98] cursor-pointer ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-              Sign in
+              {isLoading ? 'Signing in...' : 'Sign in'}
             </button>
 
             {/* Sign In with Google */}
             <button
               id="google-sign-in-button"
               type="button"
+              onClick={handleGoogleLogin}
               className="w-full py-2.5 bg-white border border-gray-300 text-sm font-medium text-gray-700 rounded-lg flex items-center justify-center gap-2.5 transition-all duration-200 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm active:scale-[0.98] cursor-pointer"
             >
               <GoogleIcon />

@@ -1,15 +1,30 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
 function RegisterPage() {
-  const [fullName, setFullName] = useState('')
+  const [nama, setNama] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const navigate = useNavigate()
+  const { register } = useAuth()
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Register attempt:', { fullName, email, password })
+    setError('')
+    setIsLoading(true)
+    try {
+      await register(nama, email, password)
+      navigate('/')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Registration failed. Please check your inputs.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -37,6 +52,12 @@ function RegisterPage() {
             <p className="text-gray-500 text-sm">Please enter your details to sign up</p>
           </div>
 
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Full Name Field */}
             <div>
@@ -50,8 +71,9 @@ function RegisterPage() {
                 id="fullname-input"
                 type="text"
                 placeholder="Enter your Full name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                value={nama}
+                onChange={(e) => setNama(e.target.value)}
+                required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20 hover:border-gray-400"
               />
             </div>
@@ -70,6 +92,7 @@ function RegisterPage() {
                 placeholder="Enter your Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20 hover:border-gray-400"
               />
             </div>
@@ -89,6 +112,7 @@ function RegisterPage() {
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#1a56db] focus:ring-2 focus:ring-[#1a56db]/20 hover:border-gray-400"
                 />
                 <button
@@ -116,9 +140,10 @@ function RegisterPage() {
             <button
               id="register-button"
               type="submit"
-              className="w-full py-2.5 bg-[#1a56db] text-white text-sm font-semibold rounded-lg transition-all duration-200 hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98] cursor-pointer"
+              disabled={isLoading}
+              className={`w-full py-2.5 bg-[#1a56db] text-white text-sm font-semibold rounded-lg transition-all duration-200 hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98] cursor-pointer ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-              Sign up
+              {isLoading ? 'Signing up...' : 'Sign up'}
             </button>
           </form>
 

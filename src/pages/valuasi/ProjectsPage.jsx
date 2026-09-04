@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import logo from '../../assets/logo-pkspl.svg'
+import BoundarySourcePicker from '../../components/map/BoundarySourcePicker'
+import ProfileDropdown from '../../components/ProfileDropdown'
 
 // Static project data matching UI
 const initialProjects = [
@@ -74,17 +76,101 @@ function NewProjectModal({ isOpen, onClose, onCreateProject }) {
   const [kodeProyek, setKodeProyek] = useState('PROJ-001')
   const [namaProyek, setNamaProyek] = useState('')
   const [deskripsi, setDeskripsi] = useState('')
-  const [batasMode, setBatasMode] = useState('wilayah')
+  const [activeMode, setActiveMode] = useState('wilayah')
   const [provinsi, setProvinsi] = useState('')
-  const [kabupaten, setKabupaten] = useState('')
-  const [kecamatan, setKecamatan] = useState('')
-  const [kelurahan, setKelurahan] = useState('')
   const [lokasi, setLokasi] = useState('')
+  
+  // Explicitly separate geometry state for Wilayah vs SHP
+  const [adminGeojson, setAdminGeojson] = useState(null)
+  const [adminCenter, setAdminCenter] = useState(null)
+  const [shpGeojson, setShpGeojson] = useState(null)
+  const [shpCenter, setShpCenter] = useState(null)
   const [shpFile, setShpFile] = useState(null)
+  const [selectedRegion, setSelectedRegion] = useState(null)
 
   if (!isOpen) return null
 
-  const autoLokasi = [provinsi, kabupaten, kecamatan, kelurahan].filter(Boolean).join(', ')
+  // Single source of truth for map display based on active mode
+  const displayedGeometry = activeMode === 'wilayah' ? adminGeojson : shpGeojson
+
+  const handleTabChange = (newMode) => {
+    setActiveMode(newMode)
+    setLokasi('') // Reset Lokasi/Alamat field on mode switch
+    if (newMode === 'shp') {
+      // Clear Administrative state & geometry when switching to SHP mode
+      setAdminGeojson(null)
+      setAdminCenter(null)
+      setProvinsi('')
+      setSelectedRegion(null)
+    } else {
+      // Clear SHP state & geometry when switching to Administrative mode
+      setShpGeojson(null)
+      setShpCenter(null)
+      setShpFile(null)
+    }
+  }
+
+  const handleParsedBoundary = (geojson, center, labelOrFile) => {
+    if (activeMode === 'shp' || labelOrFile instanceof File) {
+      setShpGeojson(geojson)
+      setShpCenter(center)
+      if (labelOrFile instanceof File) {
+        setShpFile(labelOrFile)
+        setLokasi(labelOrFile.name.replace(/\.zip$/i, ''))
+      }
+    } else {
+      setAdminGeojson(geojson)
+      setAdminCenter(center)
+      if (typeof labelOrFile === 'string' && labelOrFile) {
+        setLokasi(labelOrFile)
+      }
+    }
+  }
+
+  const handleClearBoundary = () => {
+    setLokasi('')
+    if (activeMode === 'wilayah') {
+      setAdminGeojson(null)
+      setAdminCenter(null)
+      setSelectedRegion(null)
+    } else {
+      setShpGeojson(null)
+      setShpCenter(null)
+      setShpFile(null)
+    }
+  }
+
+  const handleRegionChange = ({ regency, district, village }) => {
+    setSelectedRegion({ regency, district, village })
+    const parts = [
+      village?.name ? `Desa ${village.name}` : null,
+      district?.name ? `Kec. ${district.name}` : null,
+      regency?.name || null,
+      provinsi || null
+    ].filter(Boolean)
+    setLokasi(parts.length > 0 ? parts.join(', ') : (provinsi || ''))
+  }
+
+  const handleCreateSubmit = () => {
+    const isWilayah = activeMode === 'wilayah'
+    const activeGeometry = isWilayah ? adminGeojson : shpGeojson
+    const activeCenter = isWilayah ? adminCenter : shpCenter
+
+    onCreateProject?.({
+      kode_proyek: kodeProyek,
+      nama_proyek: namaProyek,
+      deskripsi,
+      lokasi,
+      id_provinsi: isWilayah ? (selectedRegion?.provinsi?.id || null) : null,
+      id_kabupaten_kota: isWilayah ? (selectedRegion?.regency?.rawId || selectedRegion?.regency?.id || null) : null,
+      id_kecamatan: isWilayah ? (selectedRegion?.district?.rawId || selectedRegion?.district?.id || null) : null,
+      id_desa_kelurahan: isWilayah ? (selectedRegion?.village?.rawId || selectedRegion?.village?.id || null) : null,
+      latitude: activeCenter?.lat || null,
+      longitude: activeCenter?.lng || null,
+      geometry: activeGeometry,
+      shp_file: isWilayah ? null : shpFile,
+    })
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -126,165 +212,34 @@ function NewProjectModal({ isOpen, onClose, onCreateProject }) {
               placeholder="Deskripsi proyek..."
               value={deskripsi}
               onChange={(e) => setDeskripsi(e.target.value)}
-              rows={4}
+              rows={3}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#5046e5] focus:ring-2 focus:ring-[#5046e5]/20 resize-y"
             />
           </div>
 
           <hr className="border-gray-200 mb-6" />
 
-          <div className="mb-5">
+          <div className="mb-6">
             <h3 className="text-sm font-bold text-gray-900 mb-3">Batas Area &amp; Wilayah</h3>
-            <div className="flex items-center gap-3 mb-5">
-              <button
-                type="button"
-                onClick={() => setBatasMode('wilayah')}
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 cursor-pointer ${
-                  batasMode === 'wilayah'
-                    ? 'bg-[#5046e5] text-white shadow-md shadow-indigo-500/25'
-                    : 'bg-white text-gray-600 border border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                Pilih Wilayah Administratif
-              </button>
-              <button
-                type="button"
-                onClick={() => setBatasMode('shp')}
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 cursor-pointer ${
-                  batasMode === 'shp'
-                    ? 'bg-[#5046e5] text-white shadow-md shadow-indigo-500/25'
-                    : 'bg-white text-gray-600 border border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                Upload File SHP
-              </button>
-            </div>
-
-            {batasMode === 'wilayah' ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-1.5">Provinsi</label>
-                    <div className="relative">
-                      <select
-                        value={provinsi}
-                        onChange={(e) => { setProvinsi(e.target.value); setKabupaten(''); setKecamatan(''); setKelurahan('') }}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 outline-none transition-all duration-200 focus:border-[#5046e5] focus:ring-2 focus:ring-[#5046e5]/20 appearance-none bg-white cursor-pointer"
-                      >
-                        <option value="">— Pilih provinsi —</option>
-                        <option value="DKI Jakarta">DKI Jakarta</option>
-                        <option value="Jawa Barat">Jawa Barat</option>
-                        <option value="Jawa Tengah">Jawa Tengah</option>
-                        <option value="Jawa Timur">Jawa Timur</option>
-                        <option value="Banten">Banten</option>
-                        <option value="Kalimantan Timur">Kalimantan Timur</option>
-                        <option value="Sulawesi Selatan">Sulawesi Selatan</option>
-                        <option value="Nusa Tenggara Barat">Nusa Tenggara Barat</option>
-                        <option value="Nusa Tenggara Timur">Nusa Tenggara Timur</option>
-                        <option value="Papua">Papua</option>
-                      </select>
-                      <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-1.5">Kabupaten/Kota</label>
-                    <div className="relative">
-                      <select
-                        value={kabupaten}
-                        onChange={(e) => { setKabupaten(e.target.value); setKecamatan(''); setKelurahan('') }}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 outline-none transition-all duration-200 focus:border-[#5046e5] focus:ring-2 focus:ring-[#5046e5]/20 appearance-none bg-white cursor-pointer"
-                      >
-                        <option value="">— Pilih kabupaten/kota —</option>
-                        <option value="Kepulauan Seribu">Kepulauan Seribu</option>
-                        <option value="Jakarta Utara">Jakarta Utara</option>
-                        <option value="Jakarta Barat">Jakarta Barat</option>
-                        <option value="Jakarta Selatan">Jakarta Selatan</option>
-                        <option value="Bogor">Bogor</option>
-                      </select>
-                      <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-1.5">Kecamatan</label>
-                    <div className="relative">
-                      <select
-                        value={kecamatan}
-                        onChange={(e) => { setKecamatan(e.target.value); setKelurahan('') }}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 outline-none transition-all duration-200 focus:border-[#5046e5] focus:ring-2 focus:ring-[#5046e5]/20 appearance-none bg-white cursor-pointer"
-                      >
-                        <option value="">— Pilih kecamatan —</option>
-                        <option value="Kepulauan Seribu Utara">Kepulauan Seribu Utara</option>
-                        <option value="Kepulauan Seribu Selatan">Kepulauan Seribu Selatan</option>
-                        <option value="Penjaringan">Penjaringan</option>
-                      </select>
-                      <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-1.5">Kelurahan/Desa</label>
-                    <div className="relative">
-                      <select
-                        value={kelurahan}
-                        onChange={(e) => setKelurahan(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 outline-none transition-all duration-200 focus:border-[#5046e5] focus:ring-2 focus:ring-[#5046e5]/20 appearance-none bg-white cursor-pointer"
-                      >
-                        <option value="">— Pilih kelurahan/desa —</option>
-                        <option value="Pulau Tidung">Pulau Tidung</option>
-                        <option value="Pulau Panggang">Pulau Panggang</option>
-                        <option value="Pulau Kelapa">Pulau Kelapa</option>
-                        <option value="Pulau Harapan">Pulau Harapan</option>
-                      </select>
-                      <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50 flex flex-col items-center justify-center py-16 mb-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
-                  </svg>
-                  <p className="text-sm text-gray-400">Pilih wilayah di atas untuk menggambar batas area secara otomatis</p>
-                </div>
-                <p className="text-xs text-[#5046e5] mb-5">
-                  Pilih wilayah administratif untuk menggambar batas area otomatis, atau unggah file SHP manual.
-                </p>
-              </>
-            ) : (
-              <div className="mb-5">
-                <div
-                  className="border-2 border-dashed border-gray-300 rounded-xl py-16 flex flex-col items-center justify-center gap-3 hover:border-[#5046e5]/40 hover:bg-indigo-50/30 transition-all duration-200 cursor-pointer"
-                  onClick={() => document.getElementById('shp-file-input')?.click()}
-                >
-                  <input
-                    id="shp-file-input"
-                    type="file"
-                    accept=".shp,.zip"
-                    className="hidden"
-                    onChange={(e) => setShpFile(e.target.files?.[0] || null)}
-                  />
-                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                  </div>
-                  {shpFile ? (
-                    <p className="text-sm text-gray-700 font-medium">{shpFile.name}</p>
-                  ) : (
-                    <p className="text-sm text-gray-500">
-                      <span className="text-[#5046e5] font-medium hover:underline">Klik atau drag</span> file SHP / ZIP di sini
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
+            <BoundarySourcePicker
+              province={provinsi}
+              onProvinceChange={setProvinsi}
+              value={displayedGeometry}
+              onParsed={handleParsedBoundary}
+              onClear={handleClearBoundary}
+              onRegionChange={handleRegionChange}
+              onTabChange={handleTabChange}
+              activeTab={activeMode}
+              height={280}
+            />
           </div>
 
           <div className="mb-8">
-            <label className="block text-sm font-semibold text-gray-900 mb-1.5">Lokasi</label>
+            <label className="block text-sm font-semibold text-gray-900 mb-1.5">Lokasi / Alamat</label>
             <input
               type="text"
-              placeholder="Terisi otomatis dari wilayah yang dipilih, atau isi manual"
-              value={lokasi || autoLokasi}
+              placeholder="Terisi otomatis dari wilayah/SHP yang dipilih, atau isi manual"
+              value={lokasi}
               onChange={(e) => setLokasi(e.target.value)}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 focus:border-[#5046e5] focus:ring-2 focus:ring-[#5046e5]/20"
             />
@@ -293,7 +248,7 @@ function NewProjectModal({ isOpen, onClose, onCreateProject }) {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={onCreateProject}
+              onClick={handleCreateSubmit}
               className="px-6 py-2.5 bg-[#5046e5] text-white text-sm font-semibold rounded-lg hover:bg-[#4338ca] hover:shadow-lg hover:shadow-indigo-500/25 active:scale-[0.98] transition-all duration-200 cursor-pointer"
             >
               Buat Proyek
@@ -402,17 +357,7 @@ function ProjectsPage() {
         </div>
 
         {/* Profile */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-            </svg>
-          </div>
-          <span className="text-sm font-medium text-gray-700 hidden sm:inline">Dhafa</span>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-          </svg>
-        </div>
+        <ProfileDropdown isScrolled={true} />
       </div>
 
       {/* Content Area */}

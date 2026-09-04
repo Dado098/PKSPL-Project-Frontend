@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+import { AuthProvider } from './contexts/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
+import GoogleCallbackPage from './pages/GoogleCallbackPage'
 import Navbar from './components/Navbar'
 import HeroSection from './components/HeroSection'
 import AboutSection from './components/AboutSection'
@@ -104,30 +108,40 @@ function LandingPageContent() {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<LandingPageContent />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/valuasi/projects" element={<ProjectsPage />} />
-        <Route path="/valuasi/projects/:projectId/modules/direct-use-value/input" element={<DirectUseValueFormPage />} />
-        <Route path="/valuasi/projects/:projectId/modules/:moduleId/input" element={<DirectUseValueFormPage />} />
-        <Route path="/valuasi/projects/:projectId/index/:indexId/form" element={<ValuasiFormPage />} />
-        <Route path="/valuasi/projects/:projectId/index/:indexId/preview" element={<ValuasiPreviewPage />} />
-        <Route path="/valuasi/projects/:projectId/index/:indexId/areas" element={<AreaIndexPage />} />
-        <Route path="/valuasi/projects/:projectId/index/:indexId/areas/:areaId" element={<AreaDashboardPage />} />
-        <Route path="/valuasi/projects/:projectId/modules/:moduleId" element={<ProjectIndexPage />} />
-        <Route path="/valuasi/projects/:projectId/modules" element={<ModuleDashboardPage />} />
-        <Route path="/valuasi/projects/:projectId" element={<ModuleDashboardPage />} />
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="master-data" element={<MasterDataPage />} />
-          <Route path="verifikasi-data" element={<VerifikasiDataPage />} />
-          <Route path="manajemen-pengguna" element={<ManajemenPenggunaPage />} />
-          <Route path="riwayat-aktivitas" element={<RiwayatAktivitasPage />} />
-          <Route path="kebijakan" element={<KebijakanPage />} />
-        </Route>
-      </Routes>
+      <AuthProvider>
+        <Toaster position="top-center" reverseOrder={false} />
+        <Routes>
+          <Route path="/" element={<LandingPageContent />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/auth/callback" element={<GoogleCallbackPage />} />
+          
+          <Route element={<ProtectedRoute allowedRoles={['Admin', 'Administrator', 'Peneliti']} />}>
+            <Route path="/valuasi/projects" element={<ProjectsPage />} />
+            <Route path="/valuasi/projects/:projectId/modules/direct-use-value/input" element={<DirectUseValueFormPage />} />
+            <Route path="/valuasi/projects/:projectId/modules/:moduleId/input" element={<DirectUseValueFormPage />} />
+            <Route path="/valuasi/projects/:projectId/index/:indexId/form" element={<ValuasiFormPage />} />
+            <Route path="/valuasi/projects/:projectId/index/:indexId/preview" element={<ValuasiPreviewPage />} />
+            <Route path="/valuasi/projects/:projectId/index/:indexId/areas" element={<AreaIndexPage />} />
+            <Route path="/valuasi/projects/:projectId/index/:indexId/areas/:areaId" element={<AreaDashboardPage />} />
+            <Route path="/valuasi/projects/:projectId/modules/:moduleId" element={<ProjectIndexPage />} />
+            <Route path="/valuasi/projects/:projectId/modules" element={<ModuleDashboardPage />} />
+            <Route path="/valuasi/projects/:projectId" element={<ModuleDashboardPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={['Admin', 'Administrator']} />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="master-data" element={<MasterDataPage />} />
+              <Route path="verifikasi-data" element={<VerifikasiDataPage />} />
+              <Route path="manajemen-pengguna" element={<ManajemenPenggunaPage />} />
+              <Route path="riwayat-aktivitas" element={<RiwayatAktivitasPage />} />
+              <Route path="kebijakan" element={<KebijakanPage />} />
+            </Route>
+          </Route>
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Menu, X, User, Edit3, Lock, LogOut } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../contexts/AuthContext';
+import ProfileDropdown from './ProfileDropdown';
+import ProfileModal from './ProfileModal';
+import EditProfileModal from './EditProfileModal';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showMobileProfile, setShowMobileProfile] = useState(false);
+  const [showMobileEditProfile, setShowMobileEditProfile] = useState(false);
+  const [showMobileChangePassword, setShowMobileChangePassword] = useState(false);
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    toast.success('Anda berhasil keluar.');
+    navigate('/');
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -14,14 +31,22 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const getValuasiLink = () => {
+    if (!isAuthenticated) return '/valuasi/projects';
+    const role = user?.role?.nama_role;
+    if (role === 'Admin' || role === 'Administrator') return '/admin';
+    return '/valuasi/projects';
+  };
+
   const navLinks = [
     { name: 'Beranda', href: '#hero' },
     { name: 'Kawasan', href: '#about' },
-    { name: 'Valuasi', href: '/valuasi/projects' },
+    { name: 'Valuasi', href: getValuasiLink() },
     { name: 'Bantuan / Kontak', href: '#map' },
   ];
 
   return (
+    <>
     <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4 sm:px-6 lg:px-8">
       <div
         className={`
@@ -78,18 +103,22 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Daftar / Masuk Button */}
+          {/* Daftar / Masuk Button or Profile Dropdown */}
           <div className="hidden lg:block flex-shrink-0">
-            <Link
-              to="/login"
-              className={`px-5 py-2 text-sm font-semibold rounded-full transition-all duration-200 border whitespace-nowrap ${
-                isScrolled
-                  ? 'text-white bg-blue-600 hover:bg-blue-700 border-blue-600'
-                  : 'text-white bg-white/15 hover:bg-white/25 border-white/20 hover:border-white/40'
-              }`}
-            >
-              Daftar / Masuk
-            </Link>
+            {!isAuthenticated ? (
+              <Link
+                to="/login"
+                className={`px-5 py-2 text-sm font-semibold rounded-full transition-all duration-200 border whitespace-nowrap ${
+                  isScrolled
+                    ? 'text-white bg-blue-600 hover:bg-blue-700 border-blue-600'
+                    : 'text-white bg-white/15 hover:bg-white/25 border-white/20 hover:border-white/40'
+                }`}
+              >
+                Daftar / Masuk
+              </Link>
+            ) : (
+              <ProfileDropdown isScrolled={isScrolled} />
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -140,19 +169,69 @@ const Navbar = () => {
               )
             )}
             <div className="pt-2 pb-1 border-t border-white/10 mt-2">
-              <Link
-                to="/login"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block px-4 py-2.5 rounded-xl text-sm font-semibold text-white
-                           bg-white/15 hover:bg-white/25 text-center transition-all duration-200"
-              >
-                Daftar / Masuk
-              </Link>
+              {!isAuthenticated ? (
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-semibold text-white
+                             bg-white/15 hover:bg-white/25 text-center transition-all duration-200"
+                >
+                  Daftar / Masuk
+                </Link>
+              ) : (
+                <div className="px-4 py-2 space-y-1">
+                  <p className="text-sm text-white/70 mb-2">Login sebagai: <span className="font-medium text-white">{user?.nama}</span></p>
+                  <button
+                    onClick={() => { setIsMobileMenuOpen(false); setShowMobileProfile(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-white/90 hover:bg-white/10 transition-all"
+                  >
+                    <User size={16} /> Profil Saya
+                  </button>
+                  <button
+                    onClick={() => { setIsMobileMenuOpen(false); setShowMobileEditProfile(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-white/90 hover:bg-white/10 transition-all"
+                  >
+                    <Edit3 size={16} /> Edit Profil
+                  </button>
+                  <button
+                    onClick={() => { setIsMobileMenuOpen(false); setShowMobileChangePassword(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-white/90 hover:bg-white/10 transition-all"
+                  >
+                    <Lock size={16} /> Ganti Password
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleLogout();
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-xl text-sm font-semibold text-white
+                               bg-red-500/20 border border-red-500/30 hover:bg-red-500/30 transition-all duration-200"
+                  >
+                    <LogOut size={16} /> Keluar
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
     </nav>
+
+    {/* Mobile Modals */}
+    {showMobileProfile && (
+      <ProfileModal
+        onClose={() => setShowMobileProfile(false)}
+        onEditProfile={() => { setShowMobileProfile(false); setShowMobileEditProfile(true); }}
+        onChangePassword={() => { setShowMobileProfile(false); setShowMobileChangePassword(true); }}
+      />
+    )}
+    {showMobileEditProfile && (
+      <EditProfileModal onClose={() => setShowMobileEditProfile(false)} />
+    )}
+    {showMobileChangePassword && (
+      <ChangePasswordModal onClose={() => setShowMobileChangePassword(false)} />
+    )}
+    </>
   );
 };
 
