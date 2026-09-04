@@ -21,7 +21,6 @@ export const moduleCategories = [
     borderColor: 'border-t-green-500',
     textColor: 'text-green-600',
     modules: [
-      { id: 'direct-use-value', name: 'Direct Use Value', records: 2, icon: 'dollar' },
       { id: 'eop', name: 'EOP', records: 1, icon: 'clipboard' },
       { id: 'food-production', name: 'Food Production', records: 1, icon: 'food' },
       { id: 'raw-material', name: 'Raw Material', records: 1, icon: 'leaf' },
@@ -39,6 +38,15 @@ export const moduleCategories = [
       { id: 'climate', name: 'Climate / Carbon Storage', records: 1, icon: 'cloud' },
       { id: 'erosion-control', name: 'Erosion Control', records: 1, icon: 'mountain' },
       { id: 'water-supply', name: 'Water Supply', records: 1, icon: 'water' },
+    ],
+  },
+  {
+    category: 'Supporting',
+    color: 'purple',
+    borderColor: 'border-t-purple-500',
+    textColor: 'text-purple-600',
+    modules: [
+      { id: 'habitat-nursery', name: 'Habitat /Nursery Ground Function', records: 1, icon: 'waves' },
     ],
   },
   {
@@ -60,6 +68,7 @@ export function ModuleIcon({ type, color }) {
     green: 'bg-green-100 text-green-600',
     blue: 'bg-blue-100 text-blue-600',
     yellow: 'bg-yellow-100 text-yellow-600',
+    purple: 'bg-purple-100 text-purple-600',
   }
 
   const iconMap = {
@@ -111,6 +120,11 @@ export function ModuleIcon({ type, color }) {
     water: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+      </svg>
+    ),
+    waves: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2M3 13c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2M3 18c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2" />
       </svg>
     ),
     briefcase: (
@@ -221,6 +235,8 @@ function ModuleDashboardPage() {
                           ? 'border-green-300 text-green-700 hover:bg-green-50'
                           : cat.color === 'blue'
                           ? 'border-blue-300 text-blue-700 hover:bg-blue-50'
+                          : cat.color === 'purple'
+                          ? 'border-purple-300 text-purple-700 hover:bg-purple-50'
                           : 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
                       }`}
                     >

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronUp, Plus, Trash2, Save, Search, Sparkles, PenLine } from 'lucide-react'
+import { moduleCategories } from './ModuleDashboardPage'
 
 // ─── Area Reklamasi Suggestions ─────────────────────────────────────────────
 
@@ -749,14 +750,50 @@ function ServiceSection({ label, prefix, rows, setRows, color, isOpen, onToggle 
     setShowAddMenu(false)
   }
 
+  const [showBarisMenu, setShowBarisMenu] = useState(false)
+  const [selectedBaris, setSelectedBaris] = useState(null)
+  const [barisCount, setBarisCount] = useState(20)
+  const barisMenuRef = useRef(null)
+  
+  const [showModulMenu, setShowModulMenu] = useState(false)
+  const [selectedModul, setSelectedModul] = useState(null)
+  const modulMenuRef = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (barisMenuRef.current && !barisMenuRef.current.contains(e.target)) {
+        setShowBarisMenu(false)
+      }
+      if (modulMenuRef.current && !modulMenuRef.current.contains(e.target)) {
+        setShowModulMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const categoryName = label.split('. ')[1]?.split(' ')[0]
+  const availableModules = moduleCategories.find(c => c.category === categoryName)?.modules || []
+
+  const handleSelectBaris = (num) => {
+    setSelectedBaris(num)
+    setShowBarisMenu(false)
+  }
+
+  const handleTambahBaris = () => {
+    setBarisCount(prev => prev + 1)
+    setSelectedBaris(barisCount + 1)
+    setShowBarisMenu(false)
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
       {/* Section Header */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50/80 transition-colors cursor-pointer"
-      >
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-6 py-4">
+        <button
+          onClick={onToggle}
+          className="flex items-center gap-3 flex-1 hover:opacity-80 transition-opacity cursor-pointer"
+        >
           <div className="w-1.5 h-8 rounded-full" style={{ backgroundColor: color }} />
           <div className="text-left">
             <h3 className="font-bold text-gray-900 text-base">{label}</h3>
@@ -764,11 +801,89 @@ function ServiceSection({ label, prefix, rows, setRows, color, isOpen, onToggle 
               {rows.length} item &bull; Total: <span className="font-semibold text-blue-600">Rp {formatNumber(sectionTotal)}</span>
             </p>
           </div>
+        </button>
+        <div className="flex items-center gap-3">
+          {/* Action buttons side-by-side */}
+          {isOpen && (
+            <div className="flex items-center gap-2">
+              {/* Pilih Baris Dropdown */}
+              <div ref={barisMenuRef} className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowBarisMenu(!showBarisMenu) }}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-600 bg-white hover:bg-gray-50 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  {selectedBaris ? `Baris ${selectedBaris}` : 'Pilih Baris'}
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {showBarisMenu && (
+                  <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl w-40 max-h-64 overflow-y-auto z-50 animate-fade-in">
+                    {Array.from({ length: barisCount }, (_, i) => i + 1).map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => handleSelectBaris(num)}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer ${
+                          selectedBaris === num ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Baris {num}
+                      </button>
+                    ))}
+                    <div className="border-t border-gray-100">
+                      <button
+                        onClick={handleTambahBaris}
+                        className="w-full text-left px-4 py-2.5 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Tambah Baris
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pilihan Modul Dropdown - shows only if a baris is selected */}
+              {selectedBaris && (
+                <div ref={modulMenuRef} className="relative">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowModulMenu(!showModulMenu) }}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-600 bg-white hover:bg-gray-50 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {selectedModul ? selectedModul.name : 'Pilih Modul'}
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                  {showModulMenu && (
+                    <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl w-56 max-h-64 overflow-y-auto z-50 animate-fade-in">
+                      {availableModules.map((mod) => (
+                        <button
+                          key={mod.id}
+                          onClick={() => {
+                            setSelectedModul(mod)
+                            setShowModulMenu(false)
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors cursor-pointer ${
+                            selectedModul?.id === mod.id ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {mod.name}
+                        </button>
+                      ))}
+                      {availableModules.length === 0 && (
+                         <div className="px-4 py-2.5 text-sm text-gray-500 italic">Tidak ada modul</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <button
+            onClick={onToggle}
+            className={`p-2 rounded-xl transition-all duration-300 cursor-pointer ${isOpen ? 'bg-blue-50 text-blue-600 rotate-0' : 'bg-gray-100 text-gray-400'}`}
+          >
+            {isOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </button>
         </div>
-        <div className={`p-2 rounded-xl transition-all duration-300 ${isOpen ? 'bg-blue-50 text-blue-600 rotate-0' : 'bg-gray-100 text-gray-400'}`}>
-          {isOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-        </div>
-      </button>
+      </div>
 
       {/* Section Content */}
       <div className={`transition-all duration-400 ease-in-out overflow-hidden ${isOpen ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'}`}>
@@ -783,7 +898,7 @@ function ServiceSection({ label, prefix, rows, setRows, color, isOpen, onToggle 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export default function ValuasiFormPage() {
-  const { projectId } = useParams()
+  const { projectId, indexId } = useParams()
   const navigate = useNavigate()
 
   const isNew = projectId === 'new'
@@ -817,13 +932,13 @@ export default function ValuasiFormPage() {
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <Link
-          to={`/valuasi/projects/${projectId}/modules/direct-use-value`}
+          to={`/valuasi/projects/${projectId}/index/${indexId || '1'}/areas/1`}
           className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          Kembali ke Beranda
+          Kembali ke Area
         </Link>
 
         <div className="flex items-center gap-3">

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { MapContainer, TileLayer, Polygon, Marker } from 'react-leaflet'
+import { MapContainer, TileLayer, Polygon, Marker, Polyline, CircleMarker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -63,87 +63,159 @@ const defaultIndexes = [
   },
 ]
 
-function NewIndexModal({ isOpen, onClose, onCreateIndex, projectId, navigate }) {
-  if (!isOpen) return null
+function DrawLineOnMap({ points, setPoints }) {
+  useMapEvents({
+    click(e) {
+      if (points.length >= 4) return;
+      setPoints([...points, [e.latlng.lat, e.latlng.lng]]);
+    }
+  });
+
+  return (
+    <>
+      {points.length > 0 && (
+        <Polygon 
+          positions={points} 
+          pathOptions={{ color: '#1a5cd6', weight: 3, fillColor: '#1a5cd6', fillOpacity: 0.2 }} 
+        />
+      )}
+      {points.map((p, i) => (
+        <CircleMarker 
+          key={i} 
+          center={p} 
+          radius={5} 
+          pathOptions={{ color: '#1a5cd6', fillColor: '#fff', fillOpacity: 1 }} 
+        />
+      ))}
+    </>
+  );
+}
+
+function NewIndexModal({ isOpen, onClose, onCreateIndex, projectId, navigate, existingIndexes = [] }) {
+  const [namaIndex, setNamaIndex] = useState('');
+  const [deskripsi, setDeskripsi] = useState('');
+  const [points, setPoints] = useState([]);
+
+  if (!isOpen) return null;
+
+  const handleSimpan = () => {
+    if (!namaIndex) return alert("Nama Index wajib diisi!");
+    if (points.length < 3) return alert("Buat minimal 3 titik untuk membentuk sebuah area (polygon) pada peta!");
+    onCreateIndex({ 
+      namaProyek: namaIndex,
+      kodeProyek: 'IDX-NEW',
+      deskripsi, 
+      points, 
+    });
+    setNamaIndex('');
+    setDeskripsi('');
+    setPoints([]);
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-[#eef2f7] rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-y-auto animate-in flex flex-col">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-modal">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
-          <h2 className="text-xl font-bold text-gray-900">Status Modul</h2>
-          <div className="flex gap-3">
-            <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
-              Kelola Modul →
-            </button>
-            <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors">
-              Tutup
-            </button>
-          </div>
+        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50 rounded-t-2xl">
+          <h2 className="text-xl font-bold text-gray-900">Tambah Index Baru</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 md:p-8 flex-1">
-          <div className="space-y-6">
-            {moduleCategories.map((cat) => (
-              <div
-                key={cat.category}
-                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
-              >
-                {cat.modules.map((mod) => (
-                  <div
-                    key={mod.id}
-                    className={`bg-white rounded-xl border border-gray-200 border-t-4 ${cat.borderColor} shadow-sm hover:shadow-md transition-all duration-200 flex flex-col`}
-                  >
-                    {/* Card Header */}
-                    <div className="p-4 pb-3">
-                      <div className="flex items-start justify-between mb-1">
-                        <div className="flex items-center gap-3">
-                          <ModuleIcon type={mod.icon} color={cat.color} />
-                          <div>
-                            <h3 className="text-sm font-bold text-gray-900 leading-tight">{mod.name}</h3>
-                            <p className="text-xs text-gray-400 mt-0.5">{mod.records} records</p>
-                          </div>
-                        </div>
-                        <span className="px-2.5 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full flex-shrink-0">
-                          Draft
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Card Footer */}
-                    <div className="px-4 pb-4 mt-auto">
-                      <p className="text-xs text-gray-400 mb-0.5">Cakupan jasa ekosistem:</p>
-                      <p className={`text-xs font-bold ${cat.textColor} mb-3`}>{cat.category}</p>
-
-                      <button
-                        onClick={() => {
-                          if (mod.id === 'direct-use-value') {
-                            onClose()
-                            navigate(`/valuasi/projects/${projectId}/modules/direct-use-value/input`)
-                          } else {
-                            onCreateIndex({ namaProyek: mod.name, kodeProyek: `MOD-${mod.id.substring(0,3).toUpperCase()}` })
-                          }
-                        }}
-                        className={`w-full py-2 border rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer hover:shadow-sm active:scale-[0.97] border-[#1a56db] text-[#1a56db] hover:bg-blue-50`}
-                      >
-                        Buka Modul →
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
+        <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nama Index *</label>
+              <input
+                type="text"
+                value={namaIndex}
+                onChange={(e) => setNamaIndex(e.target.value)}
+                placeholder="Misal: Area Pesisir Timur"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#1a5cd6] focus:border-[#1a5cd6] outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Deskripsi</label>
+              <textarea
+                rows={3}
+                value={deskripsi}
+                onChange={(e) => setDeskripsi(e.target.value)}
+                placeholder="Deskripsi index..."
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#1a5cd6] focus:border-[#1a5cd6] outline-none transition-all resize-none"
+              ></textarea>
+            </div>
+            
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
+              <h4 className="text-sm font-semibold text-blue-900 flex items-center gap-2 mb-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Cara Membuat Garis Peta
+              </h4>
+              <p className="text-xs text-blue-800 leading-relaxed">
+                Klik maksimal 4 titik pada area peta untuk membuat area kotak (polygon). Titik terakhir akan otomatis menyambung ke titik pertama. Klik tombol "Reset Garis" untuk mengulang dari awal.
+              </p>
+            </div>
           </div>
+          
+          <div className="flex flex-col h-[350px] md:h-auto border border-gray-200 rounded-xl overflow-hidden relative shadow-sm">
+            <div className="absolute top-4 right-4 z-[400]">
+              <button
+                onClick={() => setPoints([])}
+                className="px-3 py-1.5 bg-white border border-gray-200 text-red-600 text-xs font-bold rounded-lg shadow-sm hover:bg-red-50 transition-colors"
+              >
+                Reset Garis
+              </button>
+            </div>
+            <MapContainer 
+              center={[-6.5925, 106.7975]} 
+              zoom={11} 
+              style={{ height: '100%', width: '100%' }}
+              className="z-0"
+            >
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              {existingIndexes.map((idx) => {
+                if (idx.points && idx.points.length > 0) {
+                  return (
+                    <Polygon 
+                      key={idx.id} 
+                      positions={idx.points} 
+                      pathOptions={{ color: '#9ca3af', weight: 2, fillColor: '#9ca3af', fillOpacity: 0.1, dashArray: '4' }} 
+                    />
+                  );
+                }
+                return null;
+              })}
+              <DrawLineOnMap points={points} setPoints={setPoints} />
+            </MapContainer>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            onClick={handleSimpan}
+            className="px-6 py-2.5 rounded-lg bg-[#1a5cd6] text-sm font-semibold text-white hover:bg-[#1750bd] shadow-sm transition-colors"
+          >
+            Simpan Index
+          </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 const createLabelIcon = (text) => L.divIcon({
@@ -204,6 +276,8 @@ function ProjectIndexPage() {
         year: 'numeric',
       }),
       status: 'Draft',
+      points: data?.points || [],
+      deskripsi: data?.deskripsi || '',
     }
     setIndexes([...indexes, newIndex])
     // Auto-expand the new index for editing
@@ -473,11 +547,7 @@ function ProjectIndexPage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          if (idx.id === 1) {
-                            navigate(`/valuasi/projects/${projectId}/index/${idx.id}/areas`)
-                          } else {
-                            navigate(`/valuasi/projects/${projectId}/index/${idx.id}`)
-                          }
+                          navigate(`/valuasi/projects/${projectId}/index/${idx.id}/areas/1`)
                         }}
                         className="px-4 py-1.5 bg-[#1a56db] text-white text-xs font-semibold rounded-lg hover:bg-[#1545b8] active:scale-[0.97] transition-all duration-200 cursor-pointer whitespace-nowrap"
                       >
@@ -584,6 +654,7 @@ function ProjectIndexPage() {
         onClose={() => setShowModal(false)}
         projectId={projectId}
         navigate={navigate}
+        existingIndexes={indexes}
         onCreateIndex={(data) => {
           handleAddIndex(data)
           setShowModal(false)

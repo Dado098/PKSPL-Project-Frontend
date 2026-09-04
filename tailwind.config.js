@@ -8,6 +8,8 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
         ocean: {
@@ -22,6 +24,28 @@ export default {
           800: '#0f4c81',
           900: '#0a2540',
         },
+        background: '#f4f6f8',
+        foreground: '#0f1b2d',
+        card: '#ffffff',
+        primary: {
+          DEFAULT: '#1a5cd6',
+          50: '#eaf1fd',
+          100: '#d5e3fb',
+          600: '#1750bd',
+        },
+        muted: {
+          DEFAULT: '#f0f4f8',
+          foreground: '#5a6b80',
+        },
+        border: '#e2e8f0',
+        eco: {
+          DEFAULT: '#157a5b',
+          50: '#e6f4ee',
+        },
+        provisioning: '#0891b2',
+        regulating: '#2563eb',
+        supporting: '#7c3aed',
+        cultural: '#db7f0c',
       },
     },
   },

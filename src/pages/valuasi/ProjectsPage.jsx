@@ -469,7 +469,7 @@ function ProjectsPage() {
               {filteredProjects.map((project) => (
                 <tr
                   key={project.id}
-                  onClick={() => navigate(`/valuasi/projects/${project.id}`)}
+                  onClick={() => navigate(`/valuasi/projects/${project.id}/modules/direct-use-value`)}
                   onContextMenu={(e) => handleContextMenu(e, project)}
                   className={`cursor-pointer transition-colors ${
                     selectedProject === project.id
@@ -528,7 +528,7 @@ function ProjectsPage() {
                       {openActionMenu === project.id && (
                         <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 min-w-[140px]">
                           <button
-                            onClick={(e) => { e.stopPropagation(); setOpenActionMenu(null); navigate(`/valuasi/projects/${project.id}`) }}
+                            onClick={(e) => { e.stopPropagation(); setOpenActionMenu(null); navigate(`/valuasi/projects/${project.id}/modules/direct-use-value`) }}
                             className="w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                           >Buka Proyek</button>
                           <button

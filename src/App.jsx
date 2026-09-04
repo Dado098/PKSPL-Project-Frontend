@@ -26,6 +26,7 @@ import ModuleDashboardPage from './pages/valuasi/ModuleDashboardPage'
 import DirectUseValueFormPage from './pages/valuasi/DirectUseValueFormPage'
 import AreaIndexPage from './pages/valuasi/AreaIndexPage'
 import AreaDashboardPage from './pages/valuasi/AreaDashboardPage'
+import { ErrorBoundary } from './ErrorBoundary'
 
 function LandingPageContent() {
   const [currentView, setCurrentView] = useState('home')
@@ -114,7 +115,7 @@ function App() {
         <Route path="/valuasi/projects/:projectId/index/:indexId/form" element={<ValuasiFormPage />} />
         <Route path="/valuasi/projects/:projectId/index/:indexId/preview" element={<ValuasiPreviewPage />} />
         <Route path="/valuasi/projects/:projectId/index/:indexId/areas" element={<AreaIndexPage />} />
-        <Route path="/valuasi/projects/:projectId/index/:indexId/areas/:areaId" element={<AreaDashboardPage />} />
+        <Route path="/valuasi/projects/:projectId/index/:indexId/areas/:areaId" element={<ErrorBoundary><AreaDashboardPage /></ErrorBoundary>} />
         <Route path="/valuasi/projects/:projectId/modules/:moduleId" element={<ProjectIndexPage />} />
         <Route path="/valuasi/projects/:projectId/modules" element={<ModuleDashboardPage />} />
         <Route path="/valuasi/projects/:projectId" element={<ModuleDashboardPage />} />

@@ -436,7 +436,7 @@ function ServiceSection({ label, prefix, rows, setRows, color, isOpen, onToggle 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export default function ValuasiPreviewPage() {
-  const { projectId } = useParams()
+  const { projectId, indexId } = useParams()
   const navigate = useNavigate()
 
   const isNew = projectId === 'new'
@@ -467,13 +467,13 @@ export default function ValuasiPreviewPage() {
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <Link
-          to="/valuasi/projects"
+          to={`/valuasi/projects/${projectId}/index/${indexId || '1'}/areas/1`}
           className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          Kembali ke Beranda
+          Kembali ke Area
         </Link>
 
         <div className="flex items-center gap-3">
