@@ -114,11 +114,19 @@ export function ProjectDetail({
           <StatusBadge status="accepted" />
         </div>
 
-        {/* Breadcrumb */}
-        <div className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span>{project.group}</span>
-          <span>/</span>
-          <span className="font-medium text-foreground">{project.code}</span>
+        {/* Breadcrumb & Actions */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>{project.group}</span>
+            <span>/</span>
+            <span className="font-medium text-foreground">{project.code}</span>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button className="px-4 py-2 bg-[#1a56db] text-white rounded-lg text-sm font-semibold shadow-sm hover:bg-[#1545b8] hover:shadow-md transition-all cursor-pointer active:scale-[0.98]">
+              Kirimkan Hasil ke Analis
+            </button>
+          </div>
         </div>
 
         {/* Project header */}
@@ -131,7 +139,6 @@ export function ProjectDetail({
               <Meta icon={Calendar} text={`Tahun ${project.year}`} />
               <Meta icon={MapPin} text={project.location} />
               <Meta icon={Leaf} text={project.ecosystem} />
-              <Meta icon={User} text={project.lead} />
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

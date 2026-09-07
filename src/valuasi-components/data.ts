@@ -85,8 +85,7 @@ export const STATUS: Record<
 export const STATUS_ORDER: DataStatus[] = [
   "accepted",
   "draft",
-  "review",
-  "rejected",
+  "review"
 ];
 
 export type Biota = "flora" | "fauna";

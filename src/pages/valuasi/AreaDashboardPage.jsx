@@ -123,13 +123,13 @@ export default function AreaDashboardPage() {
 
       <div className="flex-1 relative z-0">
         {screen === "detail" && (
-          <ProjectDetail
-            project={project}
-            highlightId={highlightId}
-            onPreview={(row) => setPreviewRow(row)}
-            onEdit={handleEdit}
-            onDelete={(row) => setDeleteRow(row)}
-            onAddData={(category) => {
+            <ProjectDetail
+              project={project}
+              highlightId={highlightId}
+              onPreview={(row) => setPreviewRow(row)}
+              onEdit={handleEdit}
+              onDelete={(row) => setDeleteRow(row)}
+              onAddData={(category) => {
               setModule(null)
               setMethod(null)
               setEditRow(null)
