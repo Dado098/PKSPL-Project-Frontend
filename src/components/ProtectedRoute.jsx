@@ -18,30 +18,31 @@ const ProtectedRoute = ({ allowedRoles }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user?.role?.nama_role)) {
-    console.warn('ProtectedRoute access denied', {
+  const userRoleName = user?.role?.nama_role || (typeof user?.role === 'string' ? user?.role : null);
+  const normalizedRole = (userRoleName || '').toLowerCase();
+
+  const isAllowed = allowedRoles
+    ? allowedRoles.some((r) => r.toLowerCase() === normalizedRole)
+    : true;
+
+  if (!isAllowed) {
+    console.warn('ProtectedRoute access denied - redirecting based on role', {
       pathname: location.pathname,
-      user,
+      userRoleName,
       allowedRoles,
-      roleName: user?.role?.nama_role ?? null,
-      isAuthenticated,
     });
 
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen text-center px-4">
-        <h1 className="text-4xl font-bold text-[#1a56db] mb-4">Akses Ditolak</h1>
-        <p className="text-gray-600 mb-6">Anda tidak memiliki izin untuk mengakses halaman ini.</p>
-        <p className="text-xs text-gray-500 mb-6">
-          Debug: role={user?.role?.nama_role ?? 'tidak ada'}; allowed={allowedRoles.join(', ')}
-        </p>
-        <button
-          onClick={() => window.history.back()}
-          className="px-6 py-2 bg-[#1a56db] text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Kembali
-        </button>
-      </div>
-    );
+    // Redirect to the designated workspace based on user's active role
+    if (['super admin', 'admin', 'administrator'].includes(normalizedRole)) {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
+    if (normalizedRole === 'peneliti') {
+      return <Navigate to="/peneliti/projects" replace />;
+    }
+    if (normalizedRole === 'analyst') {
+      return <Navigate to="/analyst/dashboard" replace />;
+    }
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

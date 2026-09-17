@@ -1,7 +1,10 @@
 import React from 'react';
 import { CheckCircle2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const AboutSection = () => {
+  const { t } = useTranslation(['landing']);
+
   return (
     <section id="about" className="py-20 lg:py-28 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -23,14 +26,14 @@ const AboutSection = () => {
           {/* Right Column */}
           <div>
             <div className="inline-block bg-blue-50 text-blue-600 px-4 py-1 rounded-full text-sm font-semibold tracking-wider mb-6">
-              TENTANG KAMI
+              {t('about.tag')}
             </div>
             <h2 className="text-3xl lg:text-4xl font-bold text-slate-800 mb-4">
-              Tentang Platform Valuasi Ekosistem<br />
-              <span className="text-gradient">PKSPL IPB</span>
+              {t('about.title')}<br />
+              <span className="text-gradient">{t('about.subtitle')}</span>
             </h2>
             <p className="text-slate-600 text-lg leading-relaxed mt-4 mb-8">
-              Ekosistem pesisir seperti mangrove, terumbu karang, dan padang lamun memiliki manfaat ekologis dan ekonomi yang sangat krusial. Platform ini hadir sebagai solusi digital end-to-end untuk:
+              {t('about.description')}
             </p>
 
             <ul className="space-y-4 mt-6">
@@ -39,8 +42,8 @@ const AboutSection = () => {
                   <CheckCircle2 className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <span className="font-bold text-slate-800">Digitalisasi Pendataan Data:</span>
-                  <span className="text-slate-600 ml-1">Memudahkan masukan data primer & sekunder.</span>
+                  <span className="font-bold text-slate-800">{t('about.point1Title')} </span>
+                  <span className="text-slate-600">{t('about.point1Desc')}</span>
                 </div>
               </li>
               <li className="flex gap-3">
@@ -48,8 +51,8 @@ const AboutSection = () => {
                   <CheckCircle2 className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <span className="font-bold text-slate-800">Kalkulasi Otomatis TEV:</span>
-                  <span className="text-slate-600 ml-1">Mengakomodasi perhitungan Use Value (Direct, Indirect, Option) hingga Non-Use Value (Existence, Bequest).</span>
+                  <span className="font-bold text-slate-800">{t('about.point2Title')} </span>
+                  <span className="text-slate-600">{t('about.point2Desc')}</span>
                 </div>
               </li>
               <li className="flex gap-3">
@@ -57,8 +60,8 @@ const AboutSection = () => {
                   <CheckCircle2 className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <span className="font-bold text-slate-800">Analisis & Kebijakan:</span>
-                  <span className="text-slate-600 ml-1">Menyajikan analisis sensitivitas data dan rekomendasi strategi pengelolaan seperti Blue Economy, kawasan konservasi, hingga Pembayaran Jasa Ekosistem (PES).</span>
+                  <span className="font-bold text-slate-800">{t('about.point3Title')} </span>
+                  <span className="text-slate-600">{t('about.point3Desc')}</span>
                 </div>
               </li>
             </ul>

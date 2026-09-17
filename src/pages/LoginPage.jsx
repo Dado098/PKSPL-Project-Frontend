@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 
 const GoogleIcon = () => (
@@ -13,6 +14,7 @@ const GoogleIcon = () => (
 )
 
 function LoginPage() {
+  const { t } = useTranslation(['auth', 'common'])
   const navigate = useNavigate()
   const location = useLocation()
   const { login, loginWithGoogle } = useAuth()
@@ -26,30 +28,57 @@ function LoginPage() {
   
   const from = location.state?.from?.pathname || '/'
 
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem('pkspl_remembered_email')
+    if (rememberedEmail) {
+      setIdentity(rememberedEmail)
+      setRememberMe(true)
+    }
+
+    const searchParams = new URLSearchParams(location.search)
+    if (location.state?.idleTimeout || searchParams.get('idle_timeout') === '1') {
+      const msg = t('idleTimeout.message', { hours: 2, ns: 'common' })
+      setError(msg)
+      toast.error(msg)
+    }
+  }, [location, t])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setIsLoading(true)
     try {
-      const user = await login(identity, password)
-      toast.success(`Login berhasil. Selamat datang, ${user.nama || 'User'}!`)
+      if (rememberMe) {
+        localStorage.setItem('pkspl_remembered_email', identity.trim())
+      } else {
+        localStorage.removeItem('pkspl_remembered_email')
+      }
+
+      const user = await login(identity, password, rememberMe)
+      toast.success(`${t('messages.success', { ns: 'common' })}. ${user.nama || 'User'}!`)
       
       let redirectPath = from
       if (from === '/') {
-        const role = user?.role?.nama_role
-        if (role === 'Admin' || role === 'Administrator') {
-          redirectPath = '/admin'
-        } else if (role === 'Peneliti') {
-          redirectPath = '/valuasi/projects'
+        const role = user?.role?.nama_role || (typeof user?.role === 'string' ? user?.role : '');
+        const normalizedRole = role.toLowerCase();
+        if (normalizedRole === 'super admin' || normalizedRole === 'admin' || normalizedRole === 'administrator') {
+          redirectPath = '/admin/dashboard'
+        } else if (normalizedRole === 'peneliti') {
+          redirectPath = '/peneliti/projects'
+        } else if (normalizedRole === 'analyst') {
+          redirectPath = '/analyst/dashboard'
         }
       }
       
       navigate(redirectPath, { replace: true })
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Login gagal. Silakan coba lagi.'
+      let errorMessage = err.response?.data?.message || t('errors.invalidCredentials')
+      if (err.response?.data?.requires_verification) {
+        errorMessage = err.response?.data?.message || t('errors.emailUnverified')
+      } else if (errorMessage.includes('Google')) {
+        errorMessage = t('errors.accountGoogleOnly')
+      }
       setError(errorMessage)
-      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -60,12 +89,12 @@ function LoginPage() {
     try {
       await loginWithGoogle()
     } catch (err) {
-      setError('Failed to initialize Google login.')
+      setError(t('messages.errorOccurred', { ns: 'common' }))
     }
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#1a56db] font-inter p-4 md:p-8">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#1a56db] font-inter p-4 md:p-8 relative">
       {/* Login Card */}
       <div
         id="login-card"
@@ -81,12 +110,12 @@ function LoginPage() {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
             </svg>
-            Kembali ke Beranda
+            {t('actions.backToHome', { ns: 'common' })}
           </Link>
 
           <div className="mb-8 mt-4">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Log in</h1>
-            <p className="text-gray-500 text-sm">Welcome back! Please enter your details</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('loginTitle')}</h1>
+            <p className="text-gray-500 text-sm">{t('loginSubtitle')}</p>
           </div>
 
           {error && (
@@ -102,12 +131,14 @@ function LoginPage() {
                 htmlFor="identity-input"
                 className="block text-sm font-medium text-gray-900 mb-1.5"
               >
-                Email / Username
+                {t('emailOrUsername')}
               </label>
               <input
                 id="identity-input"
+                name="username"
                 type="text"
-                placeholder="Masukkan email atau username"
+                autoComplete="username"
+                placeholder={t('emailOrUsernamePlaceholder')}
                 value={identity}
                 onChange={(e) => setIdentity(e.target.value)}
                 required
@@ -117,17 +148,28 @@ function LoginPage() {
 
             {/* Password Field */}
             <div>
-              <label
-                htmlFor="password-input"
-                className="block text-sm font-medium text-gray-900 mb-1.5"
-              >
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  htmlFor="password-input"
+                  className="block text-sm font-medium text-gray-900"
+                >
+                  {t('password')}
+                </label>
+                <Link
+                  to="/forgot-password"
+                  id="forgot-password-link"
+                  className="text-xs font-medium text-[#1a56db] hover:text-[#1545b8] hover:underline transition-colors"
+                >
+                  {t('forgotPasswordLink')}
+                </Link>
+              </div>
               <div className="relative">
                 <input
                   id="password-input"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••••••"
+                  autoComplete="current-password"
+                  placeholder={t('passwordPlaceholder')}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -167,7 +209,7 @@ function LoginPage() {
                 htmlFor="remember-me"
                 className="ml-2 text-sm text-gray-600 cursor-pointer select-none"
               >
-                Remember me
+                {t('rememberMe')}
               </label>
             </div>
 
@@ -178,7 +220,7 @@ function LoginPage() {
               disabled={isLoading}
               className={`w-full py-2.5 bg-[#1a56db] text-white text-sm font-semibold rounded-lg transition-all duration-200 hover:bg-[#1545b8] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98] cursor-pointer ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isLoading ? t('signingIn') : t('signIn')}
             </button>
 
             {/* Sign In with Google */}
@@ -189,37 +231,35 @@ function LoginPage() {
               className="w-full py-2.5 bg-white border border-gray-300 text-sm font-medium text-gray-700 rounded-lg flex items-center justify-center gap-2.5 transition-all duration-200 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm active:scale-[0.98] cursor-pointer"
             >
               <GoogleIcon />
-              Sign in with Google
+              {t('signInWithGoogle')}
             </button>
           </form>
 
           {/* Sign Up Link */}
           <p className="mt-6 text-center text-sm text-gray-600">
-            Dont have an Account?{' '}
+            {t('dontHaveAccount')}{' '}
             <Link
               to="/register"
               id="sign-up-link"
               className="text-[#1a56db] font-semibold hover:text-[#1545b8] hover:underline transition-colors"
             >
-              Sign up
+              {t('signUpLink')}
             </Link>
           </p>
         </div>
 
         {/* Right Side - Image Placeholder */}
         <div className="hidden md:flex w-1/2 bg-gradient-to-br from-[#1a56db] to-[#0e3baa] items-center justify-center p-6 relative overflow-hidden">
-          {/* Placeholder - replace with your image */}
           <div className="w-full h-full rounded-xl border-2 border-white/20 bg-white/5 backdrop-blur-sm flex items-center justify-center">
             <div className="text-center text-white/60">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <p className="text-sm font-medium">Your Image Here</p>
-              <p className="text-xs mt-1 opacity-70">Replace this placeholder</p>
+              <p className="text-sm font-medium">PKSPL IPB</p>
+              <p className="text-xs mt-1 opacity-70">Valuasi Ekonomi Ekosistem Pesisir</p>
             </div>
           </div>
 
-          {/* Decorative elements */}
           <div className="absolute -top-20 -right-20 w-40 h-40 bg-white/5 rounded-full"></div>
           <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-white/5 rounded-full"></div>
         </div>

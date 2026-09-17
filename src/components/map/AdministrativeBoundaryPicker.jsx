@@ -9,7 +9,7 @@ import {
   fetchDistricts,
   fetchVillages,
 } from '../../lib/wilayah'
-import { boundaryCentroid, countCoordinates, findInvalidCoordinate } from '../../lib/geo'
+import { countCoordinates, findInvalidCoordinate } from '../../lib/geo'
 import {
   getProvinsi as fetchApiProvinsi,
   getKabupatenKota as fetchApiKabupaten,
@@ -67,11 +67,11 @@ export default function AdministrativeBoundaryPicker({
     setVillages([])
     setNotice(null)
 
-    const skipAutoDraw = isFirstRun.current && !!value
+    const skipAutoDraw = (isFirstRun.current && !!value) || !!value
     isFirstRun.current = false
 
     if (!province) {
-      if (!skipAutoDraw) onReset?.()
+      if (!skipAutoDraw && !value) onReset?.()
       return
     }
 
@@ -79,7 +79,7 @@ export default function AdministrativeBoundaryPicker({
     const dbProv = dbProvinsiList.find(p => p.nama_provinsi?.toLowerCase() === province.toLowerCase())
     const provCode = dbProv?.kode_provinsi || PROVINCE_BOUNDARY_CODE[province] || PROVINCE_EMSIFA_ID[province]
 
-    if (!skipAutoDraw && provCode) {
+    if (!skipAutoDraw && !value && provCode) {
       lookupBoundary(1, provCode, province)
     }
 
@@ -113,10 +113,20 @@ export default function AdministrativeBoundaryPicker({
     }
   }, [province, dbProvinsiList])
 
+  // Cleanup on unmount to cancel pending boundary requests
+  useEffect(() => {
+    return () => {
+      requestId.current += 1
+      setLoadingBoundary(false)
+    }
+  }, [])
+
   async function lookupBoundary(level, code, label) {
     const myRequestId = ++requestId.current
     setLoadingBoundary(true)
     setNotice(null)
+    onReset?.()
+
     try {
       const data = await fetchApiBoundaryLookup(level, code)
       if (myRequestId !== requestId.current) return
@@ -126,11 +136,6 @@ export default function AdministrativeBoundaryPicker({
           type: 'warning',
           text: `Batas poligon untuk "${label}" belum tersedia di database wilayah. Anda dapat mengunggah file SHP manual untuk polygon yang presisi.`,
         })
-
-        if (value) {
-          const centroid = boundaryCentroid(value)
-          if (centroid) onFound?.(value, centroid, label)
-        }
         return
       }
 
@@ -265,6 +270,8 @@ export default function AdministrativeBoundaryPicker({
     ? dbProvinsiList.map(p => p.nama_provinsi)
     : PROVINCES
 
+  const isMapVisible = loadingBoundary || !!value || !!notice
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -342,35 +349,59 @@ export default function AdministrativeBoundaryPicker({
         </div>
       </div>
 
-      {loadingBoundary && (
-        <div className="text-xs text-[#5046e5] font-semibold animate-pulse flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-[#5046e5] animate-ping" />
-          Mengambil batas geometri wilayah...
-        </div>
-      )}
-
-      {notice && (
-        <div className={`p-3 rounded-lg text-xs border ${
-          notice.type === 'error'
-            ? 'bg-red-50 text-red-700 border-red-200'
-            : 'bg-amber-50 text-amber-800 border-amber-200'
-        }`}>
-          {notice.text}
-        </div>
-      )}
-
-      {value ? (
+      {isMapVisible ? (
         <div>
-          <ProjectLocationMap boundary={value} height={height} className="shadow-sm" />
-          <div className="flex justify-end mt-2">
-            <button
-              type="button"
-              className="text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-              onClick={reset}
-            >
-              Reset Pilihan Boundary
-            </button>
+          <div className="relative overflow-hidden rounded-xl border border-gray-200 shadow-sm" style={{ height }}>
+            <ProjectLocationMap boundary={loadingBoundary ? null : value} height={height} />
+
+            {/* Map Loading Overlay */}
+            {loadingBoundary && (
+              <div className="absolute inset-0 z-[1000] bg-white/75 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 p-4 text-center transition-all duration-200">
+                <div className="w-10 h-10 border-4 border-[#5046e5]/20 border-t-[#5046e5] rounded-full animate-spin" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-gray-800">Memuat batas wilayah...</p>
+                  <p className="text-xs text-gray-500">Mengambil data geometri dari server</p>
+                </div>
+              </div>
+            )}
+
+            {/* Notice / Error Overlay */}
+            {!loadingBoundary && notice && (
+              <div className="absolute inset-x-4 top-4 z-[1000]">
+                <div className={`p-3.5 rounded-xl text-xs border shadow-lg backdrop-blur-md ${
+                  notice.type === 'error'
+                    ? 'bg-red-50/95 text-red-700 border-red-200'
+                    : 'bg-amber-50/95 text-amber-900 border-amber-200'
+                }`}>
+                  <div className="flex items-start gap-2.5">
+                    <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      {notice.type === 'error' ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      )}
+                    </svg>
+                    <div>
+                      <span className="font-bold">{notice.type === 'error' ? 'Gagal Memuat Geometri' : 'Informasi Wilayah'}</span>
+                      <p className="mt-0.5 text-gray-700">{notice.text}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
+          {value && !loadingBoundary && (
+            <div className="flex justify-end mt-2">
+              <button
+                type="button"
+                className="text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                onClick={reset}
+              >
+                Reset Pilihan Boundary
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div

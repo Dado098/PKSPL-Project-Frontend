@@ -10,30 +10,18 @@ export const getProyekById = async (idProyek) => {
   return response.data?.data || response.data
 }
 
+export const getNextProyekCode = async () => {
+  const response = await api.get('/proyek/next-code')
+  return response.data?.next_code || response.data
+}
+
 export const createProyek = async (payload) => {
-  let requestData = payload
-  let headers = {}
-
-  // If payload contains SHP File objects, send as FormData
-  if (payload instanceof FormData) {
-    requestData = payload
-    headers = { 'Content-Type': 'multipart/form-data' }
-  }
-
-  const response = await api.post('/proyek', requestData, { headers })
+  const response = await api.post('/proyek', payload)
   return response.data?.data || response.data
 }
 
 export const updateProyek = async (idProyek, payload) => {
-  let requestData = payload
-  let headers = {}
-
-  if (payload instanceof FormData) {
-    requestData = payload
-    headers = { 'Content-Type': 'multipart/form-data' }
-  }
-
-  const response = await api.put(`/proyek/${idProyek}`, requestData, { headers })
+  const response = await api.put(`/proyek/${idProyek}`, payload)
   return response.data?.data || response.data
 }
 

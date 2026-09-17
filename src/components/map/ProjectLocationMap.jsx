@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { MAP_CONFIG } from '../../peneliti/config/mapConfig'
 
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
@@ -84,9 +85,10 @@ export default function ProjectLocationMap({
     const map = L.map(containerRef.current, { scrollWheelZoom: true, zoomSnap: 0, zoomDelta: 0.5 })
     mapRef.current = map
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 18,
+    L.tileLayer(MAP_CONFIG.primaryTileProvider.url, {
+      attribution: MAP_CONFIG.primaryTileProvider.attribution,
+      maxZoom: MAP_CONFIG.primaryTileProvider.maxZoom,
+      referrerPolicy: 'strict-origin-when-cross-origin',
     }).addTo(map)
 
     return () => {

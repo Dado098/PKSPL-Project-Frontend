@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Menu, X, User, Edit3, Lock, LogOut } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileDropdown from './ProfileDropdown';
 import ProfileModal from './ProfileModal';
@@ -9,6 +10,7 @@ import EditProfileModal from './EditProfileModal';
 import ChangePasswordModal from './ChangePasswordModal';
 
 const Navbar = () => {
+  const { t } = useTranslation(['common', 'profile']);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showMobileProfile, setShowMobileProfile] = useState(false);
@@ -19,7 +21,7 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     await logout();
-    toast.success('Anda berhasil keluar.');
+    toast.success(t('messages.loggedOut'));
     navigate('/');
   };
 
@@ -32,17 +34,17 @@ const Navbar = () => {
   }, []);
 
   const getValuasiLink = () => {
-    if (!isAuthenticated) return '/valuasi/projects';
+    if (!isAuthenticated) return '/peneliti/projects';
     const role = user?.role?.nama_role;
-    if (role === 'Admin' || role === 'Administrator') return '/admin';
-    return '/valuasi/projects';
+    if (role === 'Admin' || role === 'Administrator' || role === 'Super Admin') return '/admin/dashboard';
+    return '/peneliti/projects';
   };
 
   const navLinks = [
-    { name: 'Beranda', href: '#hero' },
-    { name: 'Kawasan', href: '#about' },
-    { name: 'Valuasi', href: getValuasiLink() },
-    { name: 'Bantuan / Kontak', href: '#map' },
+    { name: t('nav.home'), href: '#hero' },
+    { name: t('nav.about'), href: '#about' },
+    { name: t('nav.valuation'), href: getValuasiLink() },
+    { name: t('nav.contact'), href: '#map' },
   ];
 
   return (
@@ -74,7 +76,7 @@ const Navbar = () => {
 
           {/* Desktop Navigation Links */}
           <div className="hidden lg:flex items-center gap-1 xl:gap-2">
-          {navLinks.map((link) =>
+            {navLinks.map((link) =>
               link.href.startsWith('/') ? (
                 <Link
                   key={link.name}
@@ -103,8 +105,8 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Daftar / Masuk Button or Profile Dropdown */}
-          <div className="hidden lg:block flex-shrink-0">
+          {/* Login/Profile */}
+          <div className="hidden lg:flex items-center gap-3 flex-shrink-0">
             {!isAuthenticated ? (
               <Link
                 to="/login"
@@ -114,7 +116,7 @@ const Navbar = () => {
                     : 'text-white bg-white/15 hover:bg-white/25 border-white/20 hover:border-white/40'
                 }`}
               >
-                Daftar / Masuk
+                {t('nav.loginRegister')}
               </Link>
             ) : (
               <ProfileDropdown isScrolled={isScrolled} />
@@ -122,17 +124,19 @@ const Navbar = () => {
           </div>
 
           {/* Mobile menu button */}
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className={`lg:hidden p-1.5 rounded-full transition-all ${
-              isScrolled
-                ? 'text-slate-700 hover:text-blue-600 hover:bg-slate-100'
-                : 'text-white/90 hover:text-white hover:bg-white/10'
-            }`}
-            aria-label="Toggle menu"
-          >
-            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          <div className="flex lg:hidden items-center gap-2">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className={`p-1.5 rounded-full transition-all ${
+                isScrolled
+                  ? 'text-slate-700 hover:text-blue-600 hover:bg-slate-100'
+                  : 'text-white/90 hover:text-white hover:bg-white/10'
+              }`}
+              aria-label="Toggle menu"
+            >
+              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -176,28 +180,28 @@ const Navbar = () => {
                   className="block px-4 py-2.5 rounded-xl text-sm font-semibold text-white
                              bg-white/15 hover:bg-white/25 text-center transition-all duration-200"
                 >
-                  Daftar / Masuk
+                  {t('nav.loginRegister')}
                 </Link>
               ) : (
                 <div className="px-4 py-2 space-y-1">
-                  <p className="text-sm text-white/70 mb-2">Login sebagai: <span className="font-medium text-white">{user?.nama}</span></p>
+                  <p className="text-sm text-white/70 mb-2">{t('nav.loggedInAs')} <span className="font-medium text-white">{user?.nama}</span></p>
                   <button
                     onClick={() => { setIsMobileMenuOpen(false); setShowMobileProfile(true); }}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-white/90 hover:bg-white/10 transition-all"
                   >
-                    <User size={16} /> Profil Saya
+                    <User size={16} /> {t('profile.myProfile', { ns: 'profile' })}
                   </button>
                   <button
                     onClick={() => { setIsMobileMenuOpen(false); setShowMobileEditProfile(true); }}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-white/90 hover:bg-white/10 transition-all"
                   >
-                    <Edit3 size={16} /> Edit Profil
+                    <Edit3 size={16} /> {t('profile.editProfile', { ns: 'profile' })}
                   </button>
                   <button
                     onClick={() => { setIsMobileMenuOpen(false); setShowMobileChangePassword(true); }}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-white/90 hover:bg-white/10 transition-all"
                   >
-                    <Lock size={16} /> Ganti Password
+                    <Lock size={16} /> {t('profile.changePassword', { ns: 'profile' })}
                   </button>
                   <button
                     onClick={() => {
@@ -207,7 +211,7 @@ const Navbar = () => {
                     className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-xl text-sm font-semibold text-white
                                bg-red-500/20 border border-red-500/30 hover:bg-red-500/30 transition-all duration-200"
                   >
-                    <LogOut size={16} /> Keluar
+                    <LogOut size={16} /> {t('profile.logout', { ns: 'profile' })}
                   </button>
                 </div>
               )}

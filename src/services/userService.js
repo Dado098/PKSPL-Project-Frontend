@@ -5,6 +5,11 @@ export const getUsers = async () => {
   return response.data?.data ?? [];
 };
 
+export const getUserById = async (userId) => {
+  const response = await api.get(`/users/${userId}`);
+  return response.data?.data ?? response.data;
+};
+
 export const getRoles = async () => {
   const response = await api.get('/roles');
   return response.data?.data ?? [];

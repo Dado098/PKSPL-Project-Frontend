@@ -8,6 +8,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
 import { getLocationById, getCategoryInfo } from './mapData';
+import { MAP_CONFIG } from '../../peneliti/config/mapConfig';
 
 // Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -188,8 +189,10 @@ export default function ProjectDetailPage({ projectId, onBack }) {
               <div className="h-[400px] rounded-xl overflow-hidden shadow-inner border border-slate-200">
                 <MapContainer center={loc.coords} zoom={10} scrollWheelZoom={false} className="h-full w-full">
                   <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution={MAP_CONFIG.primaryTileProvider.attribution}
+                    url={MAP_CONFIG.primaryTileProvider.url}
+                    maxZoom={MAP_CONFIG.primaryTileProvider.maxZoom}
+                    referrerPolicy="strict-origin-when-cross-origin"
                   />
                   <Marker position={loc.coords}>
                     <Popup>

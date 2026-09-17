@@ -1,10 +1,13 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Camera, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { updateProfile } from '../services/profileService';
 
 const EditProfileModal = ({ onClose }) => {
+  const { t } = useTranslation(['profile', 'common']);
   const { user, refreshUser } = useAuth();
   const [nama, setNama] = useState(user?.nama || '');
   const [previewUrl, setPreviewUrl] = useState(user?.foto || null);
@@ -22,7 +25,6 @@ const EditProfileModal = ({ onClose }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Client-side validation
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setErrors({ foto: 'Format foto harus JPEG, JPG, PNG, atau WebP.' });
@@ -59,33 +61,32 @@ const EditProfileModal = ({ onClose }) => {
 
       await updateProfile(formData);
       await refreshUser();
-      toast.success('Profil berhasil diperbarui.');
+      toast.success(t('profileUpdated'));
       onClose();
     } catch (error) {
       const responseErrors = error.response?.data?.errors;
       if (responseErrors) {
-        // Map Laravel validation errors
         const mapped = {};
         Object.entries(responseErrors).forEach(([key, msgs]) => {
           mapped[key] = Array.isArray(msgs) ? msgs[0] : msgs;
         });
         setErrors(mapped);
       } else {
-        toast.error(error.response?.data?.message || 'Gagal memperbarui profil.');
+        toast.error(error.response?.data?.message || t('messages.errorOccurred', { ns: 'common' }));
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fade-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-800">Edit Profil</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <h2 className="text-lg font-bold text-slate-800">{t('editProfileTitle')}</h2>
           <button
             onClick={onClose}
             className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
@@ -94,7 +95,7 @@ const EditProfileModal = ({ onClose }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5">
+        <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
           {/* Photo Upload */}
           <div className="flex flex-col items-center mb-6">
             <div
@@ -119,7 +120,6 @@ const EditProfileModal = ({ onClose }) => {
               >
                 {getInitials(nama)}
               </div>
-              {/* Camera overlay */}
               <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                 <Camera size={24} className="text-white" />
               </div>
@@ -131,7 +131,7 @@ const EditProfileModal = ({ onClose }) => {
               onChange={handleFileSelect}
               className="hidden"
             />
-            <p className="text-xs text-slate-400 mt-2">Klik untuk mengganti foto</p>
+            <p className="text-xs text-slate-400 mt-2">{t('uploadPhoto')}</p>
             {errors.foto && <p className="text-xs text-red-500 mt-1">{errors.foto}</p>}
           </div>
 
@@ -161,7 +161,6 @@ const EditProfileModal = ({ onClose }) => {
               disabled
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 text-slate-500 cursor-not-allowed"
             />
-            <p className="text-xs text-slate-400 mt-1">Email tidak dapat diubah.</p>
           </div>
 
           {/* Actions */}
@@ -169,24 +168,26 @@ const EditProfileModal = ({ onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               disabled={isSubmitting}
             >
-              Batal
+              {t('actions.cancel', { ns: 'common' })}
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-              {isSubmitting ? 'Menyimpan...' : 'Simpan'}
+              {isSubmitting ? t('actions.submitting', { ns: 'common' }) : t('actions.save', { ns: 'common' })}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 export default EditProfileModal;

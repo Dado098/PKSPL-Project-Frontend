@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { updatePassword } from '../services/profileService';
 
 const ChangePasswordModal = ({ onClose }) => {
+  const { t } = useTranslation(['profile', 'common']);
   const { user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -21,12 +24,11 @@ const ChangePasswordModal = ({ onClose }) => {
     e.preventDefault();
     setErrors({});
 
-    // Client-side validation
     const clientErrors = {};
-    if (!currentPassword) clientErrors.current_password = 'Password saat ini wajib diisi.';
-    if (!newPassword) clientErrors.password = 'Password baru wajib diisi.';
-    else if (newPassword.length < 8) clientErrors.password = 'Password baru minimal 8 karakter.';
-    if (newPassword !== confirmPassword) clientErrors.password_confirmation = 'Konfirmasi password tidak cocok.';
+    if (!currentPassword) clientErrors.current_password = t('currentPassword') + ' mandatory.';
+    if (!newPassword) clientErrors.password = t('newPassword') + ' mandatory.';
+    else if (newPassword.length < 8) clientErrors.password = 'Minimal 8 characters.';
+    if (newPassword !== confirmPassword) clientErrors.password_confirmation = t('confirmPassword') + ' mismatch.';
 
     if (Object.keys(clientErrors).length > 0) {
       setErrors(clientErrors);
@@ -41,7 +43,7 @@ const ChangePasswordModal = ({ onClose }) => {
         password_confirmation: confirmPassword,
       });
 
-      toast.success('Password berhasil diubah.');
+      toast.success(t('passwordUpdated'));
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -55,7 +57,7 @@ const ChangePasswordModal = ({ onClose }) => {
         });
         setErrors(mapped);
       } else {
-        const message = error.response?.data?.message || 'Gagal mengubah password.';
+        const message = error.response?.data?.message || t('messages.errorOccurred', { ns: 'common' });
         toast.error(message);
       }
     } finally {
@@ -63,7 +65,7 @@ const ChangePasswordModal = ({ onClose }) => {
     }
   };
 
-  const PasswordField = ({ label, value, onChange, show, onToggle, error, errorKey, placeholder }) => (
+  const PasswordField = ({ label, value, onChange, show, onToggle, error, placeholder }) => (
     <div className="mb-4">
       <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
       <div className="relative">
@@ -90,14 +92,14 @@ const ChangePasswordModal = ({ onClose }) => {
     </div>
   );
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fade-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-800">Ganti Password</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <h2 className="text-lg font-bold text-slate-800">{t('changePasswordTitle')}</h2>
           <button
             onClick={onClose}
             className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
@@ -106,45 +108,44 @@ const ChangePasswordModal = ({ onClose }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5">
-          {/* Google User Info */}
+        <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
           {isGoogleUser && (
             <div className="flex items-start gap-3 mb-5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
               <AlertCircle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-amber-700">
-                Akun Anda terhubung dengan Google. Masukkan password saat ini untuk mengubahnya, atau atur password baru jika belum pernah mengatur password lokal.
+                Google account connected. Set or update your password.
               </p>
             </div>
           )}
 
           <PasswordField
-            label="Password Saat Ini"
+            label={t('currentPassword')}
             value={currentPassword}
             onChange={setCurrentPassword}
             show={showCurrentPassword}
             onToggle={() => setShowCurrentPassword(!showCurrentPassword)}
             error={errors.current_password}
-            placeholder="Masukkan password saat ini"
+            placeholder="••••••••••••"
           />
 
           <PasswordField
-            label="Password Baru"
+            label={t('newPassword')}
             value={newPassword}
             onChange={setNewPassword}
             show={showNewPassword}
             onToggle={() => setShowNewPassword(!showNewPassword)}
             error={errors.password}
-            placeholder="Minimal 8 karakter"
+            placeholder="••••••••••••"
           />
 
           <PasswordField
-            label="Konfirmasi Password Baru"
+            label={t('confirmPassword')}
             value={confirmPassword}
             onChange={setConfirmPassword}
             show={showConfirmPassword}
             onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
             error={errors.password_confirmation}
-            placeholder="Ulangi password baru"
+            placeholder="••••••••••••"
           />
 
           {/* Actions */}
@@ -152,24 +153,26 @@ const ChangePasswordModal = ({ onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               disabled={isSubmitting}
             >
-              Batal
+              {t('actions.cancel', { ns: 'common' })}
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-              {isSubmitting ? 'Menyimpan...' : 'Ubah Password'}
+              {isSubmitting ? t('actions.submitting', { ns: 'common' }) : t('actions.save', { ns: 'common' })}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 export default ChangePasswordModal;

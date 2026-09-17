@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import GoogleCallbackPage from './pages/GoogleCallbackPage'
+import EmailVerifyCallbackPage from './pages/EmailVerifyCallbackPage'
+import FloatingLanguageSwitcher from './components/FloatingLanguageSwitcher'
 import Navbar from './components/Navbar'
 import HeroSection from './components/HeroSection'
 import AboutSection from './components/AboutSection'
@@ -15,32 +17,50 @@ import DashboardPage from './components/dashboard/DashboardPage'
 import ProjectDetailPage from './components/map/ProjectDetailPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
-import AdminLayout from './components/AdminLayout'
-import AdminDashboard from './pages/admin/DashboardPage'
-import MasterDataPage from './pages/admin/MasterDataPage'
-import ManajemenPenggunaPage from './pages/admin/ManajemenPenggunaPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
+import AdminShell from './admin/layouts/AdminShell'
+import AdminDashboardPage from './admin/pages/AdminDashboardPage'
+import AdminMasterDataPage from './admin/pages/AdminMasterDataPage'
+import AdminUsersPage from './admin/pages/AdminUsersPage'
+import AdminProjectsPage from './admin/pages/AdminProjectsPage'
+import AdminActivityPage from './admin/pages/AdminActivityPage'
+import AdminMessagesPage from './admin/pages/AdminMessagesPage'
 import VerifikasiDataPage from './pages/admin/VerifikasiDataPage'
-import RiwayatAktivitasPage from './pages/admin/RiwayatAktivitasPage'
 import KebijakanPage from './pages/admin/KebijakanPage'
-import ProjectsPage from './pages/valuasi/ProjectsPage'
-import ValuasiFormPage from './pages/valuasi/ValuasiFormPage'
-import ValuasiPreviewPage from './pages/valuasi/ValuasiPreviewPage'
-import ProjectIndexPage from './pages/valuasi/ProjectIndexPage'
-import ModuleDashboardPage from './pages/valuasi/ModuleDashboardPage'
-import DirectUseValueFormPage from './pages/valuasi/DirectUseValueFormPage'
-import AreaIndexPage from './pages/valuasi/AreaIndexPage'
-import AreaDashboardPage from './pages/valuasi/AreaDashboardPage'
+
+// Peneliti (Researcher) Context & Components
+import { ProjectProvider } from './peneliti/context/ProjectContext'
+import { SpreadsheetProvider } from './peneliti/context/SpreadsheetContext'
+import { AppShell as PenelitiShell } from './peneliti/components/layout/AppShell'
+import { ProjectListPage } from './peneliti/pages/ProjectListPage'
+import { MapsPage } from './peneliti/pages/MapsPage'
+import { IndexPage } from './peneliti/pages/IndexPage'
+import { DataMasterPage } from './peneliti/pages/DataMasterPage'
+import { ServicesMethodsPage } from './peneliti/pages/ServicesMethodsPage'
+import { DataValuationPage } from './peneliti/pages/DataValuationPage'
+import { CalculationPage } from './peneliti/pages/CalculationPage'
+import { AnalyticsPage } from './peneliti/pages/AnalyticsPage'
+import { ReviewReportPage } from './peneliti/pages/ReviewReportPage'
+import { ReportPrintView } from './peneliti/pages/ReportPrintView'
+import { ErrorBoundary } from './ErrorBoundary'
+
+// Role Analyst Context, Shell & Pages
+import { AnalystProvider } from './analyst/context/AnalystContext'
+import { AnalystAppShell } from './analyst/components/layout/AnalystAppShell'
+import { AnalystDashboardPage } from './analyst/pages/AnalystDashboardPage'
+import { ProjectReviewPlaceholderPage } from './analyst/pages/ProjectReviewPlaceholderPage'
+import { AnalystProjectReviewPage } from './analyst/pages/AnalystProjectReviewPage'
+import { AnalystDiscussionPage } from './analyst/pages/AnalystDiscussionPage'
 
 function LandingPageContent() {
   const [currentView, setCurrentView] = useState('home')
   const [projectId, setProjectId] = useState(null)
 
-  // Hash-based routing for sub-pages within the landing page
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '')
 
-      // Check for project detail route: #project/flora-001
       if (hash.startsWith('project/')) {
         const id = hash.replace('project/', '')
         setProjectId(id)
@@ -54,7 +74,6 @@ function LandingPageContent() {
       }
     }
 
-    // Set initial view from hash
     handleHashChange()
 
     window.addEventListener('hashchange', handleHashChange)
@@ -65,21 +84,18 @@ function LandingPageContent() {
     window.location.hash = page
   }
 
-  // Dashboard Page (AI Analysis)
   if (currentView === 'dashboard') {
     return (
       <DashboardPage onNavigateHome={() => navigateTo('home')} />
     )
   }
 
-  // Project Detail Page
   if (currentView === 'project' && projectId) {
     return (
       <ProjectDetailPage
         projectId={projectId}
         onBack={() => {
           navigateTo('home')
-          // Scroll to map section after navigation
           setTimeout(() => {
             const mapEl = document.getElementById('map')
             if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth' })
@@ -89,7 +105,6 @@ function LandingPageContent() {
     )
   }
 
-  // Landing Page (Home)
   return (
     <div className="min-h-screen bg-white font-sans antialiased">
       <Navbar onNavigateDashboard={() => navigateTo('dashboard')} />
@@ -109,39 +124,98 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Toaster position="top-center" reverseOrder={false} />
-        <Routes>
-          <Route path="/" element={<LandingPageContent />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/auth/callback" element={<GoogleCallbackPage />} />
-          
-          <Route element={<ProtectedRoute allowedRoles={['Admin', 'Administrator', 'Peneliti']} />}>
-            <Route path="/valuasi/projects" element={<ProjectsPage />} />
-            <Route path="/valuasi/projects/:projectId/modules/direct-use-value/input" element={<DirectUseValueFormPage />} />
-            <Route path="/valuasi/projects/:projectId/modules/:moduleId/input" element={<DirectUseValueFormPage />} />
-            <Route path="/valuasi/projects/:projectId/index/:indexId/form" element={<ValuasiFormPage />} />
-            <Route path="/valuasi/projects/:projectId/index/:indexId/preview" element={<ValuasiPreviewPage />} />
-            <Route path="/valuasi/projects/:projectId/index/:indexId/areas" element={<AreaIndexPage />} />
-            <Route path="/valuasi/projects/:projectId/index/:indexId/areas/:areaId" element={<AreaDashboardPage />} />
-            <Route path="/valuasi/projects/:projectId/modules/:moduleId" element={<ProjectIndexPage />} />
-            <Route path="/valuasi/projects/:projectId/modules" element={<ModuleDashboardPage />} />
-            <Route path="/valuasi/projects/:projectId" element={<ModuleDashboardPage />} />
-          </Route>
+        <ProjectProvider>
+          <SpreadsheetProvider>
+            <AnalystProvider>
+              <Toaster position="top-center" reverseOrder={false} />
+            <FloatingLanguageSwitcher />
+            <Routes>
+              <Route path="/" element={<LandingPageContent />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/auth/callback" element={<GoogleCallbackPage />} />
+              <Route path="/auth/email/verify/:id/:hash" element={<EmailVerifyCallbackPage />} />
+              
+              {/* ROLE PENELITI (RESEARCHER) 9-STEP WORKFLOW */}
+              <Route element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Administrator', 'Peneliti']} />}>
+                {/* Standalone Print/PDF View */}
+                <Route path="/peneliti/projects/:projectId/review/preview" element={<ReportPrintView />} />
+                <Route path="/peneliti/projects/:projectId/review-laporan/preview" element={<ReportPrintView />} />
 
-          <Route element={<ProtectedRoute allowedRoles={['Admin', 'Administrator']} />}>
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminDashboard />} />
-              <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="master-data" element={<MasterDataPage />} />
-              <Route path="verifikasi-data" element={<VerifikasiDataPage />} />
-              <Route path="manajemen-pengguna" element={<ManajemenPenggunaPage />} />
-              <Route path="riwayat-aktivitas" element={<RiwayatAktivitasPage />} />
-              <Route path="kebijakan" element={<KebijakanPage />} />
-            </Route>
-          </Route>
-        </Routes>
-      </AuthProvider>
+                {/* Researcher App Shell (Header + 9-step Sidebar) */}
+                <Route element={<PenelitiShell />}>
+                  <Route path="/peneliti" element={<Navigate to="/peneliti/projects" replace />} />
+                  <Route path="/peneliti/projects" element={<ProjectListPage />} />
+                  <Route path="/peneliti/projects/new" element={<ProjectListPage />} />
+
+                  {/* 9-Step Researcher Workflow */}
+                  <Route path="/peneliti/projects/:projectId" element={<Navigate to="maps" replace />} />
+                  <Route path="/peneliti/projects/:projectId/maps" element={<MapsPage />} />
+                  <Route path="/peneliti/projects/:projectId/index" element={<IndexPage />} />
+                  <Route path="/peneliti/projects/:projectId/data-master" element={<DataMasterPage />} />
+                  <Route path="/peneliti/projects/:projectId/services-methods" element={<ServicesMethodsPage />} />
+                  <Route path="/peneliti/projects/:projectId/jasa-metode" element={<ServicesMethodsPage />} />
+                  <Route path="/peneliti/projects/:projectId/jasa-method" element={<ServicesMethodsPage />} />
+                  <Route path="/peneliti/projects/:projectId/valuation-method" element={<Navigate to="../services-methods" replace />} />
+                  <Route path="/peneliti/projects/:projectId/identification" element={<Navigate to="../services-methods" replace />} />
+                  <Route path="/peneliti/projects/:projectId/valuation-data" element={<DataValuationPage />} />
+                  <Route path="/peneliti/projects/:projectId/data-valuasi" element={<DataValuationPage />} />
+                  <Route path="/peneliti/projects/:projectId/input-data" element={<Navigate to="../valuation-data" replace />} />
+                  <Route path="/peneliti/projects/:projectId/input" element={<Navigate to="../valuation-data" replace />} />
+                  <Route path="/peneliti/projects/:projectId/calculation" element={<CalculationPage />} />
+                  <Route path="/peneliti/projects/:projectId/perhitungan" element={<CalculationPage />} />
+                  <Route path="/peneliti/projects/:projectId/analytics" element={<AnalyticsPage />} />
+                  <Route path="/peneliti/projects/:projectId/analitik" element={<AnalyticsPage />} />
+                  <Route path="/peneliti/projects/:projectId/review" element={<ReviewReportPage />} />
+                  <Route path="/peneliti/projects/:projectId/review-laporan" element={<ReviewReportPage />} />
+                </Route>
+
+                {/* Backward-compatibility / Legacy redirects for /valuasi */}
+                <Route path="/valuasi" element={<Navigate to="/peneliti/projects" replace />} />
+                <Route path="/valuasi/projects" element={<Navigate to="/peneliti/projects" replace />} />
+                <Route path="/valuasi/projects/:projectId/*" element={<Navigate to="/peneliti/projects" replace />} />
+                <Route path="/valuasi/*" element={<Navigate to="/peneliti/projects" replace />} />
+
+                {/* Direct /projects redirect */}
+                <Route path="/projects" element={<Navigate to="/peneliti/projects" replace />} />
+                <Route path="/projects/:projectId/*" element={<Navigate to="/peneliti/projects" replace />} />
+              </Route>
+
+              {/* SUPER ADMIN CONSOLE */}
+              <Route element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Administrator']} />}>
+                <Route path="/admin" element={<AdminShell />}>
+                  <Route index element={<AdminDashboardPage />} />
+                  <Route path="dashboard" element={<AdminDashboardPage />} />
+                  <Route path="master-data" element={<AdminMasterDataPage />} />
+                  <Route path="users" element={<AdminUsersPage />} />
+                  <Route path="manajemen-pengguna" element={<AdminUsersPage />} />
+                  <Route path="projects" element={<AdminProjectsPage />} />
+                  <Route path="activity" element={<AdminActivityPage />} />
+                  <Route path="riwayat-aktivitas" element={<AdminActivityPage />} />
+                  <Route path="messages" element={<AdminMessagesPage />} />
+                  <Route path="verifikasi-data" element={<VerifikasiDataPage />} />
+                  <Route path="kebijakan" element={<KebijakanPage />} />
+                </Route>
+              </Route>
+
+              {/* ROLE ANALYST WORKSPACE */}
+              <Route element={<ProtectedRoute allowedRoles={['Analyst']} />}>
+                <Route element={<AnalystAppShell />}>
+                  <Route path="/analyst" element={<Navigate to="/analyst/dashboard" replace />} />
+                  <Route path="/analyst/dashboard" element={<AnalystDashboardPage />} />
+                  <Route path="/analyst/projects" element={<ProjectReviewPlaceholderPage />} />
+                  <Route path="/analyst/projects/:projectId" element={<AnalystProjectReviewPage />} />
+                  <Route path="/analyst/discussions" element={<AnalystDiscussionPage />} />
+                  <Route path="/analyst/discussions/:researcherId" element={<AnalystDiscussionPage />} />
+                </Route>
+              </Route>
+            </Routes>
+          </AnalystProvider>
+        </SpreadsheetProvider>
+      </ProjectProvider>
+    </AuthProvider>
     </BrowserRouter>
   )
 }

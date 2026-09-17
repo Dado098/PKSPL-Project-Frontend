@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AdministrativeBoundaryPicker from './AdministrativeBoundaryPicker'
 import ShpUploader from './ShpUploader'
 
@@ -19,6 +19,12 @@ export default function BoundarySourcePicker({
   activeTab = 'wilayah',
 }) {
   const [tab, setTab] = useState(activeTab)
+
+  useEffect(() => {
+    if (activeTab && activeTab !== tab) {
+      setTab(activeTab)
+    }
+  }, [activeTab])
 
   const handleTabClick = (newTab) => {
     if (newTab === tab) return

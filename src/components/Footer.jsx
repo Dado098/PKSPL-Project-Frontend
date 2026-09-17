@@ -1,7 +1,10 @@
 import React from 'react';
 import { MapPin, Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const Footer = () => {
+  const { t } = useTranslation(['common']);
+
   return (
     <footer className="bg-[#0a2540] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -21,40 +24,36 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-semibold text-white mb-4">PKSPL IPB</h3>
             <p className="text-slate-400 text-sm leading-relaxed">
-              Platform sistem informasi berbasis web untuk analisis Total Economic Value (TEV) ekosistem pesisir dan laut guna mendukung pengambilan keputusan kebijakan lingkungan yang berkelanjutan
+              PKSPL IPB University - Total Economic Value (TEV) coastal and marine ecosystem analysis portal.
             </p>
           </div>
 
           {/* Column 2 - Navigation */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Navigasi</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">{t('nav.home')}</h3>
             <ul className="space-y-3">
-              <li><a href="#" className="text-slate-400 hover:text-white transition-colors text-sm">Beranda</a></li>
-              <li><a href="#" className="text-slate-400 hover:text-white transition-colors text-sm">Kawasan</a></li>
-              <li><a href="#" className="text-slate-400 hover:text-white transition-colors text-sm">Valuasi</a></li>
-              <li><a href="#" className="text-slate-400 hover:text-white transition-colors text-sm">Analisis</a></li>
-              <li><a href="#" className="text-slate-400 hover:text-white transition-colors text-sm">Kontak</a></li>
+              <li><a href="#hero" className="text-slate-400 hover:text-white transition-colors text-sm">{t('nav.home')}</a></li>
+              <li><a href="#about" className="text-slate-400 hover:text-white transition-colors text-sm">{t('nav.about')}</a></li>
+              <li><a href="#map" className="text-slate-400 hover:text-white transition-colors text-sm">{t('nav.contact')}</a></li>
             </ul>
           </div>
 
           {/* Column 3 - Quick Links */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Tautan Cepat</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">{t('footer.quickLinks')}</h3>
             <ul className="space-y-3">
-              <li><a href="#about" className="text-slate-400 hover:text-white transition-colors text-sm">Deskripsi Valuasi</a></li>
-              <li><a href="#stats" className="text-slate-400 hover:text-white transition-colors text-sm">Grafik Pengguna</a></li>
-              <li><a href="#workflow" className="text-slate-400 hover:text-white transition-colors text-sm">Panduan</a></li>
-              <li><a href="#map" className="text-slate-400 hover:text-white transition-colors text-sm">Map Sebaran</a></li>
+              <li><a href="#about" className="text-slate-400 hover:text-white transition-colors text-sm">{t('nav.about')}</a></li>
+              <li><a href="#map" className="text-slate-400 hover:text-white transition-colors text-sm">{t('nav.contact')}</a></li>
             </ul>
           </div>
 
           {/* Column 4 - Contact */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Kontak</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">{t('footer.contactUs')}</h3>
             <div className="flex gap-2 mb-6">
               <MapPin className="w-5 h-5 text-slate-400 shrink-0" />
               <p className="text-slate-400 text-sm leading-relaxed">
-                Kampus IPB Jl. Pajajaran Raya No.1, RT.02/RW.05, Baranangsiang, Kecamatan Bogor Tengah, Kota Bogor, Jawa Barat 16127
+                {t('footer.address')}
               </p>
             </div>
             {/* Social Icons */}
@@ -79,13 +78,8 @@ const Footer = () => {
         {/* Bottom bar */}
         <div className="border-t border-white/10 py-6 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-slate-500 text-sm">
-            © 2024 PKSPL IPB. Hak Cipta Dilindungi.
+            © 2026 PKSPL IPB. {t('footer.rights')}
           </p>
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <a href="#" className="hover:text-white transition-colors">Kebijakan Privasi</a>
-            <span>•</span>
-            <a href="#" className="hover:text-white transition-colors">Syarat & Ketentuan</a>
-          </div>
         </div>
 
       </div>

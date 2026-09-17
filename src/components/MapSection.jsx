@@ -3,7 +3,9 @@ import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-l
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Search, MapPin, ChevronRight, Navigation2, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { categories, locations, getCategoryInfo, PROVINCE_GEOJSON_URL } from './map/mapData';
+import { MAP_CONFIG } from '../peneliti/config/mapConfig';
 
 // Fix default marker icon issues in Vite/Webpack
 delete L.Icon.Default.prototype._getIconUrl;
@@ -32,6 +34,7 @@ function MapController({ mapRef }) {
 }
 
 export default function MapSection() {
+  const { t } = useTranslation(['map', 'landing', 'common']);
   const [activeFilters, setActiveFilters] = useState(categories.map(c => c.id));
   const [selectedLocId, setSelectedLocId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,10 +158,10 @@ export default function MapSection() {
         {/* Header */}
         <div className="text-center mb-10">
           <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Sebaran Wilayah Valuasi &amp; <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-500">Pemetaan Jasa Ekosistem</span>
+            {t('map.sectionTitle')}
           </h2>
           <p className="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">
-            Eksplorasi lokasi valuasi ekonomi sumber daya pesisir dan laut di seluruh Indonesia melalui peta interaktif.
+            {t('map.sectionSubtitle')}
           </p>
         </div>
 
@@ -200,8 +203,10 @@ export default function MapSection() {
             >
               <MapController mapRef={mapRef} />
               <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url={MAP_CONFIG.primaryTileProvider.url}
+                attribution={MAP_CONFIG.primaryTileProvider.attribution}
+                maxZoom={MAP_CONFIG.primaryTileProvider.maxZoom}
+                referrerPolicy="strict-origin-when-cross-origin"
               />
               
               {geojsonData && (
@@ -263,7 +268,7 @@ export default function MapSection() {
                           }}
                           className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg transition-colors text-sm font-semibold shadow-sm"
                         >
-                          <span>Lihat Detail Proyek</span>
+                          <span>{t('map.viewProjectDetail')}</span>
                           <ChevronRight className="w-4 h-4" />
                         </button>
                       </div>
@@ -281,11 +286,11 @@ export default function MapSection() {
                   mapRef.current.flyTo([-2.5, 118.0], 5, { duration: 1.5 });
                 }
               }}
-              title="Reset ke posisi semula"
+              title={t('map.resetTooltip')}
               className="absolute top-4 right-4 z-[400] bg-white text-slate-700 px-3 py-2 rounded-lg shadow-md border border-slate-200 hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center gap-2 text-sm font-semibold group"
             >
               <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-              <span className="hidden sm:inline">Reset Zoom</span>
+              <span className="hidden sm:inline">{t('map.resetZoom')}</span>
             </button>
           </div>
 
@@ -295,7 +300,7 @@ export default function MapSection() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-slate-800 flex items-center">
                   <MapPin className="w-5 h-5 mr-2 text-blue-500" />
-                  Daftar Lokasi
+                  {t('map.locationList')}
                 </h3>
                 <span className="bg-blue-100 text-blue-700 text-xs px-2.5 py-1 rounded-full font-bold">
                   {filteredLocations.length}
@@ -305,7 +310,7 @@ export default function MapSection() {
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Cari lokasi..."
+                  placeholder={t('map.searchPlaceholder')}
                   className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow shadow-sm"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -316,7 +321,7 @@ export default function MapSection() {
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
               {filteredLocations.length === 0 ? (
                 <div className="text-center py-10 text-slate-500 text-sm">
-                  Tidak ada lokasi yang cocok.
+                  {t('map.noLocationFound')}
                 </div>
               ) : (
                 filteredLocations.map(loc => {

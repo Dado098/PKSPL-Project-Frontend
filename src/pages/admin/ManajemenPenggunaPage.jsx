@@ -1,12 +1,97 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { createUser, deleteUser, getRoles, getUsers, updateUser } from '../../services/userService'
+import UserProfileDetailModal from '../../components/UserProfileDetailModal'
 
 const roleColors = {
   Admin: 'bg-blue-100 text-blue-700',
   Analyst: 'bg-orange-100 text-orange-700',
   Peneliti: 'bg-green-100 text-green-700',
   Guest: 'bg-gray-100 text-gray-700',
+}
+
+export const PRESENCE_THRESHOLD_MINUTES = 2
+
+export const isUserOnline = (userOrDate, currentTime = Date.now()) => {
+  if (!userOrDate) return false
+  const dateValue = typeof userOrDate === 'object' ? userOrDate.last_seen_at : userOrDate
+  if (!dateValue) return false
+  const time = new Date(dateValue).getTime()
+  if (isNaN(time)) return false
+  const diffMinutes = (currentTime - time) / (1000 * 60)
+  // Allow -1 minute for minor client-server clock skew
+  return diffMinutes >= -1 && diffMinutes <= PRESENCE_THRESHOLD_MINUTES
+}
+
+function UserAvatar({ user, isOnline }) {
+  const [imgError, setImgError] = useState(false)
+  const fotoUrl = user?.foto
+
+  useEffect(() => {
+    setImgError(false)
+  }, [fotoUrl])
+
+  const getInitials = (name) => {
+    if (!name) return '?'
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase()
+  }
+
+  return (
+    <div className="relative inline-block flex-shrink-0">
+      {fotoUrl && !imgError ? (
+        <img
+          src={fotoUrl}
+          alt={user?.nama || 'Avatar'}
+          referrerPolicy="no-referrer"
+          className="w-9 h-9 rounded-full object-cover ring-1 ring-gray-200"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shadow-sm ring-1 ring-blue-100">
+          {getInitials(user?.nama)}
+        </div>
+      )}
+
+      {/* Status Presence Dot on Avatar corner */}
+      <span
+        className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+          isOnline ? 'bg-emerald-500' : 'bg-gray-300'
+        }`}
+        title={isOnline ? 'Online' : 'Offline'}
+      />
+    </div>
+  )
+}
+
+const formatLastOnline = (dateString) => {
+  if (!dateString) {
+    return <span className="text-gray-400 italic text-xs">Belum pernah online</span>
+  }
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return <span className="text-gray-400 italic text-xs">Belum pernah online</span>
+    }
+    return (
+      <span className="text-gray-700 text-xs sm:text-sm">
+        {date.toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </span>
+    )
+  } catch {
+    return <span className="text-gray-400 italic text-xs">Belum pernah online</span>
+  }
 }
 
 function UserModal({ isOpen, onClose, title, confirmText, initialData, roles, onSubmit, isSubmitting }) {
@@ -172,8 +257,11 @@ function ManajemenPenggunaPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [viewingUser, setViewingUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [currentTime, setCurrentTime] = useState(Date.now())
 
   const loadUserData = async () => {
     try {
@@ -189,6 +277,24 @@ function ManajemenPenggunaPage() {
 
   useEffect(() => {
     loadUserData()
+  }, [])
+
+  // Local timer ticks every 30s to dynamically update online/offline presence without refreshing
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Light polling every 60s when page is active (does NOT modify last_online_at)
+  useEffect(() => {
+    const pollTimer = setInterval(() => {
+      if (!document.hidden) {
+        loadUserData()
+      }
+    }, 60000)
+    return () => clearInterval(pollTimer)
   }, [])
 
   const filteredUsers = useMemo(() => {
@@ -224,6 +330,16 @@ function ManajemenPenggunaPage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleViewProfile = (user) => {
+    setViewingUser(user)
+    setShowProfileModal(true)
+  }
+
+  const handleCloseProfileModal = () => {
+    setShowProfileModal(false)
+    setViewingUser(null)
   }
 
   const handleEditRole = (user) => {
@@ -293,7 +409,7 @@ function ManajemenPenggunaPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-        <table className="w-full min-w-[600px]">
+        <table className="w-full min-w-[720px]">
           <thead>
             <tr className="bg-[#1a56db] text-white">
               <th className="w-12 px-4 py-3">
@@ -306,21 +422,23 @@ function ManajemenPenggunaPage() {
               </th>
               <th className="px-4 py-3 text-left text-sm font-semibold">Nama Pengguna</th>
               <th className="px-4 py-3 text-left text-sm font-semibold">Role</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold">Terakhir Online</th>
               <th className="px-4 py-3 text-center text-sm font-semibold">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
               <tr>
-                <td colSpan="4" className="px-4 py-10 text-center text-sm text-gray-500">Memuat data pengguna...</td>
+                <td colSpan="5" className="px-4 py-10 text-center text-sm text-gray-500">Memuat data pengguna...</td>
               </tr>
             ) : filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan="4" className="px-4 py-10 text-center text-sm text-gray-500">Tidak ada data pengguna.</td>
+                <td colSpan="5" className="px-4 py-10 text-center text-sm text-gray-500">Tidak ada data pengguna.</td>
               </tr>
             ) : (
               filteredUsers.map((user) => {
                 const roleName = user.role?.nama_role || 'Guest'
+                const online = isUserOnline(user, currentTime)
                 return (
                   <tr key={user.id_user} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-center">
@@ -334,14 +452,36 @@ function ManajemenPenggunaPage() {
 
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                          </svg>
-                        </div>
+                        <UserAvatar user={user} isOnline={online} />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{user.nama}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-medium text-gray-900">{user.nama}</p>
+                            {user.google_id_exists && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-50 text-red-600 rounded text-[10px] font-medium border border-red-100" title="Akun login Google">
+                                <svg className="w-2.5 h-2.5" viewBox="0 0 24 24">
+                                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z" />
+                                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z" />
+                                  <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.4 0 15.3s.7 5.6 1.9 8l3.7-2.9z" />
+                                  <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z" />
+                                </svg>
+                                Google
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-500">{user.email}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {online ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Online
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                                Offline
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -353,7 +493,17 @@ function ManajemenPenggunaPage() {
                     </td>
 
                     <td className="px-4 py-3">
+                      {formatLastOnline(user.last_online_at)}
+                    </td>
+
+                    <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleViewProfile(user)}
+                          className="px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors cursor-pointer"
+                        >
+                          Lihat Profil
+                        </button>
                         <button
                           onClick={() => handleEditRole(user)}
                           className="px-3 py-1.5 bg-green-100 text-green-700 text-xs font-semibold rounded-lg hover:bg-green-200 transition-colors cursor-pointer"
@@ -399,6 +549,13 @@ function ManajemenPenggunaPage() {
         roles={roles}
         onSubmit={handleUpdateUser}
         isSubmitting={isSubmitting}
+      />
+
+      <UserProfileDetailModal
+        isOpen={showProfileModal}
+        userId={viewingUser?.id_user}
+        initialData={viewingUser}
+        onClose={handleCloseProfileModal}
       />
     </div>
   )

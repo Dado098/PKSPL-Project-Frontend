@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Edit3, Lock, LogOut, ChevronDown } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +9,7 @@ import EditProfileModal from './EditProfileModal';
 import ChangePasswordModal from './ChangePasswordModal';
 
 const ProfileDropdown = ({ isScrolled = false }) => {
+  const { t } = useTranslation(['profile', 'common']);
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -16,7 +18,6 @@ const ProfileDropdown = ({ isScrolled = false }) => {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -30,7 +31,7 @@ const ProfileDropdown = ({ isScrolled = false }) => {
   const handleLogout = async () => {
     setIsOpen(false);
     await logout();
-    toast.success('Anda berhasil keluar.');
+    toast.success(t('messages.loggedOut', { ns: 'common' }));
     navigate('/');
   };
 
@@ -59,11 +60,11 @@ const ProfileDropdown = ({ isScrolled = false }) => {
               : 'hover:bg-white/10'
           }`}
         >
-          {/* Avatar */}
           {avatarUrl ? (
             <img
               src={avatarUrl}
               alt={user?.nama}
+              referrerPolicy="no-referrer"
               className="w-8 h-8 rounded-full object-cover ring-2 ring-white/30"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -130,21 +131,21 @@ const ProfileDropdown = ({ isScrolled = false }) => {
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               >
                 <User size={16} className="text-slate-400" />
-                <span>Profil Saya</span>
+                <span>{t('myProfile')}</span>
               </button>
               <button
                 onClick={() => { setIsOpen(false); setShowEditProfile(true); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               >
                 <Edit3 size={16} className="text-slate-400" />
-                <span>Edit Profil</span>
+                <span>{t('editProfile')}</span>
               </button>
               <button
                 onClick={() => { setIsOpen(false); setShowChangePassword(true); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               >
                 <Lock size={16} className="text-slate-400" />
-                <span>Ganti Password</span>
+                <span>{t('changePassword')}</span>
               </button>
             </div>
 
@@ -155,7 +156,7 @@ const ProfileDropdown = ({ isScrolled = false }) => {
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
               >
                 <LogOut size={16} className="text-red-400" />
-                <span>Keluar</span>
+                <span>{t('logout')}</span>
               </button>
             </div>
           </div>

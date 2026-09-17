@@ -1,16 +1,18 @@
 import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const WorkflowSection = () => {
+  const { t } = useTranslation(['landing']);
+
   return (
     <section id="workflow" className="bg-gradient-to-br from-blue-600 to-blue-800 py-20 lg:py-28">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center">
           <h2 className="text-3xl lg:text-4xl font-bold text-white text-center">
-            Panduan Alur Pengisian Form Valuasi
+            {t('workflow.title')}
           </h2>
           <p className="text-blue-100 text-lg text-center max-w-2xl mx-auto mt-4">
-            Ikuti langkah-langkah berikut untuk mengisi form valuasi ekosistem pesisir dan laut secara lengkap dan akurat.
+            {t('workflow.subtitle')}
           </p>
         </div>
 
@@ -41,9 +43,9 @@ const WorkflowSection = () => {
                 1
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Buat Proyek Baru</h3>
+                <h3 className="font-semibold text-white text-lg">{t('workflow.step1Title')}</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Mulai dengan membuat proyek valuasi baru dan isi informasi dasar terkait lokasi serta identitas proyek yang akan dianalisis.
+                  {t('workflow.step1Desc')}
                 </p>
               </div>
             </div>
@@ -53,9 +55,9 @@ const WorkflowSection = () => {
                 2
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Pengisian Indeks (Index)</h3>
+                <h3 className="font-semibold text-white text-lg">{t('workflow.step2Title')}</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Input data indikator dan kriteria indeks penilaian sesuai dengan parameter wilayah yang sedang dikaji.
+                  {t('workflow.step2Desc')}
                 </p>
               </div>
             </div>
@@ -65,9 +67,9 @@ const WorkflowSection = () => {
                 3
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Tentukan Area Reklamasi</h3>
+                <h3 className="font-semibold text-white text-lg">{t('workflow.step3Title')}</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Pilih jenis lokasi kajian yang sesuai, baik berupa ekosistem Mangrove maupun tipe area pesisir/reklamasi lainnya.
+                  {t('workflow.step3Desc')}
                 </p>
               </div>
             </div>
@@ -77,9 +79,9 @@ const WorkflowSection = () => {
                 4
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Input Jasa Ekosistem (Provisioning & Services)</h3>
+                <h3 className="font-semibold text-white text-lg">{t('workflow.step4Title')}</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Masukkan data nilai manfaat ekosistem, mulai dari fungsi penyedia (Provisioning Services) hingga manfaat lingkungan lainnya.
+                  {t('workflow.step4Desc')}
                 </p>
               </div>
             </div>
@@ -89,16 +91,14 @@ const WorkflowSection = () => {
                 5
               </div>
               <div>
-                <h3 className="font-semibold text-white text-lg">Data Flora dan Fauna</h3>
+                <h3 className="font-semibold text-white text-lg">{t('workflow.step5Title')}</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Lengkapi data keanekaragaman hayati dengan menginput jenis serta populasi flora dan fauna yang ada di lokasi studi.
+                  {t('workflow.step5Desc')}
                 </p>
               </div>
             </div>
           </div>
         </div>
-
-
       </div>
     </section>
   );
