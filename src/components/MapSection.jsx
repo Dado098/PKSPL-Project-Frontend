@@ -158,10 +158,10 @@ export default function MapSection() {
         {/* Header */}
         <div className="text-center mb-10">
           <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
-            {t('map.sectionTitle')}
+            {t('sectionTitle', 'Sebaran Wilayah Valuasi & Pemetaan Jasa Ekosistem')}
           </h2>
           <p className="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">
-            {t('map.sectionSubtitle')}
+            {t('sectionSubtitle', 'Eksplorasi lokasi valuasi ekonomi sumber daya pesisir dan laut di seluruh Indonesia melalui peta interaktif.')}
           </p>
         </div>
 

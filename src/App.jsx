@@ -26,8 +26,8 @@ import AdminUsersPage from './admin/pages/AdminUsersPage'
 import AdminProjectsPage from './admin/pages/AdminProjectsPage'
 import AdminActivityPage from './admin/pages/AdminActivityPage'
 import AdminMessagesPage from './admin/pages/AdminMessagesPage'
-import VerifikasiDataPage from './pages/admin/VerifikasiDataPage'
-import KebijakanPage from './pages/admin/KebijakanPage'
+import VerifikasiDataPage from './admin/pages/VerifikasiDataPage'
+import KebijakanPage from './admin/pages/KebijakanPage'
 
 // Peneliti (Researcher) Context & Components
 import { ProjectProvider } from './peneliti/context/ProjectContext'
