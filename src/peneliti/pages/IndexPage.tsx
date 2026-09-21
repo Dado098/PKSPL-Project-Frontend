@@ -28,7 +28,8 @@ export const IndexPage: React.FC = () => {
     activeProjectId,
     indices,
     landCovers,
-    createIndex,
+    createManualIndex,
+    updateManualIndex,
     updateIndex,
     deleteIndex,
     linkPolygonToIndex,
@@ -49,14 +50,14 @@ export const IndexPage: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [targetIndexForLink, setTargetIndexForLink] = useState<IndexItem | null>(null);
+  const [editingIndex, setEditingIndex] = useState<IndexItem | null>(null);
 
   // Form state for creating new index
   const [formCode, setFormCode] = useState(() => `IDX-00${indices.length + 1}`);
   const [formName, setFormName] = useState('');
-  const [formType, setFormType] = useState<string>('Mangrove');
-  const [formAreaHa, setFormAreaHa] = useState<number>(75.0);
-  const [formUnit, setFormUnit] = useState('ha');
   const [formDesc, setFormDesc] = useState('');
+  const [formLandCovers, setFormLandCovers] = useState([{ name: '', areaHa: 75 }]);
+  const [formSaving, setFormSaving] = useState(false);
 
   // Filtered indices list
   const filteredIndices = indices.filter(item => {
@@ -75,33 +76,60 @@ export const IndexPage: React.FC = () => {
     const nextNum = indices.length + 1;
     setFormCode(`IDX-00${nextNum}`);
     setFormName('');
-    setFormType('Mangrove');
-    setFormAreaHa(75.0);
-    setFormUnit('ha');
     setFormDesc('');
+    setFormLandCovers([{ name: '', areaHa: 75 }]);
+    setEditingIndex(null);
     setIsCreateModalOpen(true);
   };
 
-  const handleSaveNewIndex = (e: React.FormEvent) => {
+  const handleOpenEditModal = (index: IndexItem) => {
+    const rows = landCovers
+      .filter((landCover) => landCover.indexId === index.id)
+      .map((landCover) => ({
+        id: landCover.id,
+        name: landCover.name,
+        areaHa: landCover.areaHa,
+      }));
+    setEditingIndex(index);
+    setFormCode(index.code);
+    setFormName(index.name);
+    setFormDesc(index.description || '');
+    setFormLandCovers(rows.length ? rows : [{ name: index.landCoverName || index.name, areaHa: index.areaHa }]);
+    setIsCreateModalOpen(true);
+  };
+
+  const handleSaveNewIndex = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       alert('Nama Index wajib diisi.');
       return;
     }
 
-    createIndex({
-      code: formCode.trim().toUpperCase(),
-      name: formName.trim(),
-      landCoverType: formType,
-      landCoverName: formName.trim(),
-      areaHa: Number(formAreaHa) || 0,
-      unit: formUnit,
-      description: formDesc.trim() || 'Index dibuat secara mandiri oleh peneliti.',
-      status: 'Draft',
-      spatialStatus: 'unconnected',
-    });
+    if (formLandCovers.some((landCover) => !landCover.name.trim() || !(Number(landCover.areaHa) > 0))) {
+      alert('Nama dan luas setiap Tutupan Lahan wajib diisi.');
+      return;
+    }
 
-    setIsCreateModalOpen(false);
+    setFormSaving(true);
+    try {
+      const payload = {
+        code: formCode.trim().toUpperCase(),
+        name: formName.trim(),
+        description: formDesc.trim() || 'Index dibuat secara mandiri oleh peneliti.',
+        landCovers: formLandCovers,
+      };
+      if (editingIndex) {
+        await updateManualIndex({ id: editingIndex.id, ...payload });
+      } else {
+        await createManualIndex(payload);
+      }
+      setIsCreateModalOpen(false);
+      setEditingIndex(null);
+    } catch {
+      alert('Index atau Tutupan Lahan gagal disimpan. Periksa koneksi dan data proyek.');
+    } finally {
+      setFormSaving(false);
+    }
   };
 
   const handleOpenLinkModal = (indexItem: IndexItem) => {
@@ -250,9 +278,15 @@ export const IndexPage: React.FC = () => {
 
                       {/* Area Tutupan Lahan */}
                       <td className="py-3 px-4 text-slate-700">
-                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
-                          {item.landCoverType}
-                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {(landCovers.filter((landCover) => landCover.indexId === item.id).length
+                            ? landCovers.filter((landCover) => landCover.indexId === item.id).map((landCover) => (
+                              <span key={landCover.id} className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                                {landCover.name}
+                              </span>
+                            ))
+                            : <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">{item.landCoverType}</span>)}
+                        </div>
                       </td>
 
                       {/* Luas */}
@@ -312,6 +346,16 @@ export const IndexPage: React.FC = () => {
                           </button>
                         )}
 
+                        {!isAdmin && (
+                          <button
+                            onClick={() => handleOpenEditModal(item)}
+                            className="p-1 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors"
+                            title="Edit Index"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
                         <button
                           onClick={() => {
                             if (confirm(`Hapus Index ${item.code} (${item.name})?`)) {
@@ -359,21 +403,21 @@ export const IndexPage: React.FC = () => {
       {/* Modal: + Buat Index Mandiri Tanpa SHP */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-lg border border-slate-200 shadow-xl max-w-6xl w-full p-6 space-y-4 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
-                <h3 className="font-bold text-slate-900 text-sm">Buat Index Baru</h3>
+                <h3 className="font-bold text-slate-900 text-sm">{editingIndex ? 'Edit Index' : 'Buat Index Baru'}</h3>
                 <p className="text-[11px] text-slate-500">Mendaftarkan unit tutupan lahan penelitian secara mandiri.</p>
               </div>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={() => { setIsCreateModalOpen(false); setEditingIndex(null); }}
                 className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveNewIndex} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveNewIndex} className="grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs max-h-[70vh] overflow-y-auto pr-1">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Kode Index</label>
                 <input
@@ -397,33 +441,54 @@ export const IndexPage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tipe Tutupan</label>
-                  <select
-                    value={formType}
-                    onChange={(e) => setFormType(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+              <div className="space-y-2 lg:col-start-2 lg:row-start-1 lg:row-span-3 max-h-[58vh] overflow-y-auto pr-1">
+                <div className="flex items-center justify-between">
+                  <label className="block font-semibold text-slate-700">Tutupan Lahan</label>
+                  <button
+                    type="button"
+                    onClick={() => setFormLandCovers((current) => [...current, { name: '', areaHa: 0 }])}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
                   >
-                    <option value="Mangrove">Mangrove</option>
-                    <option value="Lamun">Padang Lamun</option>
-                    <option value="Terumbu Karang">Terumbu Karang</option>
-                    <option value="Perairan">Perairan Teluk</option>
-                    <option value="Lainnya">Lainnya / Pesisir</option>
-                  </select>
+                    <Plus className="w-3 h-3" />
+                    Tambah Tutupan Lahan
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Luas (Ha)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formAreaHa}
-                    onChange={(e) => setFormAreaHa(parseFloat(e.target.value))}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded text-right font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    required
-                  />
-                </div>
+                {formLandCovers.map((landCover, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_100px_auto] gap-2 items-end p-2 bg-slate-50 border border-slate-200 rounded">
+                    <div className="min-w-0">
+                      <label className="block text-[10px] text-slate-500 mb-1">Nama</label>
+                      <input
+                        value={landCover.name}
+                        onChange={(e) => setFormLandCovers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: e.target.value } : item))}
+                        placeholder="Contoh: Mangrove Barat"
+                        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Luas (Ha)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={landCover.areaHa}
+                        onChange={(e) => setFormLandCovers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, areaHa: Number(e.target.value) } : item))}
+                        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-right font-mono"
+                        required
+                      />
+                    </div>
+                    {formLandCovers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormLandCovers((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                        className="p-1.5 text-slate-400 hover:text-rose-600"
+                        title="Hapus Tutupan Lahan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
 
               <div>
@@ -449,16 +514,17 @@ export const IndexPage: React.FC = () => {
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
+                  onClick={() => { setIsCreateModalOpen(false); setEditingIndex(null); }}
                   className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-medium"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
+                  disabled={formSaving}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold shadow-xs"
                 >
-                  Buat Index
+                  {formSaving ? 'Menyimpan...' : editingIndex ? 'Simpan Perubahan' : 'Buat Index'}
                 </button>
               </div>
             </form>

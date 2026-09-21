@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { Project, ProjectStatus } from '../types/project';
 import { LandCoverPolygon, IndexItem, MapLayer } from '../types/spatial';
 import { AnalystFeedback } from '../types/review';
@@ -18,12 +19,15 @@ import {
 } from '../mock/spatialData';
 import { INITIAL_ANALYST_FEEDBACK } from '../mock/analystReviewMock';
 import { loadFromStorage, saveToStorage } from '../utils/storage';
-import { generateProjectCode } from '../utils/formatter';
+import { createProyek, deleteProyek, getProyekList } from '../../services/projectService';
+import { createIndexApi, createLandCoverApi, deleteLandCoverApi, getIndexesApi, updateIndexApi, updateLandCoverApi } from '../../services/indexService';
 
 import { AreaServiceConfig, EcosystemServiceId } from '../types/valuation';
 
 interface ProjectContextType {
   projects: Project[];
+  projectsLoading: boolean;
+  projectsError: string;
   activeProject: Project | null;
   activeProjectId: string;
   landCovers: LandCoverPolygon[];
@@ -32,7 +36,8 @@ interface ProjectContextType {
   analystFeedback: AnalystFeedback | null;
   areaConfigs: Record<string, AreaServiceConfig>;
   setActiveProjectId: (id: string) => void;
-  createProject: (name: string, description: string) => Project;
+  createProject: (name: string, description: string) => Promise<Project>;
+  deleteProject: (id: string) => Promise<void>;
   updateProjectStatus: (id: string, status: ProjectStatus) => void;
   addShpLayer: (name: string, featureCount: number, crs: string, targetProjId?: string) => void;
   setProjectHasShp: (projectId: string, hasShp: boolean) => void;
@@ -42,6 +47,19 @@ interface ProjectContextType {
   updateAreaConfig: (areaId: string, updates: Partial<AreaServiceConfig>) => void;
   getAreaConfig: (areaId: string) => AreaServiceConfig;
   createIndex: (item: Omit<IndexItem, 'id'>) => IndexItem;
+  createManualIndex: (item: {
+    code: string;
+    name: string;
+    description: string;
+    landCovers: { name: string; areaHa: number; description?: string }[];
+  }) => Promise<IndexItem>;
+  updateManualIndex: (item: {
+    id: string;
+    code: string;
+    name: string;
+    description: string;
+    landCovers: { id?: string; name: string; areaHa: number; description?: string }[];
+  }) => Promise<void>;
   updateIndex: (id: string, updates: Partial<IndexItem>) => void;
   deleteIndex: (id: string) => void;
   linkPolygonToIndex: (polygonId: string, indexId: string) => void;
@@ -98,7 +116,32 @@ const INITIAL_PROJECT_LAYERS: Record<string, MapLayer[]> = {
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
+const toProjectStatus = (status: string | undefined): ProjectStatus => {
+  const normalized = (status || '').toLowerCase();
+  if (normalized === 'proses') return 'DIKERJAKAN';
+  if (normalized === 'submitted') return 'MENUNGGU_ANALYST';
+  if (normalized === 'need revision') return 'PERLU_PERBAIKAN';
+  if (normalized === 'selesai' || normalized === 'approved' || normalized === 'published') return 'SELESAI';
+  return 'DRAFT';
+};
+
+const fromApiProject = (project: any, fallbackLead = 'Peneliti Utama'): Project => ({
+  id: String(project.id_proyek ?? project.id ?? project.kode_proyek),
+  code: project.kode_proyek || String(project.id_proyek ?? ''),
+  name: project.nama_proyek || '',
+  description: project.deskripsi || '',
+  status: toProjectStatus(project.status),
+  lead: project.user?.nama || fallbackLead,
+  location: project.alamat_lengkap || project.kabupaten_kota?.nama || project.provinsi?.nama || '-',
+  ecosystem: project.ekosistem || 'Ekosistem Pesisir',
+  year: Number(project.tahun || new Date().getFullYear()),
+  createdAt: project.created_at || '',
+  updatedAt: project.updated_at || '',
+  hasShp: Boolean(project.shapefile_files && Object.keys(project.shapefile_files).length),
+});
+
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, user } = useAuth();
   const [projects, setProjects] = useState<Project[]>(() => {
     const loaded = loadFromStorage<Project[]>(STORAGE_KEYS.PROJECTS, INITIAL_PROJECTS);
     return loaded.map(p => {
@@ -109,6 +152,33 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
     });
   });
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState('');
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let mounted = true;
+    setProjectsLoading(true);
+    setProjectsError('');
+
+    getProyekList({ per_page: 100 })
+      .then((data) => {
+        if (mounted) {
+          setProjects((Array.isArray(data) ? data : []).map((project) => fromApiProject(project, user?.nama)));
+        }
+      })
+      .catch(() => {
+        if (mounted) setProjectsError('Daftar proyek gagal dimuat dari server.');
+      })
+      .finally(() => {
+        if (mounted) setProjectsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthenticated, user?.id_user, user?.nama]);
 
   const [activeProjectId, setActiveProjectIdState] = useState<string>(() => 
     loadFromStorage<string>(STORAGE_KEYS.ACTIVE_ID, 'PKS-994KY1')
@@ -151,6 +221,40 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'poly-5': DEFAULT_AREA_CONFIG,
     })
   );
+
+  useEffect(() => {
+    const projectId = Number(activeProjectId);
+    if (!isAuthenticated || !Number.isInteger(projectId) || projectId <= 0) return;
+
+    let mounted = true;
+    getIndexesApi({ id_proyek: projectId, per_page: 100 }).then((apiIndexes) => {
+      if (!mounted || !Array.isArray(apiIndexes)) return;
+      const mappedIndexes: IndexItem[] = apiIndexes.map((index: any) => {
+        const landCover = index.jenis_tutupan_lahan?.[0];
+        return {
+          id: String(index.id_index), code: index.kode_index, name: index.nama_index,
+          landCoverType: landCover?.kategori || 'Lainnya', landCoverName: landCover?.nama_tutupan_lahan || index.nama_index,
+          areaHa: Number(index.luas) || 0, unit: index.satuan_luas || 'ha', description: index.deskripsi || '',
+          status: 'Draft', spatialStatus: 'unconnected', createdAt: index.created_at, updatedAt: index.updated_at,
+        };
+      });
+      const mappedLandCovers: LandCoverPolygon[] = apiIndexes.flatMap((index: any) =>
+        (index.jenis_tutupan_lahan || []).map((landCover: any) => ({
+          id: String(landCover.id_jenis_tutupan_lahan), code: `${index.kode_index}-${landCover.id_jenis_tutupan_lahan}`,
+          name: landCover.nama_tutupan_lahan,
+          type: (landCover.kategori || 'lainnya').toLowerCase().replaceAll(' ', '_') as LandCoverPolygon['type'],
+          areaHa: Number(landCover.luas) || 0, coordinates: [], center: [0, 0], indexId: String(index.id_index),
+          indexCode: index.kode_index, indexName: index.nama_index, activeServices: [], serviceDetails: [], totalValue: 0,
+        }))
+      );
+      setProjectIndices((prev) => ({ ...prev, [activeProjectId]: mappedIndexes }));
+      setProjectLandCovers((prev) => ({
+        ...prev,
+        [activeProjectId]: [...mappedLandCovers, ...(prev[activeProjectId] || []).filter((landCover) => landCover.coordinates.length > 0)],
+      }));
+    }).catch(() => undefined);
+    return () => { mounted = false; };
+  }, [activeProjectId, isAuthenticated]);
 
   // Sync to storage
   useEffect(() => {
@@ -233,30 +337,37 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   };
 
-  const createProject = (name: string, description: string): Project => {
-    const code = generateProjectCode();
-    const newProj: Project = {
-      id: code,
-      code,
-      name,
-      description,
-      status: 'DRAFT',
-      lead: 'Peneliti Utama (Saya)',
-      location: 'Kabupaten Badung, Bali',
-      ecosystem: 'Kawasan Pesisir & Mangrove',
-      year: new Date().getFullYear(),
-      createdAt: new Date().toISOString().split('T')[0],
-      updatedAt: 'Baru saja',
-      hasShp: false,
-    };
+  const createProject = async (name: string, description: string): Promise<Project> => {
+    const response = await createProyek({ nama_proyek: name, deskripsi: description });
+    const newProj = fromApiProject(response, user?.nama || 'Peneliti Utama (Saya)');
 
-    const updated = [newProj, ...projects];
-    setProjects(updated);
+    setProjects(prev => [newProj, ...prev]);
     setActiveProjectIdState(newProj.id);
-    setProjectLandCovers(prev => ({ ...prev, [code]: [] }));
-    setProjectIndices(prev => ({ ...prev, [code]: [] }));
-    setProjectLayers(prev => ({ ...prev, [code]: [] }));
+    setProjectLandCovers(prev => ({ ...prev, [newProj.id]: [] }));
+    setProjectIndices(prev => ({ ...prev, [newProj.id]: [] }));
+    setProjectLayers(prev => ({ ...prev, [newProj.id]: [] }));
     return newProj;
+  };
+
+  const deleteProject = async (id: string): Promise<void> => {
+    await deleteProyek(id);
+    setProjects(prev => prev.filter(project => project.id !== id && project.code !== id));
+    setProjectLandCovers(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setProjectIndices(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setProjectLayers(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    if (activeProjectId === id) setActiveProjectIdState('');
   };
 
   const updateProjectStatus = (id: string, status: ProjectStatus) => {
@@ -378,6 +489,133 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     return newItem;
+  };
+
+  const createManualIndex = async (item: {
+    code: string;
+    name: string;
+    description: string;
+    landCovers: { name: string; areaHa: number; description?: string }[];
+  }): Promise<IndexItem> => {
+    const index = await createIndexApi({
+      id_proyek: Number(activeProjectId),
+      nama_index: item.name,
+      kode_index: item.code,
+      luas: item.landCovers.reduce((total, landCover) => total + (Number(landCover.areaHa) || 0), 0),
+      satuan_luas: 'ha',
+      deskripsi: item.description,
+    });
+    const indexId = String(index.id_index);
+    const createdLandCovers = await Promise.all(item.landCovers.map((landCover) =>
+      createLandCoverApi({
+        id_index: Number(index.id_index),
+        nama_tutupan_lahan: landCover.name,
+        luas: Number(landCover.areaHa) || 0,
+        satuan_luas: 'ha',
+        deskripsi: landCover.description || null,
+      })
+    ));
+    const areaHa = item.landCovers.reduce((total, landCover) => total + (Number(landCover.areaHa) || 0), 0);
+    const newIndex: IndexItem = {
+      id: indexId,
+      code: item.code,
+      name: item.name,
+      landCoverType: 'Lainnya',
+      landCoverName: item.landCovers[0]?.name || item.name,
+      areaHa,
+      unit: 'ha',
+      description: item.description,
+      status: 'Draft',
+      spatialStatus: 'unconnected',
+      createdAt: new Date().toISOString(),
+    };
+    const newAreas: LandCoverPolygon[] = createdLandCovers.map((landCover: any) => ({
+      id: String(landCover.id_jenis_tutupan_lahan),
+      code: `${item.code}-${landCover.id_jenis_tutupan_lahan}`,
+      name: landCover.nama_tutupan_lahan,
+      type: (landCover.kategori || 'lainnya').toLowerCase().replaceAll(' ', '_') as LandCoverPolygon['type'],
+      areaHa: Number(landCover.luas) || 0,
+      coordinates: [],
+      center: [0, 0],
+      indexId,
+      indexCode: item.code,
+      indexName: item.name,
+      activeServices: [],
+      serviceDetails: [],
+      totalValue: 0,
+    }));
+    setProjectIndices(prev => ({ ...prev, [activeProjectId]: [newIndex, ...(prev[activeProjectId] || [])] }));
+    setProjectLandCovers(prev => ({ ...prev, [activeProjectId]: [...newAreas, ...(prev[activeProjectId] || [])] }));
+    return newIndex;
+  };
+
+  const updateManualIndex = async (item: {
+    id: string;
+    code: string;
+    name: string;
+    description: string;
+    landCovers: { id?: string; name: string; areaHa: number; description?: string }[];
+  }): Promise<void> => {
+    await updateIndexApi(item.id, {
+      nama_index: item.name,
+      kode_index: item.code,
+      luas: item.landCovers.reduce((total, landCover) => total + (Number(landCover.areaHa) || 0), 0),
+      satuan_luas: 'ha',
+      deskripsi: item.description,
+    });
+
+    const currentLandCovers = (projectLandCovers[activeProjectId] || []).filter((landCover) => landCover.indexId === item.id);
+    const nextIds = new Set(item.landCovers.filter((landCover) => landCover.id).map((landCover) => landCover.id));
+    const savedLandCovers = await Promise.all([
+      ...currentLandCovers.filter((landCover) => !nextIds.has(landCover.id)).map((landCover) => deleteLandCoverApi(landCover.id)),
+      ...item.landCovers.map((landCover) => {
+        const payload = {
+          id_index: Number(item.id),
+          nama_tutupan_lahan: landCover.name,
+          luas: Number(landCover.areaHa) || 0,
+          satuan_luas: 'ha',
+          deskripsi: landCover.description || null,
+        };
+        return landCover.id ? updateLandCoverApi(landCover.id, payload) : createLandCoverApi(payload);
+      }),
+    ]);
+
+    const updatedIndex = {
+      code: item.code,
+      name: item.name,
+      landCoverType: 'Lainnya',
+      landCoverName: item.landCovers[0]?.name || item.name,
+      areaHa: item.landCovers.reduce((total, landCover) => total + (Number(landCover.areaHa) || 0), 0),
+      description: item.description,
+      updatedAt: new Date().toISOString(),
+    };
+    setProjectIndices(prev => ({
+      ...prev,
+      [activeProjectId]: (prev[activeProjectId] || []).map((index) => index.id === item.id ? { ...index, ...updatedIndex } : index),
+    }));
+    const savedItems = savedLandCovers.filter(Boolean) as any[];
+    const updatedAreas: LandCoverPolygon[] = savedItems.map((landCover) => ({
+      id: String(landCover.id_jenis_tutupan_lahan),
+      code: `${item.code}-${landCover.id_jenis_tutupan_lahan}`,
+      name: landCover.nama_tutupan_lahan,
+      type: (landCover.kategori || 'lainnya').toLowerCase().replaceAll(' ', '_') as LandCoverPolygon['type'],
+      areaHa: Number(landCover.luas) || 0,
+      coordinates: [],
+      center: [0, 0],
+      indexId: item.id,
+      indexCode: item.code,
+      indexName: item.name,
+      activeServices: [],
+      serviceDetails: [],
+      totalValue: 0,
+    }));
+    setProjectLandCovers(prev => ({
+      ...prev,
+      [activeProjectId]: [
+        ...updatedAreas,
+        ...(prev[activeProjectId] || []).filter((landCover) => landCover.indexId !== item.id),
+      ],
+    }));
   };
 
   const updateIndex = (id: string, updates: Partial<IndexItem>) => {
@@ -543,6 +781,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <ProjectContext.Provider
       value={{
         projects,
+        projectsLoading,
+        projectsError,
         activeProject,
         activeProjectId,
         landCovers,
@@ -552,6 +792,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         areaConfigs,
         setActiveProjectId,
         createProject,
+        deleteProject,
         updateProjectStatus,
         addShpLayer,
         setProjectHasShp,
@@ -562,6 +803,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateAreaConfig,
         getAreaConfig,
         createIndex,
+        createManualIndex,
+        updateManualIndex,
         updateIndex,
         deleteIndex,
         linkPolygonToIndex,

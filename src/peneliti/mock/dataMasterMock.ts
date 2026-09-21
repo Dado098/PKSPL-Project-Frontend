@@ -39,6 +39,8 @@ export const EKOSISTEM_OPTIONS: EkosistemOption[] = [
 
 export interface ProvisioningItem {
   id: string;
+  landCoverId?: string;
+  apiData?: Record<string, unknown>;
   namaIndonesia: string;
   namaLatin: string;
   namaDaerah: string;
@@ -155,6 +157,8 @@ export const PROVISIONING_DATA: ProvisioningItem[] = [
 
 export interface RegulatingItem {
   id: string;
+  landCoverId?: string;
+  apiData?: Record<string, unknown>;
   namaParameter: string;
   daerah: string;
   daerahId: string;
@@ -233,6 +237,8 @@ export const REGULATING_DATA: RegulatingItem[] = [
 
 export interface SupportingItem {
   id: string;
+  landCoverId?: string;
+  apiData?: Record<string, unknown>;
   klasifikasi: string; // Misal: "Habitat • Reptil", "Habitat • Burung", "Habitat • Mamalia", "Nursery Ground", "Pembentukan Tanah", "Biodiversitas"
   daerah: string;
   daerahId: string;
@@ -341,6 +347,8 @@ export const SUPPORTING_DATA: SupportingItem[] = [
 
 export interface CulturalItem {
   id: string;
+  landCoverId?: string;
+  apiData?: Record<string, unknown>;
   namaObjek: string;
   deskripsi: string;
   daerah: string;

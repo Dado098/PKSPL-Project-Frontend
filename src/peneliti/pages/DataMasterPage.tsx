@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Database,
   ChevronDown,
@@ -30,6 +30,9 @@ import {
   SupportingItem,
   CulturalItem,
 } from '../mock/dataMasterMock';
+import { getDataMaster } from '../../services/dataMasterService';
+import { useProject } from '../context/ProjectContext';
+import { useNavigate } from 'react-router-dom';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -73,26 +76,14 @@ const ActionButton: React.FC<{
   usage: UsageStatus;
   onToggle: () => void;
 }> = ({ usage, onToggle }) => {
-  if (usage.used) {
-    return (
-      <button
-        onClick={onToggle}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors cursor-pointer"
-        title="Lihat detail penggunaan"
-      >
-        <Eye className="w-3.5 h-3.5" />
-        Detail
-      </button>
-    );
-  }
   return (
     <button
       onClick={onToggle}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"
-      title="Gunakan data ini dalam project"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors cursor-pointer"
+      title="Lihat Index dan Tutupan Lahan yang menggunakan data ini"
     >
-      <PlusCircle className="w-3.5 h-3.5" />
-      Gunakan
+      <Eye className="w-3.5 h-3.5" />
+      Lihat Penggunaan
     </button>
   );
 };
@@ -337,8 +328,8 @@ const ProvisioningTab: React.FC<{
 
   const filtered = useMemo(() => {
     return data.filter((item) => {
-      if (item.daerahId !== daerahId) return false;
-      if (item.ekosistemId !== ekosistemId) return false;
+      if (daerahId !== 'all' && item.daerahId !== daerahId && item.daerahId !== 'all') return false;
+      if (ekosistemId !== 'all' && item.ekosistemId !== ekosistemId && item.ekosistemId !== 'all') return false;
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         return (
@@ -527,8 +518,8 @@ const RegulatingTab: React.FC<{
 
   const filtered = useMemo(() => {
     return data.filter((item) => {
-      if (item.daerahId !== daerahId) return false;
-      if (item.ekosistemId !== ekosistemId) return false;
+      if (daerahId !== 'all' && item.daerahId !== daerahId && item.daerahId !== 'all') return false;
+      if (ekosistemId !== 'all' && item.ekosistemId !== ekosistemId && item.ekosistemId !== 'all') return false;
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         return (
@@ -690,8 +681,8 @@ const SupportingTab: React.FC<{
 
   const filtered = useMemo(() => {
     return data.filter((item) => {
-      if (item.daerahId !== daerahId) return false;
-      if (item.ekosistemId !== ekosistemId) return false;
+      if (daerahId !== 'all' && item.daerahId !== daerahId && item.daerahId !== 'all') return false;
+      if (ekosistemId !== 'all' && item.ekosistemId !== ekosistemId && item.ekosistemId !== 'all') return false;
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         return (
@@ -869,8 +860,8 @@ const CulturalTab: React.FC<{
 
   const filtered = useMemo(() => {
     return data.filter((item) => {
-      if (item.daerahId !== daerahId) return false;
-      if (item.ekosistemId !== ekosistemId) return false;
+      if (daerahId !== 'all' && item.daerahId !== daerahId && item.daerahId !== 'all') return false;
+      if (ekosistemId !== 'all' && item.ekosistemId !== ekosistemId && item.ekosistemId !== 'all') return false;
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         return (
@@ -1023,20 +1014,68 @@ const TABS: { key: TabType; label: string; icon: React.ReactNode }[] = [
   { key: 'cultural', label: 'Cultural', icon: <Palette className="w-4 h-4" /> },
 ];
 
+const usageFromApi = (item: any): UsageStatus => {
+  const index = item.tutupan_lahan?.index;
+  if (!index) return { used: false };
+  return {
+    used: true,
+    indexCode: index.kode_index || String(index.id_index),
+    indexName: index.nama_index || 'Index',
+  };
+};
+
 // ═════════════════════════════════════════════════════════════════════════════
 // MAIN PAGE COMPONENT
 // ═════════════════════════════════════════════════════════════════════════════
 
 export const DataMasterPage: React.FC = () => {
+  const { activeProjectId } = useProject();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('provisioning');
-  const [selectedDaerah, setSelectedDaerah] = useState('jakarta');
-  const [selectedEkosistem, setSelectedEkosistem] = useState('lamun');
+  const [selectedDaerah, setSelectedDaerah] = useState('all');
+  const [selectedEkosistem, setSelectedEkosistem] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Dynamic state for master data so users can add rows live
   const [provisioningList, setProvisioningList] = useState<ProvisioningItem[]>(PROVISIONING_DATA);
   const [regulatingList, setRegulatingList] = useState<RegulatingItem[]>(REGULATING_DATA);
   const [supportingList, setSupportingList] = useState<SupportingItem[]>(SUPPORTING_DATA);
   const [culturalList, setCulturalList] = useState<CulturalItem[]>(CULTURAL_DATA);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    setLoadError('');
+    getDataMaster(/^\d+$/.test(activeProjectId) ? { id_proyek: activeProjectId } : {})
+      .then(({ provisioning, regulating, supporting, cultural }) => {
+        if (!mounted) return;
+        setProvisioningList(provisioning.map((item: any) => ({
+          id: String(item.id_provisioning), landCoverId: String(item.id_jenis_tutupan_lahan), apiData: item, namaIndonesia: item.nama_objek, namaLatin: item.nama_latin || '-', namaDaerah: item.nama_daerah || '-',
+          daerah: item.wilayah?.kabupaten_kota?.nama_kabupaten_kota || item.wilayah?.provinsi?.nama_provinsi || '-', daerahId: 'all', ekosistemId: 'all', usage: usageFromApi(item),
+        })));
+        setRegulatingList(regulating.map((item: any) => ({
+          id: String(item.id_regulating), landCoverId: String(item.id_jenis_tutupan_lahan), apiData: item, namaParameter: item.jenis_regulating, daerah: item.wilayah?.kabupaten_kota?.nama_kabupaten_kota || item.wilayah?.provinsi?.nama_provinsi || '-',
+          daerahId: 'all', ekosistemId: 'all', usage: usageFromApi(item),
+        })));
+        setSupportingList(supporting.map((item: any) => ({
+          id: String(item.id_supporting), landCoverId: String(item.id_jenis_tutupan_lahan), apiData: item, klasifikasi: item.fungsi_pendukung, daerah: item.wilayah?.kabupaten_kota?.nama_kabupaten_kota || item.wilayah?.provinsi?.nama_provinsi || '-',
+          daerahId: 'all', ekosistemId: 'all', usage: usageFromApi(item),
+        })));
+        setCulturalList(cultural.map((item: any) => ({
+          id: String(item.id_cultural), landCoverId: String(item.id_jenis_tutupan_lahan), apiData: item, namaObjek: item.nama_aktivitas, deskripsi: '', daerah: item.wilayah?.kabupaten_kota?.nama_kabupaten_kota || item.wilayah?.provinsi?.nama_provinsi || '-',
+          daerahId: 'all', ekosistemId: 'all', usage: usageFromApi(item),
+        })));
+      })
+      .catch(() => {
+        if (mounted) setLoadError(`Data master project ${activeProjectId} gagal dimuat dari server.`);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => { mounted = false; };
+  }, [activeProjectId]);
 
   // Handlers for adding new data
   const handleAddProvisioning = (newItem: Omit<ProvisioningItem, 'id' | 'usage'>) => {
@@ -1076,60 +1115,12 @@ export const DataMasterPage: React.FC = () => {
   };
 
   // Handlers for toggling usage status
-  const handleToggleUsage = (tab: TabType, id: string) => {
-    if (tab === 'provisioning') {
-      setProvisioningList((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                usage: item.usage.used
-                  ? { used: false }
-                  : { used: true, indexCode: 'Index 01', indexName: 'Lamun' },
-              }
-            : item
-        )
-      );
-    } else if (tab === 'regulating') {
-      setRegulatingList((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                usage: item.usage.used
-                  ? { used: false }
-                  : { used: true, indexCode: 'Index 01', indexName: 'Lamun' },
-              }
-            : item
-        )
-      );
-    } else if (tab === 'supporting') {
-      setSupportingList((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                usage: item.usage.used
-                  ? { used: false }
-                  : { used: true, indexCode: 'Index 01', indexName: 'Lamun' },
-              }
-            : item
-        )
-      );
-    } else if (tab === 'cultural') {
-      setCulturalList((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                usage: item.usage.used
-                  ? { used: false }
-                  : { used: true, indexCode: 'Index 01', indexName: 'Lamun' },
-              }
-            : item
-        )
-      );
-    }
+  const handleViewUsage = (tab: TabType, id: string) => {
+    const lists = { provisioning: provisioningList, regulating: regulatingList, supporting: supportingList, cultural: culturalList };
+    const item = lists[tab].find((candidate: any) => candidate.id === id) as any;
+    if (!item) return;
+
+    navigate(`/peneliti/projects/${activeProjectId}/services-methods?area=${item.landCoverId}`);
   };
 
   return (
@@ -1153,18 +1144,21 @@ export const DataMasterPage: React.FC = () => {
             <FilterSelect
               label="Daerah Penelitian"
               value={selectedDaerah}
-              options={DAERAH_OPTIONS}
+              options={[{ id: 'all', label: 'Semua Daerah' }, ...DAERAH_OPTIONS]}
               onChange={setSelectedDaerah}
             />
             <FilterSelect
               label="Ekosistem"
               value={selectedEkosistem}
-              options={EKOSISTEM_OPTIONS}
+              options={[{ id: 'all', label: 'Semua Ekosistem' }, ...EKOSISTEM_OPTIONS]}
               onChange={setSelectedEkosistem}
             />
           </div>
         </div>
       </div>
+
+      {loading && <p className="text-xs text-slate-500">Memuat data master...</p>}
+      {loadError && <p className="text-xs text-amber-700">{loadError} Data sementara tetap ditampilkan.</p>}
 
       {/* ── Navigation Tabs ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 border-b border-slate-200">
@@ -1191,7 +1185,7 @@ export const DataMasterPage: React.FC = () => {
           daerahId={selectedDaerah}
           ekosistemId={selectedEkosistem}
           onAdd={handleAddProvisioning}
-          onToggleUsage={(id) => handleToggleUsage('provisioning', id)}
+          onToggleUsage={(id) => handleViewUsage('provisioning', id)}
         />
       )}
       {activeTab === 'regulating' && (
@@ -1200,7 +1194,7 @@ export const DataMasterPage: React.FC = () => {
           daerahId={selectedDaerah}
           ekosistemId={selectedEkosistem}
           onAdd={handleAddRegulating}
-          onToggleUsage={(id) => handleToggleUsage('regulating', id)}
+          onToggleUsage={(id) => handleViewUsage('regulating', id)}
         />
       )}
       {activeTab === 'supporting' && (
@@ -1209,7 +1203,7 @@ export const DataMasterPage: React.FC = () => {
           daerahId={selectedDaerah}
           ekosistemId={selectedEkosistem}
           onAdd={handleAddSupporting}
-          onToggleUsage={(id) => handleToggleUsage('supporting', id)}
+          onToggleUsage={(id) => handleViewUsage('supporting', id)}
         />
       )}
       {activeTab === 'cultural' && (
@@ -1218,7 +1212,7 @@ export const DataMasterPage: React.FC = () => {
           daerahId={selectedDaerah}
           ekosistemId={selectedEkosistem}
           onAdd={handleAddCultural}
-          onToggleUsage={(id) => handleToggleUsage('cultural', id)}
+          onToggleUsage={(id) => handleViewUsage('cultural', id)}
         />
       )}
     </div>
