@@ -32,6 +32,7 @@ import KebijakanPage from './admin/pages/KebijakanPage'
 // Peneliti (Researcher) Context & Components
 import { ProjectProvider } from './peneliti/context/ProjectContext'
 import { SpreadsheetProvider } from './peneliti/context/SpreadsheetContext'
+import { ChatProvider } from './peneliti/context/ChatContext'
 import { AppShell as PenelitiShell } from './peneliti/components/layout/AppShell'
 import { ProjectListPage } from './peneliti/pages/ProjectListPage'
 import { MapsPage } from './peneliti/pages/MapsPage'
@@ -43,6 +44,7 @@ import { CalculationPage } from './peneliti/pages/CalculationPage'
 import { AnalyticsPage } from './peneliti/pages/AnalyticsPage'
 import { ReviewReportPage } from './peneliti/pages/ReviewReportPage'
 import { ReportPrintView } from './peneliti/pages/ReportPrintView'
+import { ResearcherMessagesPage } from './peneliti/pages/ResearcherMessagesPage'
 import { ErrorBoundary } from './ErrorBoundary'
 
 // Role Analyst Context, Shell & Pages
@@ -126,9 +128,10 @@ function App() {
       <AuthProvider>
         <ProjectProvider>
           <SpreadsheetProvider>
-            <AnalystProvider>
-              <Toaster position="top-center" reverseOrder={false} />
-            <FloatingLanguageSwitcher />
+            <ChatProvider>
+              <AnalystProvider>
+                <Toaster position="top-center" reverseOrder={false} />
+                <FloatingLanguageSwitcher />
             <Routes>
               <Route path="/" element={<LandingPageContent />} />
               <Route path="/login" element={<LoginPage />} />
@@ -170,7 +173,12 @@ function App() {
                   <Route path="/peneliti/projects/:projectId/analitik" element={<AnalyticsPage />} />
                   <Route path="/peneliti/projects/:projectId/review" element={<ReviewReportPage />} />
                   <Route path="/peneliti/projects/:projectId/review-laporan" element={<ReviewReportPage />} />
+                  <Route path="/peneliti/projects/:projectId/messages" element={<ResearcherMessagesPage />} />
+                  <Route path="/peneliti/projects/:projectId/komunikasi" element={<ResearcherMessagesPage />} />
+                  <Route path="/peneliti/projects/:projectId/pesan" element={<ResearcherMessagesPage />} />
                 </Route>
+
+                <Route path="/peneliti/messages" element={<Navigate to="/peneliti/projects" replace />} />
 
                 {/* Backward-compatibility / Legacy redirects for /valuasi */}
                 <Route path="/valuasi" element={<Navigate to="/peneliti/projects" replace />} />
@@ -212,10 +220,11 @@ function App() {
                 </Route>
               </Route>
             </Routes>
-          </AnalystProvider>
-        </SpreadsheetProvider>
-      </ProjectProvider>
-    </AuthProvider>
+              </AnalystProvider>
+            </ChatProvider>
+          </SpreadsheetProvider>
+        </ProjectProvider>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

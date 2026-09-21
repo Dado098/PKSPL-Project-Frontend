@@ -1,7 +1,8 @@
 import React from 'react';
 import { useProject } from '../../context/ProjectContext';
+import { useChat } from '../../context/ChatContext';
 import { StatusBadge } from '../common/StatusBadge';
-import { FolderGit2, ChevronRight, UserCircle, RefreshCw } from 'lucide-react';
+import { FolderGit2, ChevronRight, UserCircle, RefreshCw, MessageSquare } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -11,6 +12,7 @@ interface TopbarProps {
 
 export const Topbar: React.FC<TopbarProps> = () => {
   const { activeProject, projects, setActiveProjectId, resetAllData } = useProject();
+  const { totalUnreadCount } = useChat();
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth() || {};
@@ -26,6 +28,7 @@ export const Topbar: React.FC<TopbarProps> = () => {
   else if (pathParts.includes('calculation')) currentStepName = '07 Perhitungan (TEV)';
   else if (pathParts.includes('analytics')) currentStepName = '08 Analitik & Visualisasi';
   else if (pathParts.includes('review')) currentStepName = '09 Review & Laporan';
+  else if (pathParts.includes('messages')) currentStepName = 'Pusat Pesan & Komunikasi';
 
   const projectsIdx = pathParts.indexOf('projects');
   const currentRouteId = projectsIdx !== -1 ? pathParts[projectsIdx + 1] : undefined;
@@ -79,10 +82,24 @@ export const Topbar: React.FC<TopbarProps> = () => {
         )}
       </div>
 
-      {/* Right: User Profile */}
+      {/* Right: Messages Shortcut & User Profile */}
       <div className="flex items-center gap-3 shrink-0 ml-auto pl-3">
+        {/* Quick Chat Button */}
+        <button
+          onClick={() => navigate(selectedProjId ? `/peneliti/projects/${selectedProjId}/messages` : '/peneliti/projects')}
+          title="Buka Pusat Pesan & Komunikasi"
+          className="relative p-2 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+        >
+          <MessageSquare className="w-4 h-4" />
+          {totalUnreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 bg-blue-600 text-white font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white animate-pulse">
+              {totalUnreadCount}
+            </span>
+          )}
+        </button>
+
         {/* User Peneliti profile */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200 shrink-0">
           <div className="w-8 h-8 rounded bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
             {user?.nama ? user.nama.split(' ').filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase() : 'P'}
           </div>

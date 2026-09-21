@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavLink, useLocation, useParams } from 'react-router-dom';
 import { useProject } from '../../context/ProjectContext';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useChat } from '../../context/ChatContext';
 import {
   FolderKanban,
   Map,
@@ -15,7 +17,8 @@ import {
   ChevronRight,
   ShieldAlert,
   Sliders,
-  Home
+  Home,
+  MessageSquare
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,12 +28,15 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { activeProject, activeProjectId, simulateAnalystRejection } = useProject();
+  const { user } = useAuth() || {};
+  const isAdmin = user?.role?.nama_role === 'Super Admin' || user?.role?.nama_role === 'Admin' || user?.role === 'admin';
+  const { totalUnreadCount } = useChat();
   const location = useLocation();
   const params = useParams<{ projectId?: string }>();
   const projId = params.projectId || activeProjectId || 'PKS-994KY1';
 
   // Navigation workflow items (9 Steps)
-  const workflowItems = [
+  const allWorkflowItems = [
     {
       num: '01',
       title: 'Proyek',
@@ -96,16 +102,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
     },
   ];
 
-  // Helper to determine status marker (✓ completed, ● current, ○ pending)
-  const getStepStatus = (itemIndex: number, isCurrent: boolean) => {
-    if (isCurrent) return { symbol: '●', color: 'text-blue-600 font-bold' };
-    // Simulated completion logic: previous steps marked completed
-    const currentActiveIndex = workflowItems.findIndex(i => i.match(location.pathname));
-    if (currentActiveIndex >= 0 && itemIndex < currentActiveIndex) {
-      return { symbol: '✓', color: 'text-emerald-600 font-bold' };
-    }
-    return { symbol: '○', color: 'text-slate-400' };
-  };
+  // Admin users cannot see "01 Proyek" step
+  const workflowItems = isAdmin
+    ? allWorkflowItems.filter(item => item.num !== '01')
+    : allWorkflowItems;
 
   return (
     <aside
@@ -164,9 +164,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
           </div>
         )}
 
-        {workflowItems.map((item, idx) => {
+        {workflowItems.map((item) => {
           const isCurrent = item.match(location.pathname);
-          const status = getStepStatus(idx, isCurrent);
           const Icon = item.icon;
 
           return (
@@ -188,19 +187,57 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
               </div>
 
               {!collapsed && (
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono opacity-60">{item.num}</span>
-                    <span className="truncate">{item.title}</span>
-                  </div>
-                  <span className={`text-xs ${isCurrent ? 'text-white' : status.color}`}>
-                    {status.symbol}
-                  </span>
+                <div className="flex items-center gap-2 w-full truncate">
+                  <span className="text-[11px] font-mono opacity-60">{item.num}</span>
+                  <span className="truncate">{item.title}</span>
                 </div>
               )}
             </NavLink>
           );
         })}
+
+        {/* Komunikasi & Pesan */}
+        <div className="pt-2 pb-1 border-t border-slate-800/80 space-y-1">
+          {!collapsed && (
+            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Komunikasi
+            </div>
+          )}
+          <NavLink
+            to={`/peneliti/projects/${projId}/messages`}
+            title={collapsed ? 'Pesan & Komunikasi' : undefined}
+            className={({ isActive }) => {
+              const active = isActive || location.pathname.includes('/messages');
+              return `relative flex items-center gap-3 px-3 py-2 rounded text-xs transition-colors cursor-pointer ${
+                active
+                  ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              } ${collapsed ? 'justify-center px-0' : ''}`;
+            }}
+          >
+            <div className="flex items-center justify-center flex-shrink-0 relative">
+              <MessageSquare className="w-4 h-4" />
+              {collapsed && totalUnreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-slate-900" />
+              )}
+            </div>
+
+            {!collapsed && (
+              <div className="flex items-center justify-between w-full">
+                <span className="truncate">Pesan</span>
+                {totalUnreadCount > 0 ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                    {totalUnreadCount} Baru
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-mono text-slate-500">
+                    0
+                  </span>
+                )}
+              </div>
+            )}
+          </NavLink>
+        </div>
       </div>
 
       {/* Bottom Section */}

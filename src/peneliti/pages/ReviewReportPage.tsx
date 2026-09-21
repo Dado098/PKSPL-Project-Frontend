@@ -8,6 +8,7 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { EcosystemServiceId } from '../types/valuation';
 import { getHistoricalStudiesForArea } from '../mock/historicalAnalyticsMock';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   FileCheck2,
   Download,
@@ -53,6 +54,9 @@ import {
 
 const ReviewReportPageContent: React.FC = () => {
   const params = useParams<{ projectId?: string }>();
+  const { user } = useAuth() || {};
+  const roleName = (user?.role?.nama_role || (typeof user?.role === 'string' ? user.role : '')).toLowerCase();
+  const isAdmin = roleName.includes('admin');
   const {
     projects,
     activeProject,
@@ -1568,7 +1572,40 @@ const ReviewReportPageContent: React.FC = () => {
 
       {/* 12. PENGIRIMAN KE ANALYST (Aksi Terakhir) */}
       <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-        {isSubmitted ? (
+        {isAdmin ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <div>
+              <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600" />
+                <span>Tinjauan Super Admin</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Silakan periksa laporan ini. Jika sudah sesuai, klik Terima & Selesai. Jika ada yang perlu diperbaiki, kembalikan ke Peneliti.
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3 self-start sm:self-auto">
+              <button
+                onClick={() => navigate('/admin/messages')}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs md:text-sm font-bold flex items-center gap-2 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+              >
+                <AlertTriangle className="w-4 h-4" />
+                <span>Perbaiki ke Peneliti</span>
+              </button>
+              <button
+                onClick={() => {
+                  updateProjectStatus(effectiveProjId, 'SELESAI');
+                  alert('Proyek telah diterima dan diselesaikan.');
+                  navigate('/admin/dashboard');
+                }}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs md:text-sm font-bold flex items-center gap-2 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+              >
+                <Check className="w-4 h-4" />
+                <span>Terima & Selesai</span>
+              </button>
+            </div>
+          </div>
+        ) : isSubmitted ? (
           <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-purple-950">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center flex-shrink-0">

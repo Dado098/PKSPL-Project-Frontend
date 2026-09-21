@@ -1,15 +1,17 @@
 export interface ChatMessage {
   id: string;
-  senderId: string; // 'superadmin' or user id
+  senderId: string; // 'superadmin', user id, or 'peneliti-me'
   senderName: string;
   text: string;
   timestamp: string;
   isOutgoing: boolean;
   status?: 'sent' | 'delivered' | 'read';
+  error?: boolean;
   attachment?: {
     name: string;
     type: 'file' | 'image' | 'shp';
     size: string;
+    url?: string;
   };
 }
 
@@ -17,7 +19,7 @@ export interface Conversation {
   id: string;
   userId: string;
   userName: string;
-  userRole: 'Peneliti' | 'Analyst';
+  userRole: 'Peneliti' | 'Analyst' | 'SuperAdmin';
   userAvatarBg: string;
   userInitials: string;
   isOnline: boolean;
@@ -297,3 +299,199 @@ export const INITIAL_CONVERSATIONS: Conversation[] = [
     ],
   },
 ];
+
+export const RESEARCHER_INITIAL_CONVERSATIONS: Conversation[] = [
+  {
+    id: 'rconv-1',
+    userId: 'usr-guling',
+    userName: 'Guling Putri Pamungkas',
+    userRole: 'Analyst',
+    userAvatarBg: 'from-amber-600 to-rose-600',
+    userInitials: 'GP',
+    isOnline: true,
+    projectCode: 'PKS-994KY1',
+    projectName: 'Revitalisasi Mangrove Teluk Benoa',
+    unreadCount: 2,
+    lastMessageSnippet: 'Mohon rujukan harga pasar lokal terbaru atau standar BPS...',
+    lastMessageTime: '14:28',
+    messages: [
+      {
+        id: 'rmsg-1-1',
+        senderId: 'usr-guling',
+        senderName: 'Guling Putri Pamungkas',
+        text: 'Selamat siang Bu Retno. Saya sudah menelaah draft valuasi kawasan Teluk Benoa.',
+        timestamp: '13:45',
+        isOutgoing: false,
+      },
+      {
+        id: 'rmsg-1-2',
+        senderId: 'usr-retno',
+        senderName: 'Dr. Ir. Retno Wulandari, M.Si.',
+        text: 'Siang Mbak Guling, bagaimana hasil telaah untuk indikator perlindungan fisik abrasi dan nursery ground?',
+        timestamp: '14:10',
+        isOutgoing: true,
+        status: 'read',
+      },
+      {
+        id: 'rmsg-1-3',
+        senderId: 'usr-guling',
+        senderName: 'Guling Putri Pamungkas',
+        text: 'Secara umum seluruh kalkulasi nursery ground dan seawall sudah valid. Namun ada catatan di harga satuan flora mangrove di sheet B3.',
+        timestamp: '14:25',
+        isOutgoing: false,
+      },
+      {
+        id: 'rmsg-1-4',
+        senderId: 'usr-guling',
+        senderName: 'Guling Putri Pamungkas',
+        text: 'Mohon rujukan harga pasar lokal terbaru atau standar BPS 2024 agar perhitungan biaya pengganti (replacement cost) tidak underestimate.',
+        timestamp: '14:28',
+        isOutgoing: false,
+      },
+    ],
+  },
+  {
+    id: 'rconv-2',
+    userId: 'usr-daffa',
+    userName: 'Daffa Arynt',
+    userRole: 'SuperAdmin',
+    userAvatarBg: 'from-blue-600 to-indigo-600',
+    userInitials: 'DA',
+    isOnline: true,
+    projectCode: 'PKS-994KY1',
+    projectName: 'Revitalisasi Mangrove Teluk Benoa',
+    unreadCount: 0,
+    lastMessageSnippet: 'Baik Bu Retno, kami telah menerima laporan akhir dan diteruskan ke rektorat.',
+    lastMessageTime: 'Kemarin',
+    messages: [
+      {
+        id: 'rmsg-2-1',
+        senderId: 'usr-retno',
+        senderName: 'Dr. Ir. Retno Wulandari, M.Si.',
+        text: 'Selamat pagi Mas Daffa, kami telah memverifikasi seluruh kalkulasi TEV di tahap 07 bersama tim peneliti lapangan.',
+        timestamp: 'Kemarin 09:10',
+        isOutgoing: true,
+        status: 'read',
+      },
+      {
+        id: 'rmsg-2-2',
+        senderId: 'usr-daffa',
+        senderName: 'Daffa Arynt',
+        text: 'Terima kasih infonya Bu Retno. Apakah dokumen cetak PDF dan ekspor Excel 13-sheet sudah diperiksa kembali?',
+        timestamp: 'Kemarin 09:25',
+        isOutgoing: false,
+      },
+      {
+        id: 'rmsg-2-3',
+        senderId: 'usr-retno',
+        senderName: 'Dr. Ir. Retno Wulandari, M.Si.',
+        text: 'Dokumen ekspor 13-sheet workbook sudah lengkap dan sesuai format template sistem. Kami siap untuk proses pengesahan.',
+        timestamp: 'Kemarin 09:30',
+        isOutgoing: true,
+        status: 'read',
+        attachment: {
+          name: 'Template_Valuasi_PKS-994KY1.xlsx',
+          type: 'file',
+          size: '245 KB',
+        },
+      },
+      {
+        id: 'rmsg-2-4',
+        senderId: 'usr-daffa',
+        senderName: 'Daffa Arynt',
+        text: 'Baik Bu Retno, kami telah menerima laporan akhir dan diteruskan ke rektorat.',
+        timestamp: 'Kemarin 09:40',
+        isOutgoing: false,
+      },
+    ],
+  },
+  {
+    id: 'rconv-3',
+    userId: 'usr-hendra',
+    userName: 'Dr. Hendra Kusuma, M.Econ',
+    userRole: 'Analyst',
+    userAvatarBg: 'from-orange-600 to-amber-600',
+    userInitials: 'HK',
+    isOnline: false,
+    lastSeen: '1 jam yang lalu',
+    projectCode: 'PKS-R49A12',
+    projectName: 'Valuasi Ekosistem Lamun Teluk Banten',
+    unreadCount: 1,
+    lastMessageSnippet: 'Mohon upload revisi layer GIS dan kalkulasi unit cost biota...',
+    lastMessageTime: '13 Sep',
+    messages: [
+      {
+        id: 'rmsg-3-1',
+        senderId: 'usr-retno',
+        senderName: 'Dr. Ir. Retno Wulandari, M.Si.',
+        text: 'Selamat siang Pak Hendra, kami telah mengunggah data survei awal padang lamun Teluk Banten.',
+        timestamp: '13 Sep 10:15',
+        isOutgoing: true,
+        status: 'read',
+      },
+      {
+        id: 'rmsg-3-2',
+        senderId: 'usr-hendra',
+        senderName: 'Dr. Hendra Kusuma, M.Econ',
+        text: 'Terima kasih Bu Retno. Nilai unit price rekrutmen biota per hektar perlu referensi pendukung yang lebih spesifik.',
+        timestamp: '13 Sep 11:20',
+        isOutgoing: false,
+      },
+      {
+        id: 'rmsg-3-3',
+        senderId: 'usr-hendra',
+        senderName: 'Dr. Hendra Kusuma, M.Econ',
+        text: 'Mohon upload revisi layer GIS dan kalkulasi unit cost biota per hektar agar dapat kami setujui.',
+        timestamp: '13 Sep 14:20',
+        isOutgoing: false,
+      },
+    ],
+  },
+  {
+    id: 'rconv-4',
+    userId: 'usr-maya',
+    userName: 'Maya Sartika, S.Kel',
+    userRole: 'Analyst',
+    userAvatarBg: 'from-emerald-600 to-teal-600',
+    userInitials: 'MS',
+    isOnline: true,
+    projectCode: 'PKS-UW8J6F',
+    projectName: 'Pemantauan Terumbu Karang Nusa Penida',
+    unreadCount: 0,
+    lastMessageSnippet: 'Sudah presisi Bu. Nanti kami sinkronkan dengan indeks kawasan.',
+    lastMessageTime: '08 Sep',
+    messages: [
+      {
+        id: 'rmsg-4-1',
+        senderId: 'usr-maya',
+        senderName: 'Maya Sartika, S.Kel',
+        text: 'Halo Bu Retno, file layer batas zonasi terumbu karang Nusa Penida sudah kami unduh dari sistem.',
+        timestamp: '08 Sep 11:00',
+        isOutgoing: false,
+      },
+      {
+        id: 'rmsg-4-2',
+        senderId: 'usr-retno',
+        senderName: 'Dr. Ir. Retno Wulandari, M.Si.',
+        text: 'Halo Mbak Maya, apakah proyeksi CRS EPSG:4326 (WGS84) sudah terverifikasi tanpa pergeseran koordinat?',
+        timestamp: '08 Sep 11:30',
+        isOutgoing: true,
+        status: 'read',
+        attachment: {
+          name: 'Layer_Tutupan_PKS-UW8J6F.zip',
+          type: 'shp',
+          size: '4.8 MB',
+        },
+      },
+      {
+        id: 'rmsg-4-3',
+        senderId: 'usr-maya',
+        senderName: 'Maya Sartika, S.Kel',
+        text: 'Sudah presisi Bu. Nanti kami sinkronkan dengan indeks kawasan.',
+        timestamp: '08 Sep 11:45',
+        isOutgoing: false,
+      },
+    ],
+  },
+];
+
