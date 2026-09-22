@@ -13,6 +13,8 @@ export interface ChatAttachment {
   fileName: string;
   fileSize: string;
   fileType: 'pdf' | 'doc' | 'image' | 'sheet' | 'spatial';
+  url?: string;
+  file?: File;
 }
 
 /**
@@ -42,7 +44,7 @@ export interface ChatMessage {
   id: string;
   conversationId: string;
   senderId: string;
-  senderRole: 'Analyst' | 'Peneliti';
+  senderRole: 'Analyst' | 'Peneliti' | 'Admin';
   senderName: string;
   text: string;
   timestamp: string; // Format tampilan 'HH:mm'

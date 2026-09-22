@@ -25,6 +25,7 @@ interface ChatConversationAreaProps {
   onSendMessage: (text: string, projectContext?: ProjectContext, attachments?: ChatAttachment[]) => void;
   onBackToList?: () => void; // Untuk tampilan mobile
   isLoading?: boolean;
+  currentUserId?: string | number;
 }
 
 export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
@@ -33,7 +34,8 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
   researcher,
   onSendMessage,
   onBackToList,
-  isLoading = false
+  isLoading = false,
+  currentUserId,
 }) => {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -144,6 +146,7 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
               key={msg.id}
               message={msg}
               researcherName={researcher.name}
+              currentUserId={currentUserId}
             />
           ))
         )}

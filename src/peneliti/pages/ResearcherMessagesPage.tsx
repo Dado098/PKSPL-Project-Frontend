@@ -8,6 +8,7 @@ import { AlertCircle, X } from 'lucide-react';
 export const ResearcherMessagesPage: React.FC = () => {
   const {
     conversations,
+    directoryUsers,
     activeConversationId,
     activeConversation,
     isLoading,
@@ -54,6 +55,7 @@ export const ResearcherMessagesPage: React.FC = () => {
         >
           <ResearcherConversationListPanel
             conversations={conversations}
+            directoryUsers={directoryUsers}
             activeConversationId={activeConversationId}
             isLoading={isLoading}
             onSelectConversation={selectConversation}

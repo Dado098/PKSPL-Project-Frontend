@@ -10,8 +10,58 @@ import {
   Info,
   ChevronDown
 } from 'lucide-react';
-import { ADMIN_NOTIFICATIONS } from '../mock/adminMock';
 import { useAuth } from '../../contexts/AuthContext';
+import { notificationService } from '../../analyst/services/notificationService';
+import { getEcho } from '../../lib/echo';
+
+/**
+ * Format relative timestamp for notifications
+ */
+const formatNotifTime = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (diff < 60) return 'Baru saja';
+    if (diff < 3600) return `${Math.floor(diff / 60)} mnt lalu`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
+    return `${Math.floor(diff / 86400)} hari lalu`;
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Map backend notification to topbar representation
+ */
+const mapNotification = (item) => {
+  const isChat = item.data?.type === 'chat_message';
+  let title = item.data?.title;
+  if (!title) {
+    if (isChat) {
+      title = `Pesan baru dari ${item.data?.sender_name || 'Pengguna'}`;
+    } else {
+      title = 'Pemberitahuan Sistem';
+    }
+  }
+
+  let iconType = 'info';
+  if (item.data?.type === 'warning') iconType = 'warning';
+  else if (item.data?.type === 'success') iconType = 'success';
+
+  return {
+    id: item.id,
+    title,
+    message: item.data?.message || '',
+    timestamp: formatNotifTime(item.created_at),
+    read: Boolean(item.read_at || item.is_read),
+    type: iconType,
+    conversationId: item.data?.conversation_id,
+    actionUrl: item.data?.action_url,
+    senderRole: item.data?.sender_role,
+  };
+};
 
 export const AdminTopbar = ({
   onToggleMobileSidebar,
@@ -21,7 +71,8 @@ export const AdminTopbar = ({
   const navigate = useNavigate();
   const { user } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState(ADMIN_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef(null);
 
   const userName = user?.nama || 'Administrator';
@@ -34,7 +85,59 @@ export const AdminTopbar = ({
     .join('')
     .toUpperCase() || 'SA';
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Fetch real notifications and listen to Reverb WebSocket events
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchNotifications = async () => {
+      try {
+        const [list, count] = await Promise.all([
+          notificationService.getNotifications(10),
+          notificationService.getUnreadCount(),
+        ]);
+        if (isMounted) {
+          if (Array.isArray(list)) {
+            setNotifications(list.map(mapNotification));
+          }
+          setUnreadCount(typeof count === 'number' ? count : 0);
+        }
+      } catch (e) {
+        // silent fail
+      }
+    };
+
+    fetchNotifications();
+
+    // Listen to real-time events via Reverb
+    const echo = getEcho();
+    let channel = null;
+    const currentUserId = user?.id || user?.id_user;
+    if (echo && currentUserId) {
+      try {
+        channel = echo.private(`user.${currentUserId}`);
+        channel.listen('.ChatMessageSent', () => {
+          fetchNotifications();
+        });
+      } catch (err) {
+        console.warn('[AdminTopbar] Echo listener error:', err);
+      }
+    }
+
+    // Polling fallback every 20 seconds
+    const interval = setInterval(fetchNotifications, 20000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      if (channel && echo) {
+        try {
+          channel.stopListening('.ChatMessageSent');
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [user]);
 
   // Handle outside click to close notification popover
   useEffect(() => {
@@ -47,8 +150,35 @@ export const AdminTopbar = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const markAllRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (e) {
+      console.warn('[AdminTopbar] Gagal tandai semua dibaca:', e);
+    }
+  };
+
+  const handleNotificationClick = async (notif) => {
+    if (!notif.read) {
+      try {
+        await notificationService.markAsRead(notif.id);
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      } catch (e) {
+        // silent catch
+      }
+    }
+
+    setNotificationsOpen(false);
+
+    // Navigate to admin messages if related to chat
+    if (notif.conversationId || notif.title?.toLowerCase().includes('pesan')) {
+      navigate('/admin/messages');
+    }
   };
 
   // Greeting by current hour
@@ -146,8 +276,9 @@ export const AdminTopbar = ({
                   notifications.map((notif) => (
                     <div
                       key={notif.id}
-                      className={`p-3.5 hover:bg-slate-50/80 transition-colors flex gap-3 text-xs ${
-                        !notif.read ? 'bg-blue-50/30' : ''
+                      onClick={() => handleNotificationClick(notif)}
+                      className={`p-3.5 hover:bg-slate-50/80 transition-colors flex gap-3 text-xs cursor-pointer ${
+                        !notif.read ? 'bg-blue-50/30 font-medium' : ''
                       }`}
                     >
                       <div className="mt-0.5 shrink-0">

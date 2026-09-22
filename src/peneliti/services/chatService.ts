@@ -1,4 +1,6 @@
 import { Conversation, ChatMessage, RESEARCHER_INITIAL_CONVERSATIONS } from '../mock/chatMock';
+import { apiClient } from '../../analyst/services/api';
+import { getEcho } from '../../lib/echo';
 
 export type ChatEventType =
   | 'MESSAGE_SENT'
@@ -21,57 +23,92 @@ export interface ChatEvent {
   conversations?: Conversation[];
 }
 
-type ChatEventListener = (event: ChatEvent) => void;
+export type ChatEventListener = (event: ChatEvent) => void;
 
-const STORAGE_KEY = 'pkspl_researcher_conversations_v1';
+export interface ChatDirectoryUser {
+  id: string;
+  nama: string;
+  email: string;
+  role: string;
+  isOnline: boolean;
+  lastSeen: string;
+  userAvatarBg: string;
+  userInitials: string;
+  associatedProjects?: Array<{ code: string; name: string }>;
+}
+
+export const getAvatarBg = (role?: string): string => {
+  const r = (role || '').toLowerCase();
+  if (r.includes('analyst')) return 'from-amber-600 to-rose-600';
+  if (r.includes('peneliti')) return 'from-blue-600 to-indigo-600';
+  if (r.includes('admin') || r.includes('superadmin')) return 'from-purple-600 to-indigo-600';
+  return 'from-slate-600 to-slate-800';
+};
+
+export const getInitials = (name?: string): string => {
+  if (!name) return 'U';
+  return (
+    name
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'U'
+  );
+};
+
+export const formatTime = (isoString?: string): string => {
+  if (!isoString) return '';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return String(isoString);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  } catch {
+    return '';
+  }
+};
+
+export const formatFileSize = (bytes?: number | string): string => {
+  if (!bytes || isNaN(Number(bytes))) return '';
+  const num = Number(bytes);
+  if (num < 1024) return `${num} B`;
+  if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
+  return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+export const formatLastSeen = (val: any, isOnline: boolean): string => {
+  if (isOnline) return 'Online';
+  if (!val) return 'Offline';
+  if (val === 'Online' || val === 'online') return 'Online';
+  try {
+    const date = new Date(val);
+    if (isNaN(date.getTime())) return String(val);
+    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diff < 60) return 'Baru saja';
+    if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
+    return `${Math.floor(diff / 86400)} hari lalu`;
+  } catch {
+    return String(val);
+  }
+};
 
 class ChatService {
   private conversations: Conversation[] = [];
+  private currentUserId: string | null = null;
   private listeners: Set<ChatEventListener> = new Set();
-  private isInitialized = false;
+  private userEchoChannel: any = null;
+  private convEchoChannel: any = null;
+  private activeListeningConvId: string | null = null;
 
-  constructor() {
-    this.init();
+  public setCurrentUserId(userId: string | number | null) {
+    this.currentUserId = userId ? String(userId) : null;
+    this.setupUserEchoListener();
   }
 
-  private init() {
-    if (typeof window === 'undefined') {
-      this.conversations = [...RESEARCHER_INITIAL_CONVERSATIONS];
-      return;
-    }
-
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        this.conversations = JSON.parse(stored);
-      } else {
-        this.conversations = JSON.parse(JSON.stringify(RESEARCHER_INITIAL_CONVERSATIONS));
-        this.save();
-      }
-    } catch {
-      this.conversations = JSON.parse(JSON.stringify(RESEARCHER_INITIAL_CONVERSATIONS));
-    }
-    this.isInitialized = true;
-  }
-
-  private save() {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.conversations));
-      } catch (e) {
-        console.error('Failed to persist conversations to localStorage', e);
-      }
-    }
-  }
-
-  private emit(event: ChatEvent) {
-    this.listeners.forEach((listener) => {
-      try {
-        listener(event);
-      } catch (err) {
-        console.error('Chat listener error', err);
-      }
-    });
+  public getCurrentUserId(): string | null {
+    return this.currentUserId;
   }
 
   public subscribe(listener: ChatEventListener): () => void {
@@ -81,233 +118,481 @@ class ChatService {
     };
   }
 
-  public async getConversations(): Promise<Conversation[]> {
-    if (!this.isInitialized) {
-      this.init();
-    }
-    // Simulate realistic async network delay on first call
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    return [...this.conversations];
-  }
-
-  public getConversationById(id: string): Conversation | undefined {
-    return this.conversations.find((c) => c.id === id);
-  }
-
-  public getTotalUnreadCount(): number {
-    return this.conversations.reduce((acc, conv) => acc + (conv.unreadCount || 0), 0);
-  }
-
-  public markAsRead(convId: string): void {
-    let changed = false;
-    this.conversations = this.conversations.map((c) => {
-      if (c.id === convId && c.unreadCount > 0) {
-        changed = true;
-        return { ...c, unreadCount: 0 };
+  private emit(event: ChatEvent) {
+    this.listeners.forEach((listener) => {
+      try {
+        listener(event);
+      } catch (err) {
+        console.error('[ChatService] Listener callback error:', err);
       }
-      return c;
     });
+  }
 
-    if (changed) {
-      this.save();
-      const totalUnread = this.getTotalUnreadCount();
-      this.emit({
-        type: 'UNREAD_COUNT_CHANGED',
-        conversationId: convId,
-        totalUnread,
-        conversations: this.conversations,
+  /**
+   * Menyiapkan listener Echo pada private user channel (user.{id})
+   */
+  private setupUserEchoListener() {
+    const echo = getEcho();
+    if (!echo || !this.currentUserId || isNaN(Number(this.currentUserId))) {
+      return;
+    }
+
+    if (this.userEchoChannel) {
+      try {
+        this.userEchoChannel.stopListening('.ChatMessageSent');
+      } catch {
+        // ignore
+      }
+    }
+
+    try {
+      this.userEchoChannel = echo.private(`user.${this.currentUserId}`);
+      this.userEchoChannel.listen('.ChatMessageSent', async () => {
+        try {
+          await this.getConversations();
+        } catch {
+          // ignore
+        }
       });
-      this.emit({
-        type: 'CONVERSATIONS_UPDATED',
-        conversationId: convId,
-        conversations: this.conversations,
-      });
+    } catch (err) {
+      console.warn('[ChatService] Gagal setup user echo listener:', err);
     }
   }
 
-  private getCurrentTime(): string {
-    const now = new Date();
-    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  /**
+   * Menyiapkan listener Echo pada private conversation channel (conversation.{id})
+   */
+  public listenToConversation(conversationId: string | null) {
+    const echo = getEcho();
+    if (!echo) return;
+
+    if (this.convEchoChannel && this.activeListeningConvId) {
+      try {
+        this.convEchoChannel.stopListening('.ChatMessageSent');
+      } catch {
+        // ignore
+      }
+      this.convEchoChannel = null;
+      this.activeListeningConvId = null;
+    }
+
+    if (!conversationId || isNaN(Number(conversationId))) return;
+
+    try {
+      this.activeListeningConvId = String(conversationId);
+      this.convEchoChannel = echo.private(`conversation.${conversationId}`);
+      this.convEchoChannel.listen('.ChatMessageSent', (event: any) => {
+        if (event?.message) {
+          const raw = event.message;
+          const senderId = String(raw.sender_id || raw.id_sender || raw.senderId || '');
+          const isOutgoing = this.currentUserId ? senderId === String(this.currentUserId) : false;
+
+          let attachment: any = undefined;
+          const firstAtt = raw.attachments?.[0];
+          if (firstAtt) {
+            const rawType = (firstAtt.file_type || firstAtt.fileType || '').toLowerCase();
+            let attType: 'file' | 'image' | 'shp' = 'file';
+            if (rawType.includes('shp') || rawType.includes('spatial')) attType = 'shp';
+            else if (rawType.includes('image') || rawType.includes('jpg') || rawType.includes('png')) attType = 'image';
+
+            attachment = {
+              name: firstAtt.file_name || firstAtt.fileName || 'Lampiran',
+              type: attType,
+              size: formatFileSize(firstAtt.file_size || firstAtt.fileSize),
+              url: firstAtt.url,
+            };
+          }
+
+          const incomingMsg: ChatMessage = {
+            id: String(raw.id || raw.id_message),
+            senderId,
+            senderName: raw.sender_name || raw.senderName || 'Pengguna',
+            text: raw.message || raw.text || '',
+            timestamp: formatTime(raw.created_at || raw.createdAt),
+            isOutgoing,
+            status: 'read',
+            attachment,
+          };
+
+          // Append to conversation
+          const conv = this.conversations.find((c) => c.id === String(conversationId));
+          if (conv) {
+            if (!conv.messages.some((m) => m.id === incomingMsg.id)) {
+              conv.messages = [...conv.messages, incomingMsg];
+            }
+            conv.lastMessageSnippet = incomingMsg.text || (attachment ? '📎 Lampiran' : '');
+            conv.lastMessageTime = incomingMsg.timestamp;
+            if (isOutgoing) {
+              conv.unreadCount = 0;
+            }
+          }
+
+          this.emit({
+            type: 'MESSAGE_RECEIVED',
+            conversationId: String(conversationId),
+            message: incomingMsg,
+            conversations: this.conversations,
+            totalUnread: this.getTotalUnreadCount(),
+          });
+
+          // Tandai telah dibaca otomatis karena layar chat sedang aktif
+          this.markAsRead(String(conversationId)).catch(() => {});
+        }
+      });
+    } catch (err) {
+      console.warn('[ChatService] Gagal setup conversation echo listener:', err);
+    }
   }
 
+  /**
+   * Mengambil daftar percakapan pengguna yang sedang login dari database
+   */
+  public async getConversations(userId?: string | null): Promise<Conversation[]> {
+    const uid = userId ? String(userId) : this.currentUserId;
+    if (uid) this.currentUserId = uid;
+
+    try {
+      const res = await apiClient.get<any>('/conversations');
+      if (res && Array.isArray(res.data)) {
+        const mapped: Conversation[] = res.data.map((item: any) => {
+          const other = item.otherUser || item.other_user || item.researcher || {};
+          const otherName = other.name || other.nama || item.userName || item.title || 'Pengguna';
+          const otherRoleRaw = other.role || item.userRole || 'Analyst';
+          const roleName =
+            otherRoleRaw === 'Admin' || otherRoleRaw === 'Super Admin' || otherRoleRaw === 'Administrator'
+              ? 'SuperAdmin'
+              : (otherRoleRaw as any);
+
+          const existingConv = this.conversations.find((c) => c.id === String(item.id || item.id_conversation));
+
+          const lastMsg = item.lastMessage || item.last_message;
+          const snippet =
+            item.lastMessageSnippet ||
+            (lastMsg ? (lastMsg.message || lastMsg.text || (lastMsg.attachments?.length ? '📎 Mengirim lampiran' : '')) : '');
+          const time = item.lastMessageTime || (lastMsg ? formatTime(lastMsg.created_at || lastMsg.createdAt) : '');
+
+          return {
+            id: String(item.id || item.id_conversation),
+            userId: String(other.id || other.id_user || item.userId || item.researcherId || ''),
+            userName: otherName,
+            userRole: roleName,
+            userAvatarBg: item.userAvatarBg || getAvatarBg(roleName),
+            userInitials: item.userInitials || getInitials(otherName),
+            isOnline: Boolean(item.isOnline ?? other.isOnline ?? other.is_online),
+            lastSeen: item.lastSeen || other.lastSeen || 'Offline',
+            projectCode: item.projectCode || item.project?.code || 'PKS-994KY1',
+            projectName: item.projectName || item.project?.name || 'Proyek PKSPL',
+            unreadCount: Number(item.unreadCount ?? item.unread_count ?? 0),
+            lastMessageSnippet: snippet,
+            lastMessageTime: time,
+            messages: existingConv ? existingConv.messages : [],
+          };
+        });
+
+        this.conversations = mapped;
+        this.emit({
+          type: 'CONVERSATIONS_UPDATED',
+          conversations: this.conversations,
+          totalUnread: this.getTotalUnreadCount(),
+        });
+        return mapped;
+      }
+    } catch (err) {
+      console.warn('[ChatService] Gagal memuat percakapan dari API backend:', err);
+    }
+
+    if (this.conversations.length === 0) {
+      this.conversations = JSON.parse(JSON.stringify(RESEARCHER_INITIAL_CONVERSATIONS));
+    }
+    return this.conversations;
+  }
+
+  /**
+   * Mengambil riwayat pesan percakapan dari database
+   */
+  public async getMessages(conversationId: string, userId?: string | null): Promise<ChatMessage[]> {
+    const uid = userId ? String(userId) : this.currentUserId;
+    if (uid) this.currentUserId = uid;
+
+    try {
+      const res = await apiClient.get<any>(`/conversations/${conversationId}/messages`, { per_page: 100 });
+      if (res && Array.isArray(res.data)) {
+        const msgs: ChatMessage[] = res.data.map((m: any) => {
+          const senderId = String(m.senderId || m.sender_id || m.id_sender || '');
+          const isOutgoing = uid ? senderId === String(uid) : (m.senderRole === 'Peneliti');
+          const firstAtt = m.attachments?.[0];
+
+          let attachment: any = undefined;
+          if (firstAtt) {
+            const rawType = (firstAtt.file_type || firstAtt.fileType || '').toLowerCase();
+            let attType: 'file' | 'image' | 'shp' = 'file';
+            if (rawType.includes('shp') || rawType.includes('spatial')) attType = 'shp';
+            else if (rawType.includes('image') || rawType.includes('jpg') || rawType.includes('png')) attType = 'image';
+
+            attachment = {
+              name: firstAtt.file_name || firstAtt.fileName || 'Lampiran',
+              type: attType,
+              size: formatFileSize(firstAtt.file_size || firstAtt.fileSize),
+              url: firstAtt.url,
+            };
+          }
+
+          const isRead = Boolean(m.isRead ?? m.is_read);
+
+          return {
+            id: String(m.id || m.id_message),
+            senderId,
+            senderName: m.senderName || m.sender_name || 'Pengguna',
+            text: m.text || m.message || '',
+            timestamp: formatTime(m.created_at || m.createdAt),
+            isOutgoing,
+            status: isRead ? 'read' : 'delivered',
+            attachment,
+          };
+        });
+
+        // Update cache pesan pada percakapan
+        const convIndex = this.conversations.findIndex((c) => c.id === conversationId);
+        if (convIndex !== -1) {
+          this.conversations[convIndex].messages = msgs;
+        }
+
+        return msgs;
+      }
+    } catch (err) {
+      console.warn(`[ChatService] Gagal memuat pesan #${conversationId}:`, err);
+    }
+
+    const cached = this.conversations.find((c) => c.id === conversationId);
+    return cached ? cached.messages : [];
+  }
+
+  /**
+   * Mengirim pesan (teks dan/atau berkas lampiran nyata) ke percakapan di backend
+   */
   public async sendMessage(
     conversationId: string,
     text: string,
-    attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string }
+    attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string; file?: File },
+    userId?: string | null
   ): Promise<ChatMessage> {
-    const conv = this.conversations.find((c) => c.id === conversationId);
-    if (!conv) {
-      throw new Error(`Percakapan dengan ID ${conversationId} tidak ditemukan.`);
+    const uid = userId ? String(userId) : this.currentUserId;
+    if (uid) this.currentUserId = uid;
+
+    try {
+      let res: any;
+      if (attachment?.file) {
+        const formData = new FormData();
+        formData.append('file', attachment.file);
+        if (text) formData.append('message', text);
+        res = await apiClient.upload<any>(`/conversations/${conversationId}/messages`, formData);
+      } else {
+        res = await apiClient.post<any>(`/conversations/${conversationId}/messages`, {
+          message: text,
+          text: text,
+        });
+      }
+
+      if (res && res.data) {
+        const m = res.data;
+        const firstAtt = m.attachments?.[0];
+        let sentAtt: any = undefined;
+        if (firstAtt) {
+          const rawType = (firstAtt.file_type || firstAtt.fileType || '').toLowerCase();
+          let attType: 'file' | 'image' | 'shp' = 'file';
+          if (rawType.includes('shp') || rawType.includes('spatial')) attType = 'shp';
+          else if (rawType.includes('image') || rawType.includes('jpg') || rawType.includes('png')) attType = 'image';
+
+          sentAtt = {
+            name: firstAtt.file_name || firstAtt.fileName || attachment?.name || 'Lampiran',
+            type: attType,
+            size: formatFileSize(firstAtt.file_size || firstAtt.fileSize) || attachment?.size || '1 MB',
+            url: firstAtt.url || attachment?.url,
+          };
+        } else if (attachment) {
+          sentAtt = {
+            name: attachment.name,
+            type: attachment.type,
+            size: attachment.size,
+            url: attachment.url,
+          };
+        }
+
+        const sentMessage: ChatMessage = {
+          id: String(m.id || m.id_message),
+          senderId: String(uid || m.sender_id || m.id_sender),
+          senderName: m.sender_name || m.senderName || 'Peneliti',
+          text: m.message || text,
+          timestamp: formatTime(m.created_at || new Date().toISOString()),
+          isOutgoing: true,
+          status: 'read',
+          attachment: sentAtt,
+        };
+
+        // Perbarui conversation
+        const convIndex = this.conversations.findIndex((c) => c.id === conversationId);
+        if (convIndex !== -1) {
+          const c = this.conversations[convIndex];
+          c.messages = [...c.messages.filter((msg) => msg.id !== sentMessage.id), sentMessage];
+          c.lastMessageSnippet = text || (sentAtt ? '📎 Lampiran' : '');
+          c.lastMessageTime = sentMessage.timestamp;
+          c.unreadCount = 0;
+        }
+
+        this.emit({
+          type: 'MESSAGE_SENT',
+          conversationId,
+          message: sentMessage,
+          conversations: this.conversations,
+          totalUnread: this.getTotalUnreadCount(),
+        });
+
+        return sentMessage;
+      }
+    } catch (err) {
+      console.error(`[ChatService] Gagal mengirim pesan ke conv #${conversationId}:`, err);
+      throw err;
     }
 
-    const timeStr = this.getCurrentTime();
-    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
-    // 1. Optimistic message creation with 'sent' status
-    const newMsg: ChatMessage = {
-      id: messageId,
-      senderId: 'usr-retno',
-      senderName: 'Dr. Ir. Retno Wulandari, M.Si.',
+    // Local fallback
+    const timeStr = formatTime(new Date().toISOString());
+    const fallbackMsg: ChatMessage = {
+      id: `local-msg-${Date.now()}`,
+      senderId: String(uid || 'peneliti-me'),
+      senderName: 'Peneliti',
       text,
       timestamp: timeStr,
       isOutgoing: true,
-      status: 'sent',
-      attachment,
+      status: 'delivered',
+      attachment: attachment ? {
+        name: attachment.name,
+        type: attachment.type,
+        size: attachment.size,
+        url: attachment.url,
+      } : undefined,
     };
 
-    const snippet = text || (attachment ? `📎 ${attachment.name}` : '');
+    const convIndex = this.conversations.findIndex((c) => c.id === conversationId);
+    if (convIndex !== -1) {
+      const c = this.conversations[convIndex];
+      c.messages = [...c.messages, fallbackMsg];
+      c.lastMessageSnippet = text;
+      c.lastMessageTime = timeStr;
+    }
 
-    this.conversations = this.conversations.map((c) => {
-      if (c.id === conversationId) {
-        return {
-          ...c,
-          lastMessageSnippet: snippet,
-          lastMessageTime: timeStr,
-          messages: [...c.messages, newMsg],
-        };
-      }
-      return c;
-    });
-
-    this.save();
     this.emit({
       type: 'MESSAGE_SENT',
       conversationId,
-      message: newMsg,
+      message: fallbackMsg,
       conversations: this.conversations,
+      totalUnread: this.getTotalUnreadCount(),
     });
 
-    // 2. Simulate server acknowledgement -> 'delivered'
-    setTimeout(() => {
-      this.updateMessageStatus(conversationId, messageId, 'delivered');
-    }, 600);
+    return fallbackMsg;
+  }
 
-    // 3. Simulate recipient reading message -> 'read' (if recipient is online)
-    if (conv.isOnline) {
-      setTimeout(() => {
-        this.updateMessageStatus(conversationId, messageId, 'read');
-      }, 1400);
-
-      // 4. Trigger intelligent automatic reply from the recipient
-      this.scheduleSimulatedReply(conversationId, conv, text);
+  /**
+   * Menandai percakapan sebagai telah dibaca
+   */
+  public async markAsRead(conversationId: string): Promise<void> {
+    try {
+      await apiClient.post(`/conversations/${conversationId}/read`);
+    } catch (err) {
+      console.warn(`[ChatService] Gagal menandai baca conv #${conversationId}:`, err);
     }
 
-    return newMsg;
-  }
-
-  private updateMessageStatus(
-    conversationId: string,
-    messageId: string,
-    status: 'delivered' | 'read'
-  ) {
-    this.conversations = this.conversations.map((c) => {
-      if (c.id === conversationId) {
-        return {
-          ...c,
-          messages: c.messages.map((m) => (m.id === messageId ? { ...m, status } : m)),
-        };
-      }
-      return c;
-    });
-    this.save();
-    this.emit({
-      type: status === 'delivered' ? 'MESSAGE_DELIVERED' : 'MESSAGE_READ',
-      conversationId,
-      conversations: this.conversations,
-    });
-  }
-
-  private scheduleSimulatedReply(conversationId: string, conv: Conversation, triggerText: string) {
-    const lower = triggerText.toLowerCase();
-
-    // Typing start indicator after 1s
-    setTimeout(() => {
+    const conv = this.conversations.find((c) => c.id === conversationId);
+    if (conv && conv.unreadCount > 0) {
+      conv.unreadCount = 0;
       this.emit({
-        type: 'TYPING_START',
+        type: 'UNREAD_COUNT_CHANGED',
         conversationId,
-        userId: conv.userId,
+        totalUnread: this.getTotalUnreadCount(),
+        conversations: this.conversations,
+      });
+    }
+  }
+
+  /**
+   * Mengambil daftar kontak pengguna (Analyst, Admin, Peneliti) dari database resmi
+   */
+  public async getDirectoryUsers(searchQuery: string = ''): Promise<ChatDirectoryUser[]> {
+    try {
+      const params = searchQuery ? { search: searchQuery } : undefined;
+      const res = await apiClient.get<any>('/chat/directory', params);
+      if (res && Array.isArray(res.data)) {
+        return res.data.map((u: any) => {
+          const isOnline = Boolean(u.isOnline ?? u.is_online);
+          const roleName = u.role?.nama_role || u.role || 'User';
+          return {
+            id: String(u.id || u.id_user),
+            nama: u.nama || u.name,
+            email: u.email,
+            role: roleName,
+            isOnline,
+            lastSeen: formatLastSeen(u.lastSeen || u.last_seen, isOnline),
+            userAvatarBg: getAvatarBg(roleName),
+            userInitials: getInitials(u.nama || u.name),
+            associatedProjects: u.associatedProjects || u.associated_projects || [],
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('[ChatService] Gagal memuat direktori kontak:', err);
+    }
+    return [];
+  }
+
+  /**
+   * Membuka atau membuat thread percakapan baru dengan recipientId (ID user tujuan)
+   */
+  public async getOrCreateConversation(recipientId: string | number, initialMsg?: string): Promise<string> {
+    try {
+      const res = await apiClient.post<any>('/conversations', {
+        recipient_id: Number(recipientId),
       });
 
-      // Typing stop and reply delivery after 2.2s
-      setTimeout(() => {
-        this.emit({
-          type: 'TYPING_STOP',
-          conversationId,
-          userId: conv.userId,
-        });
+      if (res && res.data) {
+        const conv = res.data;
+        const convId = String(conv.id || conv.id_conversation);
 
-        let replyContent = '';
-        if (conv.userRole === 'SuperAdmin') {
-          if (lower.includes('ekspor') || lower.includes('excel') || lower.includes('template')) {
-            replyContent = 'Baik Bu Retno, format template 13-sheet sudah kami simpan di repositori master dan diteruskan ke reviewer.';
-          } else if (lower.includes('perbaiki') || lower.includes('revisi')) {
-            replyContent = 'Terima kasih atas pembaruannya. Status pengajuan di dashboard admin telah diperbarui ke status Dalam Tinjauan.';
-          } else {
-            replyContent = 'Siap Bu Retno, kami dari sekretariat PKSPL siap memfasilitasi jika ada kendala sistem atau master data.';
-          }
-        } else {
-          // Analyst reply
-          if (lower.includes('perbaiki') || lower.includes('revisi') || lower.includes('harga')) {
-            replyContent = 'Baik Bu Retno, silakan diperbarui. Parameter harga satuan dan formula di sheet valuasi akan kami telaah ulang.';
-          } else if (lower.includes('upload') || lower.includes('template') || lower.includes('data')) {
-            replyContent = 'Data valuasi terbaru sudah kami terima. Seluruh unit penilai nursery ground dan seawall akan kami verifikasi.';
-          } else if (lower.includes('review') || lower.includes('perhitungan') || lower.includes('tev')) {
-            replyContent = 'Kalkulasi TEV sudah masuk daftar review saya Bu Retno. Saya akan kabari hasil validasinya segera.';
-          } else if (lower.includes('shp') || lower.includes('gis') || lower.includes('peta')) {
-            replyContent = 'File GIS SHP sudah kami cek koordinat poligonnya, batas zonasi sudah tepat dan tidak ada overlap.';
-          } else {
-            replyContent = 'Terima kasih atas update dan koordinasinya Bu Retno. Mohon pastikan seluruh data pendukung diunggah tepat waktu.';
+        if (initialMsg && initialMsg.trim()) {
+          try {
+            await apiClient.post(`/conversations/${convId}/messages`, {
+              message: initialMsg.trim(),
+            });
+          } catch (err) {
+            console.warn('[ChatService] Gagal mengirim pesan awal:', err);
           }
         }
 
-        const replyTime = this.getCurrentTime();
-        const incomingMsg: ChatMessage = {
-          id: `reply-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          senderId: conv.userId,
-          senderName: conv.userName,
-          text: replyContent,
-          timestamp: replyTime,
-          isOutgoing: false,
-        };
+        await this.getConversations();
+        return convId;
+      }
+    } catch (err) {
+      console.error('[ChatService] Gagal getOrCreateConversation:', err);
+      throw err;
+    }
 
-        this.conversations = this.conversations.map((c) => {
-          if (c.id === conversationId) {
-            return {
-              ...c,
-              lastMessageSnippet: replyContent,
-              lastMessageTime: replyTime,
-              messages: [...c.messages, incomingMsg],
-            };
-          }
-          return c;
-        });
-
-        this.save();
-        this.emit({
-          type: 'MESSAGE_RECEIVED',
-          conversationId,
-          message: incomingMsg,
-          conversations: this.conversations,
-        });
-      }, 1500);
-    }, 900);
+    return `rconv-${recipientId}`;
   }
 
+  /**
+   * Upload File Attachment dengan validasi
+   */
   public async uploadAttachment(
     file: File,
     type: 'file' | 'shp' | 'image',
     onProgress?: (percent: number) => void
-  ): Promise<{ name: string; type: 'file' | 'shp' | 'image'; size: string; url?: string }> {
-    // 1. File Size Validation (Max 25 MB)
+  ): Promise<{ name: string; type: 'file' | 'shp' | 'image'; size: string; url?: string; file?: File }> {
     const MAX_SIZE_BYTES = 25 * 1024 * 1024;
     if (file.size > MAX_SIZE_BYTES) {
       throw new Error(`Ukuran file (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimum 25 MB.`);
     }
 
-    // 2. Format / Extension Validation
     const fileName = file.name.toLowerCase();
-    if (type === 'file' && !fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
-      throw new Error('Format file tidak valid. Harap lampirkan spreadsheet Excel (.xlsx atau .xls).');
+    if (type === 'file' && !fileName.endsWith('.xlsx') && !fileName.endsWith('.xls') && !fileName.endsWith('.pdf')) {
+      throw new Error('Format file tidak valid. Harap lampirkan spreadsheet Excel (.xlsx, .xls) atau dokumen PDF (.pdf).');
     }
     if (type === 'shp' && !fileName.endsWith('.zip')) {
       throw new Error('Format file tidak valid. Harap lampirkan layer GIS dalam arsip ZIP (.zip) yang memuat file .shp, .shx, dan .dbf.');
@@ -316,23 +601,18 @@ class ChatService {
       throw new Error('Format gambar tidak valid. Harap lampirkan gambar berekstensi .png, .jpg, .jpeg, atau .webp.');
     }
 
-    // 3. Realistic Upload Progress Simulation
+    // Realistic progress callback
     return new Promise((resolve) => {
       let progress = 0;
       onProgress?.(0);
 
       const interval = setInterval(() => {
-        progress += Math.floor(Math.random() * 25) + 15;
+        progress += 35;
         if (progress >= 100) {
           progress = 100;
           clearInterval(interval);
           onProgress?.(100);
 
-          // Calculate human readable size
-          const sizeKb = file.size / 1024;
-          const sizeStr = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${Math.round(sizeKb)} KB`;
-
-          // Generate object URL for preview if image
           let previewUrl: string | undefined;
           if (type === 'image') {
             try {
@@ -345,37 +625,45 @@ class ChatService {
           resolve({
             name: file.name,
             type,
-            size: sizeStr,
+            size: formatFileSize(file.size),
             url: previewUrl,
+            file,
           });
         } else {
           onProgress?.(progress);
         }
-      }, 120);
+      }, 80);
     });
   }
 
-  public createNewConversation(
+  /**
+   * Fallback method createNewConversation
+   */
+  public async createNewConversation(
     name: string,
     role: 'Analyst' | 'SuperAdmin',
     projectCode: string,
-    initialMsg: string
-  ): Conversation {
-    const timeStr = this.getCurrentTime();
+    initialMsg: string,
+    recipientId?: string | number
+  ): Promise<Conversation> {
+    if (recipientId) {
+      const convId = await this.getOrCreateConversation(recipientId, initialMsg);
+      await this.getConversations();
+      const found = this.conversations.find((c) => c.id === convId);
+      if (found) return found;
+    }
+
+    // Local fallback
+    const timeStr = formatTime(new Date().toISOString());
     const newId = `rconv-${Date.now()}`;
-    const initials = name
-      .split(' ')
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase();
+    const initials = getInitials(name);
 
     const newConv: Conversation = {
       id: newId,
       userId: `usr-${Date.now()}`,
       userName: name,
       userRole: role,
-      userAvatarBg: role === 'SuperAdmin' ? 'from-blue-600 to-indigo-600' : 'from-amber-600 to-rose-600',
+      userAvatarBg: role === 'SuperAdmin' ? 'from-purple-600 to-indigo-600' : 'from-amber-600 to-rose-600',
       userInitials: initials || 'US',
       isOnline: true,
       projectCode: projectCode || 'PKS-994KY1',
@@ -386,8 +674,8 @@ class ChatService {
       messages: [
         {
           id: `rmsg-${Date.now()}`,
-          senderId: 'usr-retno',
-          senderName: 'Dr. Ir. Retno Wulandari, M.Si.',
+          senderId: this.currentUserId || 'peneliti-me',
+          senderName: 'Peneliti',
           text: initialMsg,
           timestamp: timeStr,
           isOutgoing: true,
@@ -397,86 +685,47 @@ class ChatService {
     };
 
     this.conversations = [newConv, ...this.conversations];
-    this.save();
-
     this.emit({
       type: 'CONVERSATIONS_UPDATED',
       conversationId: newId,
       conversations: this.conversations,
     });
 
-    // Simulate auto-delivery
-    setTimeout(() => {
-      this.updateMessageStatus(newId, newConv.messages[0].id, 'delivered');
-      setTimeout(() => {
-        this.updateMessageStatus(newId, newConv.messages[0].id, 'read');
-        this.scheduleSimulatedReply(newId, newConv, initialMsg);
-      }, 1200);
-    }, 500);
-
     return newConv;
+  }
+
+  public getTotalUnreadCount(): number {
+    return this.conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
   }
 
   public triggerIncomingMessageSimulation(targetConvId?: string): void {
     const target = targetConvId
       ? this.conversations.find((c) => c.id === targetConvId)
-      : this.conversations.find((c) => c.id !== 'rconv-1') || this.conversations[0];
+      : this.conversations[0];
 
     if (!target) return;
 
-    const timeStr = this.getCurrentTime();
+    const timeStr = formatTime(new Date().toISOString());
     const simulatedMsg: ChatMessage = {
       id: `sim-${Date.now()}`,
       senderId: target.userId,
       senderName: target.userName,
-      text: `Halo Bu Retno, mohon informasi apakah ada kendala dalam kompilasi data valuasi ${target.projectCode || 'proyek'}?`,
+      text: `Halo, mohon informasi tindak lanjut terkait telaah data valuasi ${target.projectCode || 'proyek'}.`,
       timestamp: timeStr,
       isOutgoing: false,
     };
 
-    this.conversations = this.conversations.map((c) => {
-      if (c.id === target.id) {
-        return {
-          ...c,
-          unreadCount: (c.unreadCount || 0) + 1,
-          lastMessageSnippet: simulatedMsg.text,
-          lastMessageTime: timeStr,
-          messages: [...c.messages, simulatedMsg],
-        };
-      }
-      return c;
-    });
-
-    this.save();
-    const totalUnread = this.getTotalUnreadCount();
+    target.messages.push(simulatedMsg);
+    target.lastMessageSnippet = simulatedMsg.text;
+    target.lastMessageTime = timeStr;
+    target.unreadCount = (target.unreadCount || 0) + 1;
 
     this.emit({
       type: 'MESSAGE_RECEIVED',
       conversationId: target.id,
       message: simulatedMsg,
-      totalUnread,
-      conversations: this.conversations,
-    });
-    this.emit({
-      type: 'UNREAD_COUNT_CHANGED',
-      conversationId: target.id,
-      totalUnread,
-      conversations: this.conversations,
-    });
-    this.emit({
-      type: 'CONVERSATIONS_UPDATED',
-      conversationId: target.id,
-      conversations: this.conversations,
-    });
-  }
-
-  public resetMockData(): void {
-    this.conversations = JSON.parse(JSON.stringify(RESEARCHER_INITIAL_CONVERSATIONS));
-    this.save();
-    this.emit({
-      type: 'CONVERSATIONS_UPDATED',
-      conversations: this.conversations,
       totalUnread: this.getTotalUnreadCount(),
+      conversations: this.conversations,
     });
   }
 }

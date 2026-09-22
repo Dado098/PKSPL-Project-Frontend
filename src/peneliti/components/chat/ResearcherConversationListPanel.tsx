@@ -1,29 +1,26 @@
 import React, { useState } from 'react';
 import { Conversation } from '../../mock/chatMock';
+import { ChatDirectoryUser } from '../../services/chatService';
 import {
   Search,
   Plus,
   MoreVertical,
   X,
-  Radio,
-  FileCheck,
-  RotateCcw,
   Sparkles,
-  Paperclip,
-  Shield,
-  UserCheck
 } from 'lucide-react';
 
 interface ResearcherConversationListPanelProps {
   conversations: Conversation[];
   activeConversationId: string | null;
   isLoading?: boolean;
+  directoryUsers?: ChatDirectoryUser[];
   onSelectConversation: (id: string) => void;
   onNewConversation?: (
     name: string,
     role: 'Analyst' | 'SuperAdmin',
     projectCode: string,
-    initialMsg: string
+    initialMsg: string,
+    recipientId?: string | number
   ) => void;
   onSimulateIncoming?: () => void;
 }
@@ -32,6 +29,7 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
   conversations,
   activeConversationId,
   isLoading = false,
+  directoryUsers = [],
   onSelectConversation,
   onNewConversation,
   onSimulateIncoming,
@@ -42,8 +40,7 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // New Chat Form State
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'Analyst' | 'SuperAdmin'>('Analyst');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [newProjectCode, setNewProjectCode] = useState('PKS-994KY1');
   const [newInitialMsg, setNewInitialMsg] = useState('');
 
@@ -64,18 +61,25 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
 
   const handleCreateNewChat = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName.trim()) return;
+    if (!selectedUserId) return;
+
+    const chosen = directoryUsers.find((u) => String(u.id) === String(selectedUserId));
+    const role: 'Analyst' | 'SuperAdmin' =
+      chosen?.role === 'Admin' || chosen?.role === 'Super Admin' || chosen?.role === 'Administrator'
+        ? 'SuperAdmin'
+        : 'Analyst';
 
     if (onNewConversation) {
       onNewConversation(
-        newUserName.trim(),
-        newUserRole,
+        chosen?.nama || 'Pengguna',
+        role,
         newProjectCode.trim() || 'PKS-994KY1',
-        newInitialMsg.trim() || 'Halo, saya ingin mendiskusikan validasi data valuasi ekonomi pada proyek ini.'
+        newInitialMsg.trim() || 'Halo, saya ingin mendiskusikan validasi data valuasi ekonomi pada proyek ini.',
+        selectedUserId
       );
     }
 
-    setNewUserName('');
+    setSelectedUserId('');
     setNewInitialMsg('');
     setNewProjectCode('PKS-994KY1');
     setIsNewChatModalOpen(false);
@@ -168,7 +172,7 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -238,7 +242,7 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
                   setSearchQuery('');
                   setActiveRoleFilter('ALL');
                 }}
-                className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700 underline"
+                className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700 underline cursor-pointer"
               >
                 Reset Filter & Pencarian
               </button>
@@ -357,7 +361,7 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
               </div>
               <button
                 onClick={() => setIsNewChatModalOpen(false)}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-700"
+                className="p-1 rounded-md text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -366,41 +370,38 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
             <form onSubmit={handleCreateNewChat} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Nama Penerima (Analyst / Super Admin):
+                  Pilih Pengguna Tujuan (Analyst / Admin):
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Budi Santoso, M.Si."
-                  value={newUserName}
-                  onChange={(e) => setNewUserName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                {directoryUsers && directoryUsers.length > 0 ? (
+                  <select
+                    required
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-800"
+                  >
+                    <option value="">-- Pilih Rekan Analyst atau Administrator --</option>
+                    {directoryUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nama} — {u.role} ({u.isOnline ? 'Online' : 'Offline'})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 text-xs">
+                    Memuat daftar pengguna dari database PKSPL...
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Peran (Role):</label>
-                  <select
-                    value={newUserRole}
-                    onChange={(e) => setNewUserRole(e.target.value as 'Analyst' | 'SuperAdmin')}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="Analyst">Analyst / Reviewer</option>
-                    <option value="SuperAdmin">Super Admin</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Kode Proyek:</label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: PKS-994KY1"
-                    value={newProjectCode}
-                    onChange={(e) => setNewProjectCode(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                  />
-                </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Kode Proyek:</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: PKS-994KY1"
+                  value={newProjectCode}
+                  onChange={(e) => setNewProjectCode(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                />
               </div>
 
               <div>
@@ -418,13 +419,18 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
                 <button
                   type="button"
                   onClick={() => setIsNewChatModalOpen(false)}
-                  className="px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold"
+                  className="px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-xs transition-colors"
+                  disabled={!selectedUserId}
+                  className={`px-4 py-2 rounded-lg font-semibold shadow-xs transition-colors ${
+                    selectedUserId
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
                 >
                   Buka Obrolan
                 </button>

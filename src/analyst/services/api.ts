@@ -26,7 +26,7 @@ export const apiClient = {
       });
     }
 
-    const token = localStorage.getItem('pkspl_token') || localStorage.getItem('auth_token');
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || localStorage.getItem('pkspl_token');
     const headers: Record<string, string> = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -60,7 +60,7 @@ export const apiClient = {
 
   async post<T>(endpoint: string, body?: any): Promise<T> {
     const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-    const token = localStorage.getItem('pkspl_token') || localStorage.getItem('auth_token');
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || localStorage.getItem('pkspl_token');
     const headers: Record<string, string> = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -91,5 +91,75 @@ export const apiClient = {
     }
 
     return response.json();
+  },
+
+  async put<T>(endpoint: string, body?: any): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || localStorage.getItem('pkspl_token');
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!response.ok) {
+      let errorData = null;
+      try {
+        errorData = await response.json();
+      } catch {
+        // Fallback
+      }
+      throw new ApiError(
+        errorData?.message || `Request failed with status ${response.status}`,
+        response.status,
+        errorData
+      );
+    }
+
+    return response.json();
+  },
+
+  async upload<T>(endpoint: string, formData: FormData): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || localStorage.getItem('pkspl_token');
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorData = null;
+      try {
+        errorData = await response.json();
+      } catch {
+        // Fallback
+      }
+      throw new ApiError(
+        errorData?.message || `Upload failed with status ${response.status}`,
+        response.status,
+        errorData
+      );
+    }
+
+    return response.json();
   }
 };
+

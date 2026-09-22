@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Conversation, ChatMessage } from '../mock/chatMock';
-import { chatService, ChatEvent } from '../services/chatService';
+import { chatService, ChatEvent, ChatDirectoryUser } from '../services/chatService';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ChatContextType {
   conversations: Conversation[];
+  directoryUsers: ChatDirectoryUser[];
   activeConversationId: string | null;
   activeConversation: Conversation | null;
   totalUnreadCount: number;
@@ -13,65 +15,78 @@ interface ChatContextType {
   selectConversation: (id: string | null) => void;
   sendMessage: (
     text: string,
-    attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string }
+    attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string; file?: File }
   ) => Promise<void>;
   uploadAttachment: (
     file: File,
     type: 'file' | 'shp' | 'image',
     onProgress?: (percent: number) => void
-  ) => Promise<{ name: string; type: 'file' | 'shp' | 'image'; size: string; url?: string }>;
+  ) => Promise<{ name: string; type: 'file' | 'shp' | 'image'; size: string; url?: string; file?: File }>;
   createNewConversation: (
     name: string,
     role: 'Analyst' | 'SuperAdmin',
     projectCode: string,
-    initialMsg: string
-  ) => void;
+    initialMsg: string,
+    recipientId?: string | number
+  ) => Promise<void>;
   simulateIncomingMessage: (targetConvId?: string) => void;
   retrySendMessage: (messageId: string) => Promise<void>;
+  refreshConversations: () => Promise<void>;
   clearError: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth() || {};
+  const currentUserId = user?.id || user?.id_user;
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
-    // Default to first conversation on desktop if available
-    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-      return 'rconv-1';
-    }
-    return null;
-  });
+  const [directoryUsers, setDirectoryUsers] = useState<ChatDirectoryUser[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [typingMap, setTypingMap] = useState<Record<string, boolean>>({});
-  const [totalUnreadCount, setTotalUnreadCount] = useState<number>(() => chatService.getTotalUnreadCount());
+  const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
 
-  // Load initial conversations from chatService
+  // Sync current user ID into chatService
   useEffect(() => {
-    let isMounted = true;
-    setIsLoading(true);
+    chatService.setCurrentUserId(currentUserId);
+  }, [currentUserId]);
 
-    chatService
-      .getConversations()
-      .then((data) => {
-        if (isMounted) {
-          setConversations(data);
-          setTotalUnreadCount(chatService.getTotalUnreadCount());
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(err.message || 'Gagal memuat data percakapan.');
-          setIsLoading(false);
-        }
-      });
+  // Load initial conversations & directory users
+  const loadInitialData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const [convs, dir] = await Promise.all([
+        chatService.getConversations(currentUserId),
+        chatService.getDirectoryUsers(),
+      ]);
 
-    // Subscribe to real-time events from chatService
+      setConversations(convs);
+      setDirectoryUsers(dir);
+      setTotalUnreadCount(chatService.getTotalUnreadCount());
+
+      // Auto-select first conversation on desktop if none selected
+      if (!activeConversationId && convs.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+        setActiveConversationId(convs[0].id);
+      }
+    } catch (err: any) {
+      console.warn('[ChatContext] Gagal memuat data awal:', err);
+      setError(err.message || 'Gagal memuat percakapan.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUserId, activeConversationId]);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
+
+  // Subscribe to real-time events from chatService
+  useEffect(() => {
     const unsubscribe = chatService.subscribe((event: ChatEvent) => {
-      if (!isMounted) return;
-
       if (event.conversations) {
         setConversations(event.conversations);
       }
@@ -82,7 +97,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTotalUnreadCount(chatService.getTotalUnreadCount());
       }
 
-      // Handle typing indicators
       if (event.type === 'TYPING_START' && event.conversationId) {
         setTypingMap((prev) => ({ ...prev, [event.conversationId!]: true }));
       } else if (event.type === 'TYPING_STOP' && event.conversationId) {
@@ -91,16 +105,74 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
-      isMounted = false;
       unsubscribe();
     };
   }, []);
 
-  // When active conversation changes, mark as read
+  // When active conversation changes: fetch messages & setup Echo listener & mark as read
+  useEffect(() => {
+    if (!activeConversationId) {
+      chatService.listenToConversation(null);
+      return;
+    }
+
+    let isMounted = true;
+    chatService.listenToConversation(activeConversationId);
+
+    const loadMessages = async () => {
+      try {
+        const msgs = await chatService.getMessages(activeConversationId, currentUserId);
+        if (isMounted) {
+          setConversations((prev) =>
+            prev.map((c) => (c.id === activeConversationId ? { ...c, messages: msgs, unreadCount: 0 } : c))
+          );
+        }
+        await chatService.markAsRead(activeConversationId);
+        setTotalUnreadCount(chatService.getTotalUnreadCount());
+      } catch (err) {
+        console.warn(`[ChatContext] Gagal memuat pesan #${activeConversationId}:`, err);
+      }
+    };
+
+    loadMessages();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeConversationId, currentUserId]);
+
+  // Polling fallback every 10 seconds if visible
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        try {
+          const convs = await chatService.getConversations(currentUserId);
+          setConversations(convs);
+          setTotalUnreadCount(chatService.getTotalUnreadCount());
+
+          if (activeConversationId) {
+            const msgs = await chatService.getMessages(activeConversationId, currentUserId);
+            setConversations((prev) =>
+              prev.map((c) => (c.id === activeConversationId ? { ...c, messages: msgs } : c))
+            );
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }, 10000);
+
+    return () => clearInterval(pollInterval);
+  }, [currentUserId, activeConversationId]);
+
+  // Select conversation handler
   const selectConversation = useCallback((id: string | null) => {
     setActiveConversationId(id);
     if (id) {
       chatService.markAsRead(id);
+      setConversations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
+      );
       setTotalUnreadCount(chatService.getTotalUnreadCount());
     }
   }, []);
@@ -109,26 +181,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return conversations.find((c) => c.id === activeConversationId) || null;
   }, [conversations, activeConversationId]);
 
-  // Send message
+  // Send message handler
   const sendMessage = useCallback(
     async (
       text: string,
-      attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string }
+      attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string; file?: File }
     ) => {
       if (!activeConversationId) return;
 
       try {
         setError(null);
-        await chatService.sendMessage(activeConversationId, text, attachment);
+        await chatService.sendMessage(activeConversationId, text, attachment, currentUserId);
+        const updated = await chatService.getConversations(currentUserId);
+        setConversations(updated);
       } catch (err: any) {
         setError(err.message || 'Gagal mengirim pesan.');
         throw err;
       }
     },
-    [activeConversationId]
+    [activeConversationId, currentUserId]
   );
 
-  // Upload attachment
+  // Upload attachment handler
   const uploadAttachment = useCallback(
     async (
       file: File,
@@ -146,14 +220,49 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     []
   );
 
-  // Create new conversation
+  // Create new conversation handler
   const createNewConversation = useCallback(
-    (name: string, role: 'Analyst' | 'SuperAdmin', projectCode: string, initialMsg: string) => {
-      const newConv = chatService.createNewConversation(name, role, projectCode, initialMsg);
-      setActiveConversationId(newConv.id);
-      setTotalUnreadCount(chatService.getTotalUnreadCount());
+    async (
+      name: string,
+      role: 'Analyst' | 'SuperAdmin',
+      projectCode: string,
+      initialMsg: string,
+      recipientId?: string | number
+    ) => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        let targetId = recipientId;
+        if (!targetId) {
+          // Cari di directoryUsers berdasarkan nama
+          const matched = directoryUsers.find(
+            (u) => u.nama.toLowerCase().includes(name.toLowerCase()) || (u.role === role && u.nama)
+          );
+          if (matched) {
+            targetId = matched.id;
+          }
+        }
+
+        let convId: string;
+        if (targetId) {
+          convId = await chatService.getOrCreateConversation(targetId, initialMsg);
+        } else {
+          const newConv = await chatService.createNewConversation(name, role, projectCode, initialMsg);
+          convId = newConv.id;
+        }
+
+        const updated = await chatService.getConversations(currentUserId);
+        setConversations(updated);
+        setActiveConversationId(convId);
+        setTotalUnreadCount(chatService.getTotalUnreadCount());
+      } catch (err: any) {
+        setError(err.message || 'Gagal membuka percakapan baru.');
+      } finally {
+        setIsLoading(false);
+      }
     },
-    []
+    [directoryUsers, currentUserId]
   );
 
   // Trigger simulated incoming message
@@ -161,7 +270,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     chatService.triggerIncomingMessageSimulation(targetConvId);
   }, []);
 
-  // Retry sending failed message
+  // Retry sending message
   const retrySendMessage = useCallback(
     async (messageId: string) => {
       if (!activeConversation) return;
@@ -169,13 +278,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!failedMsg) return;
 
       try {
-        await chatService.sendMessage(activeConversation.id, failedMsg.text, failedMsg.attachment);
+        await chatService.sendMessage(activeConversation.id, failedMsg.text, failedMsg.attachment, currentUserId);
       } catch (err: any) {
         setError(err.message || 'Gagal mengirim ulang pesan.');
       }
     },
-    [activeConversation]
+    [activeConversation, currentUserId]
   );
+
+  const refreshConversations = useCallback(async () => {
+    const convs = await chatService.getConversations(currentUserId);
+    setConversations(convs);
+    setTotalUnreadCount(chatService.getTotalUnreadCount());
+  }, [currentUserId]);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -185,6 +300,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <ChatContext.Provider
       value={{
         conversations,
+        directoryUsers,
         activeConversationId,
         activeConversation,
         totalUnreadCount,
@@ -197,6 +313,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createNewConversation,
         simulateIncomingMessage,
         retrySendMessage,
+        refreshConversations,
         clearError,
       }}
     >

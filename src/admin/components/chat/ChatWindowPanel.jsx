@@ -28,9 +28,11 @@ export const ChatWindowPanel = ({
   const [searchInChatQuery, setSearchInChatQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [simulatedAttachment, setSimulatedAttachment] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Auto-scroll to bottom when messages update
   useEffect(() => {
@@ -42,12 +44,28 @@ export const ChatWindowPanel = ({
     inputRef.current?.focus();
   }, [conversation.id]);
 
-  const handleSend = () => {
-    if (!inputText.trim() && !simulatedAttachment) return;
+  const handleFileInputChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    onSendMessage(inputText.trim(), simulatedAttachment || undefined);
+    setSelectedFile(file);
+    setSimulatedAttachment({
+      name: file.name,
+      size: `${(file.size / 1024).toFixed(1)} KB`,
+      type: file.type.includes('image') ? 'image' : file.name.endsWith('.zip') ? 'shp' : 'file',
+      file: file,
+    });
+    setShowAttachmentMenu(false);
+  };
+
+  const handleSend = () => {
+    if (!inputText.trim() && !simulatedAttachment && !selectedFile) return;
+
+    const fileToUpload = selectedFile || simulatedAttachment?.file || null;
+    onSendMessage(inputText.trim(), fileToUpload);
     setInputText('');
     setSimulatedAttachment(null);
+    setSelectedFile(null);
     setShowAttachmentMenu(false);
   };
 
@@ -263,13 +281,19 @@ export const ChatWindowPanel = ({
                     }
                   `}
                 >
-                  {/* Optional File Attachment rendering */}
+                  {/* File Attachment rendering */}
                   {msg.attachment && (
-                    <div
+                    <a
+                      href={msg.attachment.url || '#'}
+                      target={msg.attachment.url ? '_blank' : undefined}
+                      rel="noreferrer"
+                      download={msg.attachment.name}
                       className={`
-                        mb-2.5 p-2 rounded-xl flex items-center gap-2.5
-                        ${isMe ? 'bg-blue-700/60 text-white' : 'bg-slate-100 text-slate-800'}
+                        mb-2.5 p-2 rounded-xl flex items-center gap-2.5 transition-colors
+                        ${isMe ? 'bg-blue-700/60 hover:bg-blue-700/80 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-800'}
+                        ${msg.attachment.url ? 'cursor-pointer' : ''}
                       `}
+                      title={msg.attachment.url ? 'Klik untuk membuka atau mengunduh lampiran' : undefined}
                     >
                       <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
                         {msg.attachment.type === 'shp' ? (
@@ -284,7 +308,10 @@ export const ChatWindowPanel = ({
                         <div className="font-bold truncate text-[11px]">{msg.attachment.name}</div>
                         <div className="text-[10px] opacity-75">{msg.attachment.size}</div>
                       </div>
-                    </div>
+                      {msg.attachment.url && (
+                        <ExternalLink className="w-3.5 h-3.5 opacity-70 ml-auto shrink-0" />
+                      )}
+                    </a>
                   )}
 
                   {/* Message Text */}
@@ -353,15 +380,37 @@ export const ChatWindowPanel = ({
           </div>
         )}
 
+        {/* Hidden File Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileInputChange}
+          className="hidden"
+        />
+
         {/* Attachment Menu Popup */}
         {showAttachmentMenu && (
-          <div className="absolute bottom-full mb-2 left-4 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-20 space-y-1 text-xs text-slate-700 w-52 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <div className="absolute bottom-full mb-2 left-4 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-20 space-y-1 text-xs text-slate-700 w-56 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-blue-50 text-blue-700 font-semibold transition-colors text-left cursor-pointer"
+            >
+              <Paperclip className="w-4 h-4 text-blue-600" />
+              <span>Unggah Berkas Komputer...</span>
+            </button>
+
+            <div className="h-px bg-slate-100 my-1" />
+
             <button
               onClick={() => {
+                const dummyContent = 'Template Valuasi PKSPL';
+                const file = new File([dummyContent], `Template_Valuasi_${conversation.projectCode || 'PKSPL'}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                setSelectedFile(file);
                 setSimulatedAttachment({
-                  name: `Template_Valuasi_${conversation.projectCode || 'PKSPL'}.xlsx`,
+                  name: file.name,
                   type: 'file',
                   size: '245 KB',
+                  file: file,
                 });
                 setShowAttachmentMenu(false);
               }}
@@ -373,10 +422,14 @@ export const ChatWindowPanel = ({
 
             <button
               onClick={() => {
+                const dummyContent = 'GIS SHP Archive';
+                const file = new File([dummyContent], `Layer_Tutupan_${conversation.projectCode || 'Benoa'}.zip`, { type: 'application/zip' });
+                setSelectedFile(file);
                 setSimulatedAttachment({
-                  name: `Layer_Tutupan_${conversation.projectCode || 'Benoa'}.zip`,
+                  name: file.name,
                   type: 'shp',
                   size: '4.8 MB',
+                  file: file,
                 });
                 setShowAttachmentMenu(false);
               }}
@@ -388,10 +441,14 @@ export const ChatWindowPanel = ({
 
             <button
               onClick={() => {
+                const dummyContent = 'PNG Chart Content';
+                const file = new File([dummyContent], 'Grafik_Analitik_TEV.png', { type: 'image/png' });
+                setSelectedFile(file);
                 setSimulatedAttachment({
-                  name: 'Grafik_Analitik_TEV.png',
+                  name: file.name,
                   type: 'image',
                   size: '1.2 MB',
+                  file: file,
                 });
                 setShowAttachmentMenu(false);
               }}

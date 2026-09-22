@@ -14,6 +14,7 @@ import {
 import { useAnalyst } from '../../context/AnalystContext';
 import { discussionService } from '../../services/discussionService';
 import { useAuth } from '../../../contexts/AuthContext';
+import { getEcho } from '../../../lib/echo';
 
 interface AnalystSidebarProps {
   isMobile?: boolean;
@@ -26,8 +27,34 @@ export const AnalystSidebar: React.FC<AnalystSidebarProps> = ({ isMobile = false
   const [unreadChatCount, setUnreadChatCount] = React.useState<number>(0);
 
   React.useEffect(() => {
-    discussionService.getTotalUnreadCount().then(setUnreadChatCount).catch(() => {});
-  }, [location.pathname]);
+    const updateCount = () => {
+      discussionService.getTotalUnreadCount().then(setUnreadChatCount).catch(() => {});
+    };
+
+    updateCount();
+
+    // Polling fallback 10s
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        updateCount();
+      }
+    }, 10000);
+
+    // Echo listener untuk unread chat secara realtime
+    const echo = getEcho();
+    if (echo && user?.id && !isNaN(Number(user.id))) {
+      const channel = echo.private(`user.${user.id}`);
+      channel.listen('.ChatMessageSent', () => {
+        updateCount();
+      });
+      return () => {
+        clearInterval(interval);
+        channel.stopListening('.ChatMessageSent');
+      };
+    }
+
+    return () => clearInterval(interval);
+  }, [location.pathname, user?.id]);
 
   const navItems = [
     {

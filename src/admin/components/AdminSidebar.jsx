@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+import { adminChatService } from '../services/adminChatService';
+import { getEcho } from '../../lib/echo';
 
 export const AdminSidebar = ({
   collapsed,
@@ -31,7 +33,56 @@ export const AdminSidebar = ({
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const profileRef = useRef(null);
+
+  // Sync dynamic unread chat message count from backend database
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchUnread = async () => {
+      try {
+        const count = await adminChatService.getTotalUnreadCount();
+        if (isMounted) {
+          setUnreadChatCount(count);
+        }
+      } catch (err) {
+        // silent catch
+      }
+    };
+
+    fetchUnread();
+
+    // Setup Echo listener for realtime message notifications for this admin
+    const echo = getEcho();
+    let channel = null;
+    const currentUserId = user?.id || user?.id_user;
+    if (echo && currentUserId) {
+      try {
+        channel = echo.private(`user.${currentUserId}`);
+        channel.listen('.ChatMessageSent', () => {
+          fetchUnread();
+        });
+      } catch (err) {
+        console.warn('[AdminSidebar] Reverb connection error:', err);
+      }
+    }
+
+    // 15 seconds polling fallback
+    const interval = setInterval(fetchUnread, 15000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      if (channel && echo) {
+        try {
+          channel.stopListening('.ChatMessageSent');
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [user]);
 
   // Derive dynamic user details from existing auth
   const userName = user?.nama || 'Administrator';
@@ -106,7 +157,7 @@ export const AdminSidebar = ({
       title: 'Pesan',
       path: '/admin/messages',
       icon: MessageSquare,
-      badge: '3 Baru',
+      badge: unreadChatCount > 0 ? `${unreadChatCount} Baru` : undefined,
       badgeColor: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
     },
   ];
@@ -218,6 +269,11 @@ export const AdminSidebar = ({
                 )}
 
                 <Icon className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-105 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`} />
+
+                {/* Dot indicator for collapsed state if has badge */}
+                {collapsed && !isMobileOpen && item.badge && (
+                  <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-[#0F172A]" />
+                )}
 
                 {(!collapsed || isMobileOpen) && (
                   <div className="flex-1 flex items-center justify-between truncate">

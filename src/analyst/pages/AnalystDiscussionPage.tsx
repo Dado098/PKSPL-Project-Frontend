@@ -13,6 +13,7 @@ import { ChatResearcherList } from '../components/discussion/ChatResearcherList'
 import { ChatConversationArea } from '../components/discussion/ChatConversationArea';
 import { ChatEmptyState } from '../components/discussion/ChatEmptyState';
 import { TableSkeleton } from '../components/common/SkeletonLoader';
+import { getEcho } from '../../lib/echo';
 
 export const AnalystDiscussionPage: React.FC = () => {
   const { user } = useAnalyst();
@@ -53,6 +54,8 @@ export const AnalystDiscussionPage: React.FC = () => {
           setSelectedConversationId(newConv.id);
           setShowMobileChat(true);
         }
+      } else if (!selectedConversationId && convs.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
+        setSelectedConversationId(convs[0].id);
       }
     } catch (err) {
       console.error('Gagal memuat data diskusi:', err);
@@ -100,13 +103,84 @@ export const AnalystDiscussionPage: React.FC = () => {
     };
   }, [selectedConversationId]);
 
-  // 3. Handler pilih percakapan
+  // 3. Realtime WebSocket subscription via Laravel Echo (Reverb)
+  useEffect(() => {
+    const echo = getEcho();
+    if (!echo) return;
+
+    // Listen on user private channel untuk memperbarui percakapan & unread count
+    let userChannel: any = null;
+    if (user?.id && !isNaN(Number(user.id))) {
+      userChannel = echo.private(`user.${user.id}`);
+      userChannel.listen('.ChatMessageSent', async () => {
+        try {
+          const updatedConvs = await discussionService.getConversations();
+          setConversations(updatedConvs);
+        } catch (err) {
+          // ignore
+        }
+      });
+    }
+
+    // Listen on active conversation channel untuk pesan masuk secara instan
+    let convChannel: any = null;
+    if (selectedConversationId && !isNaN(Number(selectedConversationId))) {
+      convChannel = echo.private(`conversation.${selectedConversationId}`);
+      convChannel.listen('.ChatMessageSent', (event: any) => {
+        if (event?.message) {
+          const incoming = discussionService.mapMessage(event.message);
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === incoming.id)) return prev;
+            return [...prev, incoming];
+          });
+          discussionService.markConversationAsRead(selectedConversationId);
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === selectedConversationId ? { ...c, unreadCount: 0 } : c
+            )
+          );
+        }
+      });
+    }
+
+    return () => {
+      if (convChannel && selectedConversationId) {
+        convChannel.stopListening('.ChatMessageSent');
+      }
+      if (userChannel && user?.id) {
+        userChannel.stopListening('.ChatMessageSent');
+      }
+    };
+  }, [user?.id, selectedConversationId]);
+
+  // 4. Polling fallback jika WebSocket terputus / reconnect
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const convs = await discussionService.getConversations();
+          setConversations(convs);
+
+          if (selectedConversationId) {
+            const msgs = await discussionService.getMessages(selectedConversationId);
+            setMessages(msgs);
+          }
+        } catch (err) {
+          // ignore silent error
+        }
+      }
+    }, 10000);
+
+    return () => clearInterval(pollInterval);
+  }, [selectedConversationId]);
+
+  // 5. Handler pilih percakapan
   const handleSelectConversation = (conversationId: string) => {
     setSelectedConversationId(conversationId);
     setShowMobileChat(true);
   };
 
-  // 4. Handler mulai percakapan baru dengan Peneliti
+  // 6. Handler mulai percakapan baru dengan Peneliti
   const handleStartNewChat = async (resId: string) => {
     try {
       setIsLoading(true);
@@ -122,7 +196,7 @@ export const AnalystDiscussionPage: React.FC = () => {
     }
   };
 
-  // 5. Handler kirim pesan baru
+  // 7. Handler kirim pesan baru (teks dan/atau berkas telaah)
   const handleSendMessage = async (
     text: string,
     projectContext?: ProjectContext,
@@ -133,6 +207,7 @@ export const AnalystDiscussionPage: React.FC = () => {
     try {
       setIsSending(true);
       const senderName = user?.name || 'Analyst PKSPL';
+      const fileToUpload = attachments?.[0]?.file;
 
       const sentMessage = await discussionService.sendMessage(
         {
@@ -141,11 +216,15 @@ export const AnalystDiscussionPage: React.FC = () => {
           projectContext,
           attachments
         },
-        senderName
+        senderName,
+        fileToUpload
       );
 
-      // Tambahkan ke messages lokal
-      setMessages((prev) => [...prev, sentMessage]);
+      // Tambahkan ke messages lokal jika belum ada
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === sentMessage.id)) return prev;
+        return [...prev, sentMessage];
+      });
 
       // Ambil kembali daftar percakapan agar yang terbaru langsung pindah ke urutan teratas
       const updatedConvs = await discussionService.getConversations();
@@ -202,6 +281,7 @@ export const AnalystDiscussionPage: React.FC = () => {
             onSendMessage={handleSendMessage}
             onBackToList={() => setShowMobileChat(false)}
             isLoading={isSending}
+            currentUserId={user?.id}
           />
         ) : (
           <ChatEmptyState

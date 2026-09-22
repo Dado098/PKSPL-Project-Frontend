@@ -41,8 +41,8 @@ export const ChatResearcherList: React.FC<ChatResearcherListProps> = ({
   // Filter conversations berdasarkan search query
   const filteredConversations = conversations.filter((c) => {
     const q = searchQuery.toLowerCase();
-    const nameMatch = c.researcher.name.toLowerCase().includes(q);
-    const specMatch = c.researcher.specialization.toLowerCase().includes(q);
+    const nameMatch = (c.researcher?.name || '').toLowerCase().includes(q);
+    const specMatch = (c.researcher?.specialization || '').toLowerCase().includes(q);
     const messageMatch = c.lastMessage?.text.toLowerCase().includes(q) || false;
     const projectMatch = c.lastMessage?.projectContext?.projectCode.toLowerCase().includes(q) || false;
     return nameMatch || specMatch || messageMatch || projectMatch;
@@ -233,11 +233,11 @@ export const ChatResearcherList: React.FC<ChatResearcherListProps> = ({
         {/* Avatar with status indicator */}
         <div className="relative shrink-0 mt-0.5">
           <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center border border-blue-200">
-            {res.name.charAt(0)}
+            {(res?.name || 'P').charAt(0).toUpperCase()}
           </div>
           <span
             className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
-              res.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+              res?.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
             }`}
           />
         </div>
@@ -249,9 +249,9 @@ export const ChatResearcherList: React.FC<ChatResearcherListProps> = ({
               className={`text-xs font-bold truncate ${
                 isSelected ? 'text-blue-950' : 'text-slate-800'
               }`}
-              title={res.name}
+              title={res?.name || 'Peneliti'}
             >
-              {res.name}
+              {res?.name || 'Peneliti'}
             </h4>
             {lastMsg && (
               <span className="text-[10px] text-slate-400 shrink-0 font-medium">
@@ -261,7 +261,7 @@ export const ChatResearcherList: React.FC<ChatResearcherListProps> = ({
           </div>
 
           <div className="text-[11px] text-slate-500 truncate mb-1">
-            {res.specialization}
+            {res?.specialization || ''}
           </div>
 
           {/* Last Message Snippet */}
@@ -301,11 +301,11 @@ export const ChatResearcherList: React.FC<ChatResearcherListProps> = ({
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
-            {res.name.charAt(0)}
+            {(res?.name || 'P').charAt(0).toUpperCase()}
           </div>
           <div className="truncate">
-            <div className="text-xs font-semibold text-slate-800 truncate">{res.name}</div>
-            <div className="text-[10px] text-slate-400 truncate">{res.specialization}</div>
+            <div className="text-xs font-semibold text-slate-800 truncate">{res?.name || 'Peneliti'}</div>
+            <div className="text-[10px] text-slate-400 truncate">{res?.specialization || ''}</div>
           </div>
         </div>
         <button
@@ -340,19 +340,19 @@ export const ChatResearcherList: React.FC<ChatResearcherListProps> = ({
         <div className="flex items-center gap-3 min-w-0">
           <div className="relative shrink-0">
             <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center border border-blue-200">
-              {res.name.charAt(0)}
+              {(res?.name || 'P').charAt(0).toUpperCase()}
             </div>
             <span
               className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
-                res.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                res?.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
               }`}
             />
           </div>
 
           <div className="truncate">
-            <div className="text-xs font-bold text-slate-800 truncate">{res.name}</div>
-            <div className="text-[10px] text-slate-500 truncate">{res.academicTitle}</div>
-            <div className="text-[10px] text-slate-400 truncate">{res.specialization}</div>
+            <div className="text-xs font-bold text-slate-800 truncate">{res?.name || 'Peneliti'}</div>
+            <div className="text-[10px] text-slate-500 truncate">{res?.academicTitle || ''}</div>
+            <div className="text-[10px] text-slate-400 truncate">{res?.specialization || ''}</div>
           </div>
         </div>
 

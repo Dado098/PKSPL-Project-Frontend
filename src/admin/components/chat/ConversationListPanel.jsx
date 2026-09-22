@@ -17,12 +17,12 @@ export const ConversationListPanel = ({
   activeConversationId,
   onSelectConversation,
   onNewConversation,
+  directoryUsers = [],
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRoleFilter, setActiveRoleFilter] = useState('ALL');
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState('Peneliti');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [newInitialMsg, setNewInitialMsg] = useState('');
 
   // Filter conversations
@@ -40,15 +40,14 @@ export const ConversationListPanel = ({
 
   const handleCreateNewChat = (e) => {
     e.preventDefault();
-    if (!newUserName.trim()) return;
+    if (!selectedUserId) return;
     if (onNewConversation) {
       onNewConversation(
-        newUserName.trim(),
-        newUserRole,
-        newInitialMsg.trim() || 'Halo, saya ingin mendiskusikan valuasi ekonomi terkait riset Anda.'
+        selectedUserId,
+        newInitialMsg.trim() || 'Halo, saya Administrator PKSPL ingin mendiskusikan terkait riset / valuasi Anda.'
       );
     }
-    setNewUserName('');
+    setSelectedUserId('');
     setNewInitialMsg('');
     setIsNewChatModalOpen(false);
   };
@@ -259,27 +258,28 @@ export const ConversationListPanel = ({
 
             <form onSubmit={handleCreateNewChat} className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nama Pengguna:</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Maya Sartika, S.Kel"
-                  value={newUserName}
-                  onChange={(e) => setNewUserName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Peran (Role):</label>
-                <select
-                  value={newUserRole}
-                  onChange={(e) => setNewUserRole(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                >
-                  <option value="Peneliti">Peneliti / Researcher</option>
-                  <option value="Analyst">Analyst / Reviewer</option>
-                </select>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Pilih Pengguna Tujuan:
+                </label>
+                {directoryUsers && directoryUsers.length > 0 ? (
+                  <select
+                    required
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-800"
+                  >
+                    <option value="">-- Pilih Peneliti atau Analyst dari Database --</option>
+                    {directoryUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nama} — {u.role} ({u.isOnline ? 'Online' : 'Offline'})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 text-xs">
+                    Memuat daftar pengguna dari database PKSPL...
+                  </div>
+                )}
               </div>
 
               <div>

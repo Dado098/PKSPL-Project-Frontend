@@ -29,13 +29,13 @@ interface ResearcherChatWindowPanelProps {
   isTyping?: boolean;
   onSendMessage: (
     text: string,
-    attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string }
+    attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string; file?: File }
   ) => Promise<void>;
   onUploadFile: (
     file: File,
     type: 'file' | 'shp' | 'image',
     onProgress?: (percent: number) => void
-  ) => Promise<{ name: string; type: 'file' | 'shp' | 'image'; size: string; url?: string }>;
+  ) => Promise<{ name: string; type: 'file' | 'shp' | 'image'; size: string; url?: string; file?: File }>;
   onBackMobile: () => void;
   onRetryMessage?: (msgId: string) => void;
 }
@@ -58,6 +58,7 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
     type: 'file' | 'image' | 'shp';
     size: string;
     url?: string;
+    file?: File;
   } | null>(null);
 
   // Upload Progress & States
@@ -201,15 +202,19 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
       )
     : conversation.messages;
 
-  // Handle simulated file download
-  const handleDownloadFile = (name: string) => {
-    const dummyBlob = new Blob([`Simulasi konten dokumen ${name} PKSPL IPB`], {
+  // Handle simulated or real file download
+  const handleDownloadFile = (att: { name: string; url?: string }) => {
+    if (att.url) {
+      window.open(att.url, '_blank');
+      return;
+    }
+    const dummyBlob = new Blob([`Simulasi konten dokumen ${att.name} PKSPL IPB`], {
       type: 'text/plain;charset=utf-8',
     });
     const url = URL.createObjectURL(dummyBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = name;
+    link.download = att.name;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -484,7 +489,7 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
                           </button>
                         )}
                         <button
-                          onClick={() => handleDownloadFile(msg.attachment!.name)}
+                          onClick={() => handleDownloadFile(msg.attachment!)}
                           title="Unduh Berkas Lampiran"
                           className="p-1.5 rounded-lg hover:bg-black/10 transition-colors"
                         >

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bell,
   Menu,
@@ -7,14 +8,108 @@ import {
   CheckCircle2,
   AlertCircle,
   FolderX,
-  Clock
+  Clock,
+  CheckCheck,
+  ExternalLink
 } from 'lucide-react';
 import { useAnalyst } from '../../context/AnalystContext';
+import { notificationService, AppNotification } from '../../services/notificationService';
+import { getEcho } from '../../../lib/echo';
 
 export const AnalystTopbar: React.FC = () => {
   const { user, demoState, setDemoState, refreshData, isLoading, setMobileMenuOpen } = useAnalyst();
+  const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [isLoadingNotifs, setIsLoadingNotifs] = useState<boolean>(false);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const [list, count] = await Promise.all([
+        notificationService.getNotifications(10),
+        notificationService.getUnreadCount()
+      ]);
+      setNotifications(list);
+      setUnreadCount(count);
+    } catch (err) {
+      console.warn('Gagal memuat notifikasi:', err);
+    }
+  }, []);
+
+  // Inisialisasi notifikasi dan realtime listener
+  useEffect(() => {
+    loadNotifications();
+
+    // Polling fallback setiap 15 detik
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadNotifications();
+      }
+    }, 15000);
+
+    // Echo listener untuk notifikasi pengguna secara realtime
+    const echo = getEcho();
+    if (echo && user?.id && !isNaN(Number(user.id))) {
+      const channel = echo.private(`user.${user.id}`);
+      channel.listen('.ChatMessageSent', () => {
+        loadNotifications();
+      });
+      return () => {
+        clearInterval(interval);
+        channel.stopListening('.ChatMessageSent');
+      };
+    }
+
+    return () => clearInterval(interval);
+  }, [loadNotifications, user?.id]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true, read_at: new Date().toISOString() })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Gagal menandai semua dibaca:', err);
+    }
+  };
+
+  const handleNotificationClick = async (notif: AppNotification) => {
+    if (!notif.is_read) {
+      try {
+        await notificationService.markAsRead(notif.id);
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
+        );
+        setUnreadCount((c) => Math.max(0, c - 1));
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    setShowNotifications(false);
+
+    // Navigasi sesuai konteks notifikasi
+    if (notif.data?.conversation_id || notif.data?.type === 'chat_message') {
+      navigate('/analyst/discussions');
+    } else if (notif.data?.action_url) {
+      navigate(notif.data.action_url);
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    try {
+      const diff = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
+      if (diff < 60) return 'Baru saja';
+      if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
+      return `${Math.floor(diff / 86400)} hari lalu`;
+    } catch {
+      return '';
+    }
+  };
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
@@ -102,7 +197,7 @@ export const AnalystTopbar: React.FC = () => {
           <RotateCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-blue-600' : ''}`} />
         </button>
 
-        {/* Notifications Icon with Placeholder Dropdown */}
+        {/* Notifications Icon with Dynamic Dropdown */}
         <div className="relative">
           <button
             onClick={() => {
@@ -113,27 +208,83 @@ export const AnalystTopbar: React.FC = () => {
             title="Notifikasi"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white"></span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50">
+            <div className="absolute right-0 mt-2 w-80 sm:w-88 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50">
               <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800">Notifikasi Masuk</span>
-                <span className="text-[11px] text-blue-600 font-medium">3 baru</span>
-              </div>
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
-                <div className="p-3 hover:bg-slate-50 cursor-pointer">
-                  <div className="text-xs font-medium text-slate-800">Pengajuan Proyek Baru</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">Revitalisasi Mangrove Teluk Benoa siap direview.</div>
-                  <div className="text-[10px] text-slate-400 mt-1">15 menit lalu</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-800">Notifikasi</span>
+                  {unreadCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-600 border border-rose-200">
+                      {unreadCount} baru
+                    </span>
+                  )}
                 </div>
-                <div className="p-3 hover:bg-slate-50 cursor-pointer">
-                  <div className="text-xs font-medium text-slate-800">Revisi Terkirim</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">Peneliti mengirim revisi data spasial Teluk Banten.</div>
-                  <div className="text-[10px] text-slate-400 mt-1">3 jam lalu</div>
-                </div>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={handleMarkAllRead}
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-medium hover:underline flex items-center gap-1"
+                  >
+                    <CheckCheck className="w-3 h-3" />
+                    Tandai dibaca
+                  </button>
+                )}
               </div>
+
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-400">
+                    Belum ada notifikasi baru
+                  </div>
+                ) : (
+                  notifications.map((notif) => {
+                    const isChat = notif.data?.type === 'chat_message';
+                    const isUnread = !notif.is_read;
+                    return (
+                      <div
+                        key={notif.id}
+                        onClick={() => handleNotificationClick(notif)}
+                        className={`p-3 transition-colors cursor-pointer ${
+                          isUnread ? 'bg-blue-50/40 hover:bg-blue-50/70' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                            {isUnread && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                            )}
+                            <span className="truncate">
+                              {isChat
+                                ? `Pesan Baru dari ${notif.data.sender_name || 'Peneliti'}`
+                                : notif.data?.title || notif.type || 'Pemberitahuan Sistem'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 shrink-0">
+                            {formatTimeAgo(notif.created_at)}
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] text-slate-600 mt-1 line-clamp-2 leading-relaxed">
+                          {notif.data?.message || notif.data?.description || 'Klik untuk melihat detail pemberitahuan.'}
+                        </div>
+
+                        {notif.data?.project_name && (
+                          <div className="text-[10px] text-blue-600 font-medium mt-1 truncate">
+                            📁 {notif.data.project_name}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
               <div className="px-4 py-2 border-t border-slate-100 text-center">
                 <button
                   onClick={() => setShowNotifications(false)}

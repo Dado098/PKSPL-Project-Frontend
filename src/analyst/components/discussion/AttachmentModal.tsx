@@ -42,6 +42,36 @@ export const AttachmentModal: React.FC<AttachmentModalProps> = ({
 }) => {
   const [selectedItem, setSelectedItem] = useState<ChatAttachment | null>(null);
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    let fileType: ChatAttachment['fileType'] = 'doc';
+    if (ext === 'pdf') fileType = 'pdf';
+    else if (['xls', 'xlsx', 'csv'].includes(ext)) fileType = 'sheet';
+    else if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) fileType = 'image';
+    else if (['geojson', 'shp', 'zip'].includes(ext)) fileType = 'spatial';
+
+    const bytes = file.size;
+    let fileSize = `${(bytes / 1024).toFixed(0)} KB`;
+    if (bytes >= 1048576) {
+      fileSize = `${(bytes / 1048576).toFixed(1)} MB`;
+    }
+
+    const newAtt: ChatAttachment = {
+      id: `att-upload-${Date.now()}`,
+      fileName: file.name,
+      fileSize,
+      fileType,
+      file,
+    };
+
+    setSelectedItem(newAtt);
+  };
+
   if (!isOpen) return null;
 
   const handleConfirm = () => {
@@ -87,10 +117,35 @@ export const AttachmentModal: React.FC<AttachmentModalProps> = ({
           </button>
         </div>
 
-        {/* Info Banner */}
-        <div className="px-5 pt-4">
-          <div className="p-3 bg-blue-50/70 border border-blue-200/70 rounded-xl text-xs text-blue-900 leading-relaxed">
-            <span className="font-semibold">Simulasi Dokumen Pendukung:</span> Pilih salah satu sampel dokumen telaah di bawah ini untuk disematkan ke dalam pesan obrolan.
+        {/* Local File Upload Button */}
+        <div className="p-4 bg-slate-50 border-b border-slate-100">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileInputChange}
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.zip,.geojson,.shp"
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full py-2.5 px-4 bg-white border border-dashed border-blue-400 hover:border-blue-600 hover:bg-blue-50/50 rounded-xl text-xs font-semibold text-blue-700 flex items-center justify-center gap-2 transition-colors shadow-2xs"
+          >
+            <Paperclip className="w-4 h-4 text-blue-600" />
+            <span>Pilih Berkas dari Komputer Anda...</span>
+          </button>
+          {selectedItem?.file && (
+            <div className="mt-2 text-[11px] text-emerald-700 font-medium bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center justify-between">
+              <span className="truncate">Berkas terpilih: {selectedItem.fileName} ({selectedItem.fileSize})</span>
+              <Check className="w-3.5 h-3.5 shrink-0" />
+            </div>
+          )}
+        </div>
+
+        {/* Preset Header */}
+        <div className="px-5 pt-3">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Atau Gunakan Sampel Dokumen Telaah:
           </div>
         </div>
 
