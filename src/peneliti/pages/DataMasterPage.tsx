@@ -20,10 +20,6 @@ import {
 import {
   DAERAH_OPTIONS,
   EKOSISTEM_OPTIONS,
-  PROVISIONING_DATA,
-  REGULATING_DATA,
-  SUPPORTING_DATA,
-  CULTURAL_DATA,
   UsageStatus,
   ProvisioningItem,
   RegulatingItem,
@@ -171,17 +167,25 @@ const FilterSelect: React.FC<{
 const TableContainer: React.FC<{
   title: string;
   count: number;
+  loading?: boolean;
   searchTerm: string;
   onSearchChange: (v: string) => void;
   children: React.ReactNode;
-}> = ({ title, count, searchTerm, onSearchChange, children }) => (
+}> = ({ title, count, loading = false, searchTerm, onSearchChange, children }) => (
   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
     <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div className="flex items-center gap-2">
         <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{title}</h3>
-        <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-          {count} data
-        </span>
+        {loading ? (
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+            Memuat data...
+          </span>
+        ) : (
+          <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+            {count} data
+          </span>
+        )}
       </div>
       <div className="relative">
         <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -190,12 +194,39 @@ const TableContainer: React.FC<{
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Cari data..."
-          className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors w-full sm:w-56"
+          disabled={loading}
+          className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors w-full sm:w-56 disabled:bg-slate-100 disabled:cursor-not-allowed"
         />
       </div>
     </div>
     {children}
   </div>
+);
+
+// ─── Helper: Table Skeleton ──────────────────────────────────────────────────
+
+const TableSkeleton: React.FC<{ columns: number; rows?: number }> = ({ columns, rows = 5 }) => (
+  <>
+    {Array.from({ length: rows }).map((_, rIdx) => (
+      <tr key={rIdx} className="animate-pulse">
+        {Array.from({ length: columns }).map((_, cIdx) => (
+          <td key={cIdx} className="py-3.5 px-4">
+            <div
+              className={`h-4 bg-slate-200 rounded ${
+                cIdx === 0
+                  ? 'w-6 mx-auto'
+                  : cIdx === columns - 1
+                  ? 'w-20 mx-auto'
+                  : cIdx === 1
+                  ? 'w-44'
+                  : 'w-28'
+              }`}
+            />
+          </td>
+        ))}
+      </tr>
+    ))}
+  </>
 );
 
 // ─── Helper: Add Row Button ──────────────────────────────────────────────────
@@ -300,9 +331,10 @@ const ProvisioningTab: React.FC<{
   data: ProvisioningItem[];
   daerahId: string;
   ekosistemId: string;
+  loading?: boolean;
   onAdd: (newItem: Omit<ProvisioningItem, 'id' | 'usage'>) => void;
   onToggleUsage: (id: string) => void;
-}> = ({ data, daerahId, ekosistemId, onAdd, onToggleUsage }) => {
+}> = ({ data, daerahId, ekosistemId, loading = false, onAdd, onToggleUsage }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
@@ -373,6 +405,7 @@ const ProvisioningTab: React.FC<{
     <TableContainer
       title="Data Provisioning"
       count={sorted.length}
+      loading={loading}
       searchTerm={searchTerm}
       onSearchChange={(v) => {
         setSearchTerm(v);
@@ -393,96 +426,102 @@ const ProvisioningTab: React.FC<{
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {isAdding && (
-              <tr className="bg-blue-50/50">
-                <td className={`${tdClass} text-center font-mono text-blue-600 font-bold`}>+</td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Nama Indonesia *"
-                    value={namaIndonesia}
-                    onChange={(e) => setNamaIndonesia(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    autoFocus
-                  />
-                </td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Nama Latin"
-                    value={namaLatin}
-                    onChange={(e) => setNamaLatin(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
-                  />
-                </td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Nama Daerah"
-                    value={namaDaerah}
-                    onChange={(e) => setNamaDaerah(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
-                  />
-                </td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Daerah"
-                    value={daerahName}
-                    onChange={(e) => setDaerahName(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
-                  />
-                </td>
-                <td className={`${tdClass} text-slate-400 italic text-[11px]`}>Belum Digunakan</td>
-                <td className={`${tdClass} text-center`}>
-                  <div className="flex items-center justify-center gap-1">
-                    <button
-                      onClick={handleSave}
-                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                      title="Simpan"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setIsAdding(false)}
-                      className="p-1 text-slate-400 hover:bg-slate-100 rounded"
-                      title="Batal"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+            {loading ? (
+              <TableSkeleton columns={7} />
+            ) : (
+              <>
+                {isAdding && (
+                  <tr className="bg-blue-50/50">
+                    <td className={`${tdClass} text-center font-mono text-blue-600 font-bold`}>+</td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Nama Indonesia *"
+                        value={namaIndonesia}
+                        onChange={(e) => setNamaIndonesia(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        autoFocus
+                      />
+                    </td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Nama Latin"
+                        value={namaLatin}
+                        onChange={(e) => setNamaLatin(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
+                      />
+                    </td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Nama Daerah"
+                        value={namaDaerah}
+                        onChange={(e) => setNamaDaerah(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
+                      />
+                    </td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Daerah"
+                        value={daerahName}
+                        onChange={(e) => setDaerahName(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
+                      />
+                    </td>
+                    <td className={`${tdClass} text-slate-400 italic text-[11px]`}>Belum Digunakan</td>
+                    <td className={`${tdClass} text-center`}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={handleSave}
+                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                          title="Simpan"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setIsAdding(false)}
+                          className="p-1 text-slate-400 hover:bg-slate-100 rounded"
+                          title="Batal"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {paged.length === 0 && !isAdding && (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-xs text-slate-400">
+                      Tidak ada data ditemukan.
+                    </td>
+                  </tr>
+                )}
+                {paged.map((item, idx) => (
+                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className={`${tdClass} text-center font-mono text-slate-400`}>
+                      {(page - 1) * ITEMS_PER_PAGE + idx + 1}
+                    </td>
+                    <td className={`${tdClass} font-semibold text-slate-900`}>{item.namaIndonesia}</td>
+                    <td className={`${tdClass} italic text-slate-600`}>{item.namaLatin}</td>
+                    <td className={`${tdClass} text-slate-600`}>{item.namaDaerah}</td>
+                    <td className={`${tdClass} text-slate-600`}>{item.daerah}</td>
+                    <td className={tdClass}>
+                      <UsageBadge usage={item.usage} />
+                    </td>
+                    <td className={`${tdClass} text-center`}>
+                      <ActionButton usage={item.usage} onToggle={() => onToggleUsage(item.id)} />
+                    </td>
+                  </tr>
+                ))}
+              </>
             )}
-            {paged.length === 0 && !isAdding && (
-              <tr>
-                <td colSpan={7} className="py-12 text-center text-xs text-slate-400">
-                  Tidak ada data ditemukan.
-                </td>
-              </tr>
-            )}
-            {paged.map((item, idx) => (
-              <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                <td className={`${tdClass} text-center font-mono text-slate-400`}>
-                  {(page - 1) * ITEMS_PER_PAGE + idx + 1}
-                </td>
-                <td className={`${tdClass} font-semibold text-slate-900`}>{item.namaIndonesia}</td>
-                <td className={`${tdClass} italic text-slate-600`}>{item.namaLatin}</td>
-                <td className={`${tdClass} text-slate-600`}>{item.namaDaerah}</td>
-                <td className={`${tdClass} text-slate-600`}>{item.daerah}</td>
-                <td className={tdClass}>
-                  <UsageBadge usage={item.usage} />
-                </td>
-                <td className={`${tdClass} text-center`}>
-                  <ActionButton usage={item.usage} onToggle={() => onToggleUsage(item.id)} />
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
-      <AddRowButton label="Tambah Data Provisioning" onClick={() => setIsAdding(true)} />
-      <Pagination currentPage={page} totalPages={totalPages} totalItems={sorted.length} onPageChange={setPage} />
+      {!loading && <AddRowButton label="Tambah Data Provisioning" onClick={() => setIsAdding(true)} />}
+      {!loading && <Pagination currentPage={page} totalPages={totalPages} totalItems={sorted.length} onPageChange={setPage} />}
     </TableContainer>
   );
 };
@@ -493,9 +532,10 @@ const RegulatingTab: React.FC<{
   data: RegulatingItem[];
   daerahId: string;
   ekosistemId: string;
+  loading?: boolean;
   onAdd: (newItem: Omit<RegulatingItem, 'id' | 'usage'>) => void;
   onToggleUsage: (id: string) => void;
-}> = ({ data, daerahId, ekosistemId, onAdd, onToggleUsage }) => {
+}> = ({ data, daerahId, ekosistemId, loading = false, onAdd, onToggleUsage }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
@@ -557,6 +597,7 @@ const RegulatingTab: React.FC<{
     <TableContainer
       title="Data Regulating"
       count={sorted.length}
+      loading={loading}
       searchTerm={searchTerm}
       onSearchChange={(v) => {
         setSearchTerm(v);
@@ -575,76 +616,82 @@ const RegulatingTab: React.FC<{
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {isAdding && (
-              <tr className="bg-blue-50/50">
-                <td className={`${tdClass} text-center font-mono text-blue-600 font-bold`}>+</td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Contoh: Pencegah erosi, Penyerapan air *"
-                    value={namaParameter}
-                    onChange={(e) => setNamaParameter(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    autoFocus
-                  />
-                </td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Daerah"
-                    value={daerahName}
-                    onChange={(e) => setDaerahName(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
-                  />
-                </td>
-                <td className={`${tdClass} text-slate-400 italic text-[11px]`}>Belum Digunakan</td>
-                <td className={`${tdClass} text-center`}>
-                  <div className="flex items-center justify-center gap-1">
-                    <button
-                      onClick={handleSave}
-                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                      title="Simpan"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setIsAdding(false)}
-                      className="p-1 text-slate-400 hover:bg-slate-100 rounded"
-                      title="Batal"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+            {loading ? (
+              <TableSkeleton columns={5} />
+            ) : (
+              <>
+                {isAdding && (
+                  <tr className="bg-blue-50/50">
+                    <td className={`${tdClass} text-center font-mono text-blue-600 font-bold`}>+</td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Contoh: Pencegah erosi, Penyerapan air *"
+                        value={namaParameter}
+                        onChange={(e) => setNamaParameter(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        autoFocus
+                      />
+                    </td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Daerah"
+                        value={daerahName}
+                        onChange={(e) => setDaerahName(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
+                      />
+                    </td>
+                    <td className={`${tdClass} text-slate-400 italic text-[11px]`}>Belum Digunakan</td>
+                    <td className={`${tdClass} text-center`}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={handleSave}
+                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                          title="Simpan"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setIsAdding(false)}
+                          className="p-1 text-slate-400 hover:bg-slate-100 rounded"
+                          title="Batal"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {paged.length === 0 && !isAdding && (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-xs text-slate-400">
+                      Tidak ada data ditemukan.
+                    </td>
+                  </tr>
+                )}
+                {paged.map((item, idx) => (
+                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className={`${tdClass} text-center font-mono text-slate-400`}>
+                      {(page - 1) * ITEMS_PER_PAGE + idx + 1}
+                    </td>
+                    <td className={`${tdClass} font-semibold text-slate-900`}>{item.namaParameter}</td>
+                    <td className={`${tdClass} text-slate-600`}>{item.daerah}</td>
+                    <td className={tdClass}>
+                      <UsageBadge usage={item.usage} />
+                    </td>
+                    <td className={`${tdClass} text-center`}>
+                      <ActionButton usage={item.usage} onToggle={() => onToggleUsage(item.id)} />
+                    </td>
+                  </tr>
+                ))}
+              </>
             )}
-            {paged.length === 0 && !isAdding && (
-              <tr>
-                <td colSpan={5} className="py-12 text-center text-xs text-slate-400">
-                  Tidak ada data ditemukan.
-                </td>
-              </tr>
-            )}
-            {paged.map((item, idx) => (
-              <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                <td className={`${tdClass} text-center font-mono text-slate-400`}>
-                  {(page - 1) * ITEMS_PER_PAGE + idx + 1}
-                </td>
-                <td className={`${tdClass} font-semibold text-slate-900`}>{item.namaParameter}</td>
-                <td className={`${tdClass} text-slate-600`}>{item.daerah}</td>
-                <td className={tdClass}>
-                  <UsageBadge usage={item.usage} />
-                </td>
-                <td className={`${tdClass} text-center`}>
-                  <ActionButton usage={item.usage} onToggle={() => onToggleUsage(item.id)} />
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
-      <AddRowButton label="Tambah Data Regulating" onClick={() => setIsAdding(true)} />
-      <Pagination currentPage={page} totalPages={totalPages} totalItems={sorted.length} onPageChange={setPage} />
+      {!loading && <AddRowButton label="Tambah Data Regulating" onClick={() => setIsAdding(true)} />}
+      {!loading && <Pagination currentPage={page} totalPages={totalPages} totalItems={sorted.length} onPageChange={setPage} />}
     </TableContainer>
   );
 };
@@ -655,9 +702,10 @@ const SupportingTab: React.FC<{
   data: SupportingItem[];
   daerahId: string;
   ekosistemId: string;
+  loading?: boolean;
   onAdd: (newItem: Omit<SupportingItem, 'id' | 'usage'>) => void;
   onToggleUsage: (id: string) => void;
-}> = ({ data, daerahId, ekosistemId, onAdd, onToggleUsage }) => {
+}> = ({ data, daerahId, ekosistemId, loading = false, onAdd, onToggleUsage }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
@@ -719,6 +767,7 @@ const SupportingTab: React.FC<{
     <TableContainer
       title="Data Supporting — Jasa Pendukung"
       count={sorted.length}
+      loading={loading}
       searchTerm={searchTerm}
       onSearchChange={(v) => {
         setSearchTerm(v);
@@ -747,83 +796,89 @@ const SupportingTab: React.FC<{
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {isAdding && (
-              <tr className="bg-blue-50/50">
-                <td className={`${tdClass} text-center font-mono text-blue-600 font-bold`}>+</td>
-                <td className={tdClass}>
-                  <select
-                    value={klasifikasi}
-                    onChange={(e) => setKlasifikasi(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-blue-300 rounded bg-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    autoFocus
-                  >
-                    <option value="Habitat • Reptil">Habitat • Reptil</option>
-                    <option value="Habitat • Burung">Habitat • Burung</option>
-                    <option value="Habitat • Mamalia">Habitat • Mamalia</option>
-                    <option value="Nursery Ground">Nursery Ground</option>
-                    <option value="Pembentukan Tanah">Pembentukan Tanah</option>
-                    <option value="Biodiversitas">Biodiversitas</option>
-                  </select>
-                </td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Daerah"
-                    value={daerahName}
-                    onChange={(e) => setDaerahName(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
-                  />
-                </td>
-                <td className={`${tdClass} text-slate-400 italic text-[11px]`}>Belum Digunakan</td>
-                <td className={`${tdClass} text-center`}>
-                  <div className="flex items-center justify-center gap-1">
-                    <button
-                      onClick={handleSave}
-                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                      title="Simpan"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setIsAdding(false)}
-                      className="p-1 text-slate-400 hover:bg-slate-100 rounded"
-                      title="Batal"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+            {loading ? (
+              <TableSkeleton columns={5} />
+            ) : (
+              <>
+                {isAdding && (
+                  <tr className="bg-blue-50/50">
+                    <td className={`${tdClass} text-center font-mono text-blue-600 font-bold`}>+</td>
+                    <td className={tdClass}>
+                      <select
+                        value={klasifikasi}
+                        onChange={(e) => setKlasifikasi(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-blue-300 rounded bg-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        autoFocus
+                      >
+                        <option value="Habitat • Reptil">Habitat • Reptil</option>
+                        <option value="Habitat • Burung">Habitat • Burung</option>
+                        <option value="Habitat • Mamalia">Habitat • Mamalia</option>
+                        <option value="Nursery Ground">Nursery Ground</option>
+                        <option value="Pembentukan Tanah">Pembentukan Tanah</option>
+                        <option value="Biodiversitas">Biodiversitas</option>
+                      </select>
+                    </td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Daerah"
+                        value={daerahName}
+                        onChange={(e) => setDaerahName(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
+                      />
+                    </td>
+                    <td className={`${tdClass} text-slate-400 italic text-[11px]`}>Belum Digunakan</td>
+                    <td className={`${tdClass} text-center`}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={handleSave}
+                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                          title="Simpan"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setIsAdding(false)}
+                          className="p-1 text-slate-400 hover:bg-slate-100 rounded"
+                          title="Batal"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {paged.length === 0 && !isAdding && (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-xs text-slate-400">
+                      Tidak ada data ditemukan.
+                    </td>
+                  </tr>
+                )}
+                {paged.map((item, idx) => (
+                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className={`${tdClass} text-center font-mono text-slate-400`}>
+                      {(page - 1) * ITEMS_PER_PAGE + idx + 1}
+                    </td>
+                    <td className={`${tdClass} font-semibold text-slate-900`}>
+                      {item.klasifikasi}
+                    </td>
+                    <td className={`${tdClass} text-slate-600`}>{item.daerah}</td>
+                    <td className={tdClass}>
+                      <UsageBadge usage={item.usage} />
+                    </td>
+                    <td className={`${tdClass} text-center`}>
+                      <ActionButton usage={item.usage} onToggle={() => onToggleUsage(item.id)} />
+                    </td>
+                  </tr>
+                ))}
+              </>
             )}
-            {paged.length === 0 && !isAdding && (
-              <tr>
-                <td colSpan={5} className="py-12 text-center text-xs text-slate-400">
-                  Tidak ada data ditemukan.
-                </td>
-              </tr>
-            )}
-            {paged.map((item, idx) => (
-              <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                <td className={`${tdClass} text-center font-mono text-slate-400`}>
-                  {(page - 1) * ITEMS_PER_PAGE + idx + 1}
-                </td>
-                <td className={`${tdClass} font-semibold text-slate-900`}>
-                  {item.klasifikasi}
-                </td>
-                <td className={`${tdClass} text-slate-600`}>{item.daerah}</td>
-                <td className={tdClass}>
-                  <UsageBadge usage={item.usage} />
-                </td>
-                <td className={`${tdClass} text-center`}>
-                  <ActionButton usage={item.usage} onToggle={() => onToggleUsage(item.id)} />
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
-      <AddRowButton label="Tambah Data Supporting" onClick={() => setIsAdding(true)} />
-      <Pagination currentPage={page} totalPages={totalPages} totalItems={sorted.length} onPageChange={setPage} />
+      {!loading && <AddRowButton label="Tambah Data Supporting" onClick={() => setIsAdding(true)} />}
+      {!loading && <Pagination currentPage={page} totalPages={totalPages} totalItems={sorted.length} onPageChange={setPage} />}
     </TableContainer>
   );
 };
@@ -834,9 +889,10 @@ const CulturalTab: React.FC<{
   data: CulturalItem[];
   daerahId: string;
   ekosistemId: string;
+  loading?: boolean;
   onAdd: (newItem: Omit<CulturalItem, 'id' | 'usage'>) => void;
   onToggleUsage: (id: string) => void;
-}> = ({ data, daerahId, ekosistemId, onAdd, onToggleUsage }) => {
+}> = ({ data, daerahId, ekosistemId, loading = false, onAdd, onToggleUsage }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
@@ -902,6 +958,7 @@ const CulturalTab: React.FC<{
     <TableContainer
       title="Data Cultural"
       count={sorted.length}
+      loading={loading}
       searchTerm={searchTerm}
       onSearchChange={(v) => {
         setSearchTerm(v);
@@ -921,86 +978,92 @@ const CulturalTab: React.FC<{
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {isAdding && (
-              <tr className="bg-blue-50/50">
-                <td className={`${tdClass} text-center font-mono text-blue-600 font-bold`}>+</td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Nama Data / Objek *"
-                    value={namaObjek}
-                    onChange={(e) => setNamaObjek(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    autoFocus
-                  />
-                </td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Deskripsi"
-                    value={deskripsi}
-                    onChange={(e) => setDeskripsi(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
-                  />
-                </td>
-                <td className={tdClass}>
-                  <input
-                    type="text"
-                    placeholder="Daerah"
-                    value={daerahName}
-                    onChange={(e) => setDaerahName(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
-                  />
-                </td>
-                <td className={`${tdClass} text-slate-400 italic text-[11px]`}>Belum Digunakan</td>
-                <td className={`${tdClass} text-center`}>
-                  <div className="flex items-center justify-center gap-1">
-                    <button
-                      onClick={handleSave}
-                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                      title="Simpan"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setIsAdding(false)}
-                      className="p-1 text-slate-400 hover:bg-slate-100 rounded"
-                      title="Batal"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+            {loading ? (
+              <TableSkeleton columns={6} />
+            ) : (
+              <>
+                {isAdding && (
+                  <tr className="bg-blue-50/50">
+                    <td className={`${tdClass} text-center font-mono text-blue-600 font-bold`}>+</td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Nama Data / Objek *"
+                        value={namaObjek}
+                        onChange={(e) => setNamaObjek(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        autoFocus
+                      />
+                    </td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Deskripsi"
+                        value={deskripsi}
+                        onChange={(e) => setDeskripsi(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
+                      />
+                    </td>
+                    <td className={tdClass}>
+                      <input
+                        type="text"
+                        placeholder="Daerah"
+                        value={daerahName}
+                        onChange={(e) => setDaerahName(e.target.value)}
+                        className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded bg-white focus:outline-none"
+                      />
+                    </td>
+                    <td className={`${tdClass} text-slate-400 italic text-[11px]`}>Belum Digunakan</td>
+                    <td className={`${tdClass} text-center`}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={handleSave}
+                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                          title="Simpan"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setIsAdding(false)}
+                          className="p-1 text-slate-400 hover:bg-slate-100 rounded"
+                          title="Batal"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {paged.length === 0 && !isAdding && (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-xs text-slate-400">
+                      Tidak ada data ditemukan.
+                    </td>
+                  </tr>
+                )}
+                {paged.map((item, idx) => (
+                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className={`${tdClass} text-center font-mono text-slate-400`}>
+                      {(page - 1) * ITEMS_PER_PAGE + idx + 1}
+                    </td>
+                    <td className={`${tdClass} font-semibold text-slate-900`}>{item.namaObjek}</td>
+                    <td className={`${tdClass} text-slate-500 max-w-[240px] truncate`}>{item.deskripsi}</td>
+                    <td className={`${tdClass} text-slate-600`}>{item.daerah}</td>
+                    <td className={tdClass}>
+                      <UsageBadge usage={item.usage} />
+                    </td>
+                    <td className={`${tdClass} text-center`}>
+                      <ActionButton usage={item.usage} onToggle={() => onToggleUsage(item.id)} />
+                    </td>
+                  </tr>
+                ))}
+              </>
             )}
-            {paged.length === 0 && !isAdding && (
-              <tr>
-                <td colSpan={6} className="py-12 text-center text-xs text-slate-400">
-                  Tidak ada data ditemukan.
-                </td>
-              </tr>
-            )}
-            {paged.map((item, idx) => (
-              <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                <td className={`${tdClass} text-center font-mono text-slate-400`}>
-                  {(page - 1) * ITEMS_PER_PAGE + idx + 1}
-                </td>
-                <td className={`${tdClass} font-semibold text-slate-900`}>{item.namaObjek}</td>
-                <td className={`${tdClass} text-slate-500 max-w-[240px] truncate`}>{item.deskripsi}</td>
-                <td className={`${tdClass} text-slate-600`}>{item.daerah}</td>
-                <td className={tdClass}>
-                  <UsageBadge usage={item.usage} />
-                </td>
-                <td className={`${tdClass} text-center`}>
-                  <ActionButton usage={item.usage} onToggle={() => onToggleUsage(item.id)} />
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
-      <AddRowButton label="Tambah Data Cultural" onClick={() => setIsAdding(true)} />
-      <Pagination currentPage={page} totalPages={totalPages} totalItems={sorted.length} onPageChange={setPage} />
+      {!loading && <AddRowButton label="Tambah Data Cultural" onClick={() => setIsAdding(true)} />}
+      {!loading && <Pagination currentPage={page} totalPages={totalPages} totalItems={sorted.length} onPageChange={setPage} />}
     </TableContainer>
   );
 };
@@ -1038,10 +1101,10 @@ export const DataMasterPage: React.FC = () => {
   const [loadError, setLoadError] = useState('');
 
   // Dynamic state for master data so users can add rows live
-  const [provisioningList, setProvisioningList] = useState<ProvisioningItem[]>(PROVISIONING_DATA);
-  const [regulatingList, setRegulatingList] = useState<RegulatingItem[]>(REGULATING_DATA);
-  const [supportingList, setSupportingList] = useState<SupportingItem[]>(SUPPORTING_DATA);
-  const [culturalList, setCulturalList] = useState<CulturalItem[]>(CULTURAL_DATA);
+  const [provisioningList, setProvisioningList] = useState<ProvisioningItem[]>([]);
+  const [regulatingList, setRegulatingList] = useState<RegulatingItem[]>([]);
+  const [supportingList, setSupportingList] = useState<SupportingItem[]>([]);
+  const [culturalList, setCulturalList] = useState<CulturalItem[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -1157,8 +1220,11 @@ export const DataMasterPage: React.FC = () => {
         </div>
       </div>
 
-      {loading && <p className="text-xs text-slate-500">Memuat data master...</p>}
-      {loadError && <p className="text-xs text-amber-700">{loadError} Data sementara tetap ditampilkan.</p>}
+      {loadError && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+          {loadError}
+        </div>
+      )}
 
       {/* ── Navigation Tabs ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 border-b border-slate-200">
@@ -1184,6 +1250,7 @@ export const DataMasterPage: React.FC = () => {
           data={provisioningList}
           daerahId={selectedDaerah}
           ekosistemId={selectedEkosistem}
+          loading={loading}
           onAdd={handleAddProvisioning}
           onToggleUsage={(id) => handleViewUsage('provisioning', id)}
         />
@@ -1193,6 +1260,7 @@ export const DataMasterPage: React.FC = () => {
           data={regulatingList}
           daerahId={selectedDaerah}
           ekosistemId={selectedEkosistem}
+          loading={loading}
           onAdd={handleAddRegulating}
           onToggleUsage={(id) => handleViewUsage('regulating', id)}
         />
@@ -1202,6 +1270,7 @@ export const DataMasterPage: React.FC = () => {
           data={supportingList}
           daerahId={selectedDaerah}
           ekosistemId={selectedEkosistem}
+          loading={loading}
           onAdd={handleAddSupporting}
           onToggleUsage={(id) => handleViewUsage('supporting', id)}
         />
@@ -1211,6 +1280,7 @@ export const DataMasterPage: React.FC = () => {
           data={culturalList}
           daerahId={selectedDaerah}
           ekosistemId={selectedEkosistem}
+          loading={loading}
           onAdd={handleAddCultural}
           onToggleUsage={(id) => handleViewUsage('cultural', id)}
         />
