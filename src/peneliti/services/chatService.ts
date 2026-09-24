@@ -6,12 +6,16 @@ export type ChatEventType =
   | 'MESSAGE_SENT'
   | 'MESSAGE_DELIVERED'
   | 'MESSAGE_READ'
+  | 'MESSAGES_READ'
   | 'MESSAGE_RECEIVED'
+  | 'MESSAGE_UPDATED'
+  | 'MESSAGE_DELETED'
   | 'TYPING_START'
   | 'TYPING_STOP'
   | 'CONVERSATIONS_UPDATED'
   | 'UNREAD_COUNT_CHANGED'
-  | 'USER_STATUS_CHANGED';
+  | 'USER_STATUS_CHANGED'
+  | 'PRESENCE_CHANGED';
 
 export interface ChatEvent {
   type: ChatEventType;
@@ -21,6 +25,7 @@ export interface ChatEvent {
   isOnline?: boolean;
   totalUnread?: number;
   conversations?: Conversation[];
+  onlineUserIds?: Set<string>;
 }
 
 export type ChatEventListener = (event: ChatEvent) => void;
@@ -69,12 +74,11 @@ export const formatTime = (isoString?: string): string => {
   }
 };
 
-export const formatFileSize = (bytes?: number | string): string => {
-  if (!bytes || isNaN(Number(bytes))) return '';
-  const num = Number(bytes);
-  if (num < 1024) return `${num} B`;
-  if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
-  return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+export const formatFileSize = (bytes?: number): string => {
+  if (!bytes || isNaN(bytes)) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 export const formatLastSeen = (val: any, isOnline: boolean): string => {
@@ -84,11 +88,17 @@ export const formatLastSeen = (val: any, isOnline: boolean): string => {
   try {
     const date = new Date(val);
     if (isNaN(date.getTime())) return String(val);
-    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
     if (diff < 60) return 'Baru saja';
     if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
-    return `${Math.floor(diff / 86400)} hari lalu`;
+    const isToday = now.toDateString() === date.toDateString();
+    const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    if (isToday) return `Hari ini pukul ${timeStr}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (yesterday.toDateString() === date.toDateString()) return `Kemarin pukul ${timeStr}`;
+    return `${date.getDate()} ${date.toLocaleString('id-ID', { month: 'short' })} pukul ${timeStr}`;
   } catch {
     return String(val);
   }
@@ -101,10 +111,77 @@ class ChatService {
   private userEchoChannel: any = null;
   private convEchoChannel: any = null;
   private activeListeningConvId: string | null = null;
+  private presenceChannel: any = null;
+  public onlineUserIds: Set<string> = new Set();
+  private heartbeatTimer: any = null;
 
   public setCurrentUserId(userId: string | number | null) {
     this.currentUserId = userId ? String(userId) : null;
     this.setupUserEchoListener();
+    this.initPresence();
+    this.startHeartbeat();
+  }
+
+  public initPresence() {
+    const echo = getEcho();
+    if (!echo || this.presenceChannel) return;
+
+    try {
+      this.presenceChannel = echo.join('online');
+      this.presenceChannel.here((users: any[]) => {
+        this.onlineUserIds = new Set(users.map((u) => String(u.id || u.id_user)));
+        this.updateConversationsPresence();
+        this.emit({ type: 'PRESENCE_CHANGED', onlineUserIds: this.onlineUserIds, conversations: this.conversations });
+      });
+
+      this.presenceChannel.joining((user: any) => {
+        const uid = String(user.id || user.id_user);
+        this.onlineUserIds.add(uid);
+        this.updateConversationsPresence();
+        this.emit({ type: 'PRESENCE_CHANGED', onlineUserIds: this.onlineUserIds, userId: uid, conversations: this.conversations });
+      });
+
+      this.presenceChannel.leaving((user: any) => {
+        const uid = String(user.id || user.id_user);
+        this.onlineUserIds.delete(uid);
+        this.updateConversationsPresence();
+        this.emit({ type: 'PRESENCE_CHANGED', onlineUserIds: this.onlineUserIds, userId: uid, conversations: this.conversations });
+      });
+    } catch (err) {
+      console.warn('[ChatService] Gagal join presence channel:', err);
+    }
+  }
+
+  public updateConversationsPresence() {
+    let changed = false;
+    this.conversations.forEach((conv) => {
+      const isOnlineNow = this.onlineUserIds.has(String(conv.userId));
+      if (conv.isOnline !== isOnlineNow) {
+        conv.isOnline = isOnlineNow;
+        if (isOnlineNow) {
+          conv.lastSeen = 'Online';
+          // Lawan bicara online: update pesan terkirim 'sent' menjadi 'delivered'
+          conv.messages = conv.messages.map((m) =>
+            m.isOutgoing && m.status === 'sent' ? { ...m, status: 'delivered' as const } : m
+          );
+        } else {
+          conv.lastSeen = 'Baru saja';
+        }
+        changed = true;
+      }
+    });
+    if (changed) {
+      this.saveToStorage();
+    }
+  }
+
+  public startHeartbeat() {
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        apiClient.post('/chat/heartbeat').catch(() => {});
+      }
+    }, 45000);
   }
 
   public getCurrentUserId(): string | null {
@@ -169,6 +246,11 @@ class ChatService {
     if (this.convEchoChannel && this.activeListeningConvId) {
       try {
         this.convEchoChannel.stopListening('.ChatMessageSent');
+        this.convEchoChannel.stopListeningForWhisper('typing');
+        this.convEchoChannel.stopListening('.UserTyping');
+        this.convEchoChannel.stopListening('.MessagesRead');
+        this.convEchoChannel.stopListening('.ChatMessageUpdated');
+        this.convEchoChannel.stopListening('.ChatMessageDeleted');
       } catch {
         // ignore
       }
@@ -203,6 +285,8 @@ class ChatService {
             };
           }
 
+          const rawStatus = (raw.status as any) || (isOutgoing ? 'sent' : 'read');
+
           const incomingMsg: ChatMessage = {
             id: String(raw.id || raw.id_message),
             senderId,
@@ -210,7 +294,7 @@ class ChatService {
             text: raw.message || raw.text || '',
             timestamp: formatTime(raw.created_at || raw.createdAt),
             isOutgoing,
-            status: 'read',
+            status: rawStatus,
             attachment,
           };
 
@@ -231,16 +315,177 @@ class ChatService {
             type: 'MESSAGE_RECEIVED',
             conversationId: String(conversationId),
             message: incomingMsg,
-            conversations: this.conversations,
+            conversations: [...this.conversations],
             totalUnread: this.getTotalUnreadCount(),
+          });
+
+          // Hentikan indikator mengetik seketika saat pesan baru tiba
+          this.emit({
+            type: 'TYPING_STOP',
+            conversationId: String(conversationId),
           });
 
           // Tandai telah dibaca otomatis karena layar chat sedang aktif
           this.markAsRead(String(conversationId)).catch(() => {});
         }
       });
+
+      // 2. Listen for client whisper typing indicator
+      this.convEchoChannel.listenForWhisper('typing', (event: any) => {
+        this.handleIncomingTyping(String(conversationId), event);
+      });
+
+      // 3. Listen for server broadcast UserTyping event
+      this.convEchoChannel.listen('.UserTyping', (event: any) => {
+        this.handleIncomingTyping(String(conversationId), event);
+      });
+
+      // 4. Listen for server broadcast MessagesRead event
+      this.convEchoChannel.listen('.MessagesRead', (event: any) => {
+        const conv = this.conversations.find((c) => c.id === String(conversationId));
+        if (conv) {
+          conv.messages = conv.messages.map((m) =>
+            m.isOutgoing ? { ...m, status: 'read' as const } : m
+          );
+        }
+        this.emit({
+          type: 'MESSAGES_READ',
+          conversationId: String(conversationId),
+          conversations: [...this.conversations],
+        });
+      });
+
+      // 5. Listen for server broadcast ChatMessageUpdated event
+      this.convEchoChannel.listen('.ChatMessageUpdated', (event: any) => {
+        const raw = event?.message;
+        if (!raw) return;
+        const msgId = String(raw.id || raw.id_message);
+        const conv = this.conversations.find((c) => c.id === String(conversationId));
+        if (conv) {
+          conv.messages = conv.messages.map((m) => {
+            if (m.id === msgId) {
+              return {
+                ...m,
+                text: raw.message || raw.text || m.text,
+                isEdited: true,
+              };
+            }
+            return m;
+          });
+        }
+        this.emit({
+          type: 'MESSAGE_UPDATED',
+          conversationId: String(conversationId),
+          message: {
+            id: msgId,
+            text: raw.message || raw.text,
+            isEdited: true,
+          } as any,
+          conversations: [...this.conversations],
+        });
+      });
+
+      // 6. Listen for server broadcast ChatMessageDeleted event
+      this.convEchoChannel.listen('.ChatMessageDeleted', (event: any) => {
+        const msgId = String(event.message_id || event.message?.id || event.message?.id_message);
+        const conv = this.conversations.find((c) => c.id === String(conversationId));
+        if (conv) {
+          conv.messages = conv.messages.map((m) => {
+            if (m.id === msgId) {
+              return {
+                ...m,
+                text: 'Pesan telah dihapus',
+                isDeleted: true,
+                attachment: undefined,
+              };
+            }
+            return m;
+          });
+        }
+        this.emit({
+          type: 'MESSAGE_DELETED',
+          conversationId: String(conversationId),
+          message: {
+            id: msgId,
+            text: 'Pesan telah dihapus',
+            isDeleted: true,
+          } as any,
+          conversations: [...this.conversations],
+        });
+      });
     } catch (err) {
       console.warn('[ChatService] Gagal setup conversation echo listener:', err);
+    }
+  }
+
+  private typingTimeouts: Map<string, any> = new Map();
+
+  private handleIncomingTyping(conversationId: string, event: any) {
+    const senderId = String(event.userId || event.user_id || event.id || '');
+    if (this.currentUserId && senderId === String(this.currentUserId)) {
+      return;
+    }
+
+    const isTyping = Boolean(event.isTyping ?? event.is_typing);
+
+    // Hapus timer auto-reset sebelumnya jika ada
+    if (this.typingTimeouts.has(conversationId)) {
+      clearTimeout(this.typingTimeouts.get(conversationId));
+      this.typingTimeouts.delete(conversationId);
+    }
+
+    if (isTyping) {
+      this.emit({
+        type: 'TYPING_START',
+        conversationId,
+        userId: senderId,
+      });
+
+      // Hilangkan otomatis setelah 3.5 detik jika tidak ada event baru
+      const timeout = setTimeout(() => {
+        this.emit({
+          type: 'TYPING_STOP',
+          conversationId,
+          userId: senderId,
+        });
+        this.typingTimeouts.delete(conversationId);
+      }, 3500);
+
+      this.typingTimeouts.set(conversationId, timeout);
+    } else {
+      this.emit({
+        type: 'TYPING_STOP',
+        conversationId,
+        userId: senderId,
+      });
+    }
+  }
+
+  /**
+   * Mengirimkan status sedang mengetik ke lawan bicara
+   */
+  public async sendTyping(conversationId: string, isTyping: boolean = true) {
+    if (!conversationId || isNaN(Number(conversationId))) return;
+
+    // 1. Whisper instan lewat WebSocket
+    if (this.convEchoChannel) {
+      try {
+        this.convEchoChannel.whisper('typing', {
+          userId: this.currentUserId,
+          isTyping,
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. Broadcast via API backend
+    try {
+      await apiClient.post(`/conversations/${conversationId}/typing`, {
+        is_typing: isTyping,
+      });
+    } catch {
+      // ignore
     }
   }
 
@@ -292,18 +537,18 @@ class ChatService {
         this.conversations = mapped;
         this.emit({
           type: 'CONVERSATIONS_UPDATED',
-          conversations: this.conversations,
+          conversations: [...this.conversations],
           totalUnread: this.getTotalUnreadCount(),
         });
         return mapped;
       }
     } catch (err) {
       console.warn('[ChatService] Gagal memuat percakapan dari API backend:', err);
+      if (this.conversations.length === 0) {
+        this.conversations = JSON.parse(JSON.stringify(RESEARCHER_INITIAL_CONVERSATIONS));
+      }
     }
 
-    if (this.conversations.length === 0) {
-      this.conversations = JSON.parse(JSON.stringify(RESEARCHER_INITIAL_CONVERSATIONS));
-    }
     return this.conversations;
   }
 
@@ -319,7 +564,11 @@ class ChatService {
       if (res && Array.isArray(res.data)) {
         const msgs: ChatMessage[] = res.data.map((m: any) => {
           const senderId = String(m.senderId || m.sender_id || m.id_sender || '');
-          const isOutgoing = uid ? senderId === String(uid) : (m.senderRole === 'Peneliti');
+          const isOutgoing = typeof m.isOutgoing === 'boolean'
+            ? m.isOutgoing
+            : typeof m.is_outgoing === 'boolean'
+            ? m.is_outgoing
+            : (uid ? senderId === String(uid) : (m.senderRole === 'Peneliti'));
           const firstAtt = m.attachments?.[0];
 
           let attachment: any = undefined;
@@ -338,16 +587,22 @@ class ChatService {
           }
 
           const isRead = Boolean(m.isRead ?? m.is_read);
+          const rawStatus = (m.status as any) || (isRead ? 'read' : 'delivered');
+          const isDeleted = Boolean(m.isDeleted ?? m.is_deleted);
+          const isEdited = !isDeleted && Boolean(m.isEdited ?? m.is_edited);
+          const messageText = isDeleted ? 'Pesan telah dihapus' : (m.text || m.message || '');
 
           return {
             id: String(m.id || m.id_message),
             senderId,
             senderName: m.senderName || m.sender_name || 'Pengguna',
-            text: m.text || m.message || '',
+            text: messageText,
             timestamp: formatTime(m.created_at || m.createdAt),
             isOutgoing,
-            status: isRead ? 'read' : 'delivered',
-            attachment,
+            status: rawStatus,
+            isEdited,
+            isDeleted,
+            attachment: isDeleted ? undefined : attachment,
           };
         });
 
@@ -418,6 +673,10 @@ class ChatService {
           };
         }
 
+        const targetConv = this.conversations.find((c) => c.id === conversationId);
+        const isRecipientOnline = targetConv?.isOnline || (targetConv?.userId && this.onlineUserIds.has(String(targetConv.userId)));
+        const initialStatus: 'sent' | 'delivered' | 'read' = (m.status as any) || (isRecipientOnline ? 'delivered' : 'sent');
+
         const sentMessage: ChatMessage = {
           id: String(m.id || m.id_message),
           senderId: String(uid || m.sender_id || m.id_sender),
@@ -425,7 +684,7 @@ class ChatService {
           text: m.message || text,
           timestamp: formatTime(m.created_at || new Date().toISOString()),
           isOutgoing: true,
-          status: 'read',
+          status: initialStatus,
           attachment: sentAtt,
         };
 
@@ -489,6 +748,81 @@ class ChatService {
     });
 
     return fallbackMsg;
+  }
+
+  /**
+   * Mengubah teks pesan milik sendiri
+   * Terhubung ke PUT /api/v1/conversations/{conversation}/messages/{message}
+   */
+  public async editMessage(conversationId: string, messageId: string, text: string): Promise<ChatMessage> {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      throw new Error('Isi pesan tidak boleh kosong.');
+    }
+
+    try {
+      const res = await apiClient.put<any>(`/conversations/${conversationId}/messages/${messageId}`, {
+        message: trimmed,
+        text: trimmed,
+      });
+
+      const updatedRaw = res?.data;
+      const conv = this.conversations.find((c) => c.id === String(conversationId));
+      if (conv) {
+        conv.messages = conv.messages.map((m) =>
+          m.id === String(messageId)
+            ? { ...m, text: trimmed, isEdited: true }
+            : m
+        );
+      }
+
+      this.emit({
+        type: 'MESSAGE_UPDATED',
+        conversationId: String(conversationId),
+        conversations: [...this.conversations],
+      });
+
+      return {
+        id: String(messageId),
+        senderId: String(this.currentUserId || updatedRaw?.sender_id || ''),
+        senderName: updatedRaw?.sender_name || 'Peneliti',
+        text: trimmed,
+        timestamp: formatTime(updatedRaw?.created_at || new Date().toISOString()),
+        isOutgoing: true,
+        isEdited: true,
+      };
+    } catch (err: any) {
+      console.error(`[ChatService] Gagal edit pesan #${messageId}:`, err);
+      throw err;
+    }
+  }
+
+  /**
+   * Menghapus pesan milik sendiri (soft delete)
+   * Terhubung ke DELETE /api/v1/conversations/{conversation}/messages/{message}
+   */
+  public async deleteMessage(conversationId: string, messageId: string): Promise<void> {
+    try {
+      await apiClient.delete<any>(`/conversations/${conversationId}/messages/${messageId}`);
+
+      const conv = this.conversations.find((c) => c.id === String(conversationId));
+      if (conv) {
+        conv.messages = conv.messages.map((m) =>
+          m.id === String(messageId)
+            ? { ...m, text: 'Pesan telah dihapus', isDeleted: true, attachment: undefined }
+            : m
+        );
+      }
+
+      this.emit({
+        type: 'MESSAGE_DELETED',
+        conversationId: String(conversationId),
+        conversations: [...this.conversations],
+      });
+    } catch (err: any) {
+      console.error(`[ChatService] Gagal delete pesan #${messageId}:`, err);
+      throw err;
+    }
   }
 
   /**

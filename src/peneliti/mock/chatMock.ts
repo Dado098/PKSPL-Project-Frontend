@@ -6,6 +6,8 @@ export interface ChatMessage {
   timestamp: string;
   isOutgoing: boolean;
   status?: 'sent' | 'delivered' | 'read';
+  isEdited?: boolean;
+  isDeleted?: boolean;
   error?: boolean;
   attachment?: {
     name: string;

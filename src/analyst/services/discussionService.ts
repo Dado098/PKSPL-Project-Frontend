@@ -21,6 +21,30 @@ import {
   DEMO_INITIAL_MESSAGES
 } from '../mock/discussionMock';
 import { apiClient } from './api';
+import { getEcho } from '../../lib/echo';
+
+export const formatLastSeen = (val: any, isOnline: boolean): string => {
+  if (isOnline) return 'Online';
+  if (!val) return 'Offline';
+  if (val === 'Online' || val === 'online') return 'Online';
+  try {
+    const date = new Date(val);
+    if (isNaN(date.getTime())) return String(val);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diff < 60) return 'Baru saja';
+    if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
+    const isToday = now.toDateString() === date.toDateString();
+    const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    if (isToday) return `Hari ini pukul ${timeStr}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (yesterday.toDateString() === date.toDateString()) return `Kemarin pukul ${timeStr}`;
+    return `${date.getDate()} ${date.toLocaleString('id-ID', { month: 'short' })} pukul ${timeStr}`;
+  } catch {
+    return String(val);
+  }
+};
 
 const STORAGE_KEYS = {
   CONVERSATIONS: 'pkspl_demo_chat_conversations',
@@ -29,6 +53,8 @@ const STORAGE_KEYS = {
 };
 
 class DiscussionService {
+  private inMemoryMessageCache = new Map<string, ChatMessage[]>();
+
   /**
    * Mengambil daftar seluruh percakapan yang dapat diakses oleh user yang sedang login.
    * Terhubung ke GET /api/v1/conversations dengan fallback lokal.
@@ -43,6 +69,9 @@ class DiscussionService {
           const resName = resObj.name || resObj.nama || item.userName || item.title || 'Pengguna';
           const resRole = resObj.role || item.userRole || 'Peneliti';
 
+          const isOnline = Boolean(item.isOnline ?? resObj.isOnline ?? resObj.is_online);
+          const rawLastSeen = resObj.lastSeen || resObj.last_seen_at || resObj.last_seen || item.lastSeen;
+
           return {
             id: String(item.id || item.id_conversation),
             researcherId: resId,
@@ -53,8 +82,8 @@ class DiscussionService {
               specialization: resObj.specialization || (resRole === 'Analyst' ? 'Reviewer & QC' : 'Penelitian Ekosistem'),
               email: resObj.email || '',
               institution: resObj.institution || 'PKSPL IPB University',
-              isOnline: Boolean(item.isOnline ?? resObj.isOnline ?? resObj.is_online),
-              lastSeen: item.lastSeen || resObj.lastSeen || 'Offline',
+              isOnline,
+              lastSeen: formatLastSeen(rawLastSeen, isOnline),
               associatedProjects: resObj.associatedProjects || resObj.associated_projects || (item.projectCode ? [{ code: item.projectCode, name: item.projectName }] : []),
             },
             lastMessage: item.lastMessage ? this.mapMessage(item.lastMessage) : undefined,
@@ -93,18 +122,22 @@ class DiscussionService {
     try {
       const res = await apiClient.get<any>('/chat/directory');
       if (res && Array.isArray(res.data)) {
-        const researchers: ResearcherUser[] = res.data.map((u: any) => ({
-          id: String(u.id || u.id_user),
-          name: u.name || u.nama,
-          academicTitle: u.academicTitle || (u.role === 'Peneliti' ? 'Peneliti Valuasi' : u.role),
-          specialization: u.specialization || (u.role === 'Analyst' ? 'Reviewer & Quality Control' : 'Penelitian Ekosistem'),
-          email: u.email,
-          institution: u.institution || 'PKSPL IPB University',
-          avatarUrl: u.avatarUrl || undefined,
-          isOnline: Boolean(u.isOnline ?? u.is_online),
-          lastSeen: u.lastSeen || u.last_seen || 'Offline',
-          associatedProjects: u.associatedProjects || u.associated_projects || [],
-        }));
+        const researchers: ResearcherUser[] = res.data.map((u: any) => {
+          const isOnline = Boolean(u.isOnline ?? u.is_online);
+          const rawLastSeen = u.lastSeen || u.last_seen_at || u.last_seen;
+          return {
+            id: String(u.id || u.id_user),
+            name: u.name || u.nama,
+            academicTitle: u.academicTitle || (u.role === 'Peneliti' ? 'Peneliti Valuasi' : u.role),
+            specialization: u.specialization || (u.role === 'Analyst' ? 'Reviewer & Quality Control' : 'Penelitian Ekosistem'),
+            email: u.email,
+            institution: u.institution || 'PKSPL IPB University',
+            avatarUrl: u.avatarUrl || undefined,
+            isOnline,
+            lastSeen: formatLastSeen(rawLastSeen, isOnline),
+            associatedProjects: u.associatedProjects || u.associated_projects || [],
+          };
+        });
 
         this.saveResearchers(researchers);
         return researchers;
@@ -149,13 +182,9 @@ class DiscussionService {
       console.warn(`[DiscussionService] Gagal membaca pesan percakapan ${conversationId} dari API, fallback:`, e);
     }
 
-    try {
-      const stored = localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (e) {
-      // Ignore
+    const inMemory = this.inMemoryMessageCache.get(conversationId);
+    if (inMemory && inMemory.length > 0) {
+      return inMemory;
     }
 
     const initialMessages = DEMO_INITIAL_MESSAGES[conversationId] || [];
@@ -180,12 +209,19 @@ class DiscussionService {
         const formData = new FormData();
         formData.append('file', file);
         if (text) formData.append('message', text);
+        if (projectContext?.projectCode) {
+          formData.append('project_code', projectContext.projectCode);
+        }
         res = await apiClient.upload<any>(`/conversations/${conversationId}/messages`, formData);
       } else {
-        res = await apiClient.post<any>(`/conversations/${conversationId}/messages`, {
+        const payloadData: any = {
           message: text,
           text: text,
-        });
+        };
+        if (projectContext?.projectCode) {
+          payloadData.project_code = projectContext.projectCode;
+        }
+        res = await apiClient.post<any>(`/conversations/${conversationId}/messages`, payloadData);
       }
 
       if (res && res.data) {
@@ -308,6 +344,92 @@ class DiscussionService {
   }
 
   /**
+   * Mengirim sinyal indikator sedang mengetik ke percakapan tertentu
+   * (Dual-tier: client whisper untuk sub-30ms responsiveness + API call untuk reliabilitas)
+   */
+  async sendTyping(conversationId: string, isTyping: boolean = true, userId?: string | number): Promise<void> {
+    const echo = getEcho();
+    if (echo && conversationId && !isNaN(Number(conversationId))) {
+      try {
+        const channel = echo.private(`conversation.${conversationId}`);
+        channel.whisper('typing', {
+          conversationId,
+          userId,
+          isTyping,
+        });
+      } catch (err) {
+        // whisper error ignored
+      }
+    }
+
+    try {
+      await apiClient.post(`/conversations/${conversationId}/typing`, {
+        is_typing: isTyping,
+      });
+    } catch (e) {
+      // API error ignored
+    }
+  }
+
+  /**
+   * Mengedit pesan yang dikirim oleh user sendiri.
+   * Terhubung ke PUT /api/v1/conversations/{conversation}/messages/{message}.
+   */
+  async editMessage(conversationId: string, messageId: string, newText: string): Promise<ChatMessage> {
+    const trimmed = newText.trim();
+    if (!trimmed) {
+      throw new Error('Isi pesan tidak boleh kosong');
+    }
+
+    try {
+      const res = await apiClient.put<any>(`/conversations/${conversationId}/messages/${messageId}`, {
+        message: trimmed,
+        text: trimmed,
+      });
+
+      if (res && res.data) {
+        const updated = this.mapMessage(res.data);
+        const currentMessages = await this.getMessages(conversationId);
+        const next = currentMessages.map((m) => (m.id === updated.id ? updated : m));
+        this.saveMessages(conversationId, next);
+        return updated;
+      }
+      throw new Error('Respons tidak valid dari server');
+    } catch (e: any) {
+      console.error('[DiscussionService] Gagal edit pesan ke API:', e);
+      throw e;
+    }
+  }
+
+  /**
+   * Menghapus (soft delete) pesan milik user sendiri.
+   * Terhubung ke DELETE /api/v1/conversations/{conversation}/messages/{message}.
+   */
+  async deleteMessage(conversationId: string, messageId: string): Promise<void> {
+    try {
+      await apiClient.delete(`/conversations/${conversationId}/messages/${messageId}`);
+
+      // Perbarui cache lokal menjadi tombstone
+      const currentMessages = await this.getMessages(conversationId);
+      const next = currentMessages.map((m) => {
+        if (m.id === messageId) {
+          return {
+            ...m,
+            text: 'Pesan telah dihapus',
+            isDeleted: true,
+            attachments: undefined,
+          };
+        }
+        return m;
+      });
+      this.saveMessages(conversationId, next);
+    } catch (e: any) {
+      console.error('[DiscussionService] Gagal delete pesan ke API:', e);
+      throw e;
+    }
+  }
+
+  /**
    * Menghitung total pesan belum dibaca di semua percakapan
    */
   async getTotalUnreadCount(): Promise<number> {
@@ -318,6 +440,9 @@ class DiscussionService {
   // --- Helper Transformasi & Cache Internal ---
 
   public mapMessage(m: any): ChatMessage {
+    const isDeleted = Boolean(m.isDeleted ?? m.is_deleted);
+    const isEdited = Boolean(m.isEdited ?? m.is_edited);
+
     const attachments: ChatAttachment[] = Array.isArray(m.attachments)
       ? m.attachments.map((att: any) => ({
           id: String(att.id || att.id_attachment),
@@ -334,15 +459,19 @@ class DiscussionService {
       senderId: String(m.senderId || m.sender_id),
       senderRole: (m.senderRole || m.sender_role || 'Peneliti') as any,
       senderName: m.senderName || m.sender_name || 'Pengguna',
-      text: m.text || m.message || '',
+      text: isDeleted ? 'Pesan telah dihapus' : (m.text || m.message || ''),
       timestamp: m.timestamp || (m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''),
       createdAt: m.createdAt || m.created_at || new Date().toISOString(),
       isRead: Boolean(m.isRead ?? m.is_read),
+      status: (m.status as any) || (Boolean(m.isRead ?? m.is_read) ? 'read' : 'delivered'),
+      isEdited,
+      isDeleted,
+      isOutgoing: Boolean(m.isOutgoing ?? m.is_outgoing),
       projectContext: m.projectContext ? {
         projectCode: m.projectContext.projectCode || m.projectContext.project_code || '',
         projectName: m.projectContext.projectName || m.projectContext.project_name || '',
       } : undefined,
-      attachments: attachments.length > 0 ? attachments : undefined,
+      attachments: isDeleted ? undefined : (attachments.length > 0 ? attachments : undefined),
     };
   }
 
@@ -370,9 +499,22 @@ class DiscussionService {
     }
   }
 
+  private heartbeatTimer: any = null;
+
+  public startHeartbeat(): void {
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        apiClient.post('/chat/heartbeat').catch(() => {});
+      }
+    }, 45000);
+  }
+
   private saveMessages(conversationId: string, messages: ChatMessage[]): void {
+    this.inMemoryMessageCache.set(conversationId, messages);
     try {
-      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(messages));
+      // Purge any legacy unencrypted plaintext messages from localStorage
+      localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`);
     } catch (e) {
       // Ignore
     }

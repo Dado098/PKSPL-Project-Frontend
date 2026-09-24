@@ -26,7 +26,7 @@ export const ChatEmptyState: React.FC<ChatEmptyStateProps> = ({
 
         {/* Title & Description */}
         <h2 className="text-base sm:text-lg font-bold text-slate-800 tracking-tight mb-2">
-          Ruang Diskusi Langsung Peneliti & Analyst
+          Ruang Pesan Langsung Peneliti & Analyst
         </h2>
         <p className="text-xs text-slate-500 leading-relaxed mb-6">
           Kanal komunikasi <em>one-to-one</em> layaknya aplikasi pesan instan internal PKSPL. Gunakan ruang ini untuk konsultasi metodologi valuasi, klarifikasi batas zonasi data spasial, atau tindak lanjut catatan telaah secara langsung dengan Peneliti.

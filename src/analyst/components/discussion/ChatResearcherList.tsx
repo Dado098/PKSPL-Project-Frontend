@@ -7,7 +7,8 @@ import {
   Plus,
   Circle,
   FolderKanban,
-  CheckCheck
+  CheckCheck,
+  Check
 } from 'lucide-react';
 import { Conversation, ResearcherUser } from '../../types/discussion';
 
@@ -74,7 +75,7 @@ export const ChatResearcherList: React.FC<ChatResearcherListProps> = ({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-slate-900 tracking-tight">
-              Diskusi Peneliti
+              Pesan Peneliti
             </h2>
             {totalUnread > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white shadow-xs">
@@ -270,7 +271,16 @@ export const ChatResearcherList: React.FC<ChatResearcherListProps> = ({
               {lastMsg ? (
                 <>
                   {lastMsg.senderRole === 'Analyst' && (
-                    <span className="text-blue-600 font-medium mr-1">Anda:</span>
+                    <span className="inline-flex items-center gap-0.5 mr-1 align-middle">
+                      {lastMsg.status === 'read' || lastMsg.isRead ? (
+                        <CheckCheck className="w-3.5 h-3.5 text-sky-500 stroke-[2.5]" />
+                      ) : lastMsg.status === 'delivered' ? (
+                        <CheckCheck className="w-3.5 h-3.5 text-slate-400" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                      <span className="text-blue-600 font-medium">Anda:</span>
+                    </span>
                   )}
                   {lastMsg.text || (lastMsg.attachments?.length ? '📎 Mengirim lampiran' : '')}
                 </>

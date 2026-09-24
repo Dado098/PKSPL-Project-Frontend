@@ -93,7 +93,7 @@ export const AnalystTopbar: React.FC = () => {
 
     // Navigasi sesuai konteks notifikasi
     if (notif.data?.conversation_id || notif.data?.type === 'chat_message') {
-      navigate('/analyst/discussions');
+      navigate('/analyst/messages');
     } else if (notif.data?.action_url) {
       navigate(notif.data.action_url);
     }

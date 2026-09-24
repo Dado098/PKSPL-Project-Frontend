@@ -13,6 +13,7 @@ interface ChatContextType {
   error: string | null;
   typingMap: Record<string, boolean>; // convId -> is typing
   selectConversation: (id: string | null) => void;
+  sendTyping: (isTyping: boolean) => void;
   sendMessage: (
     text: string,
     attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string; file?: File }
@@ -31,6 +32,8 @@ interface ChatContextType {
   ) => Promise<void>;
   simulateIncomingMessage: (targetConvId?: string) => void;
   retrySendMessage: (messageId: string) => Promise<void>;
+  editMessage: (messageId: string, newText: string, targetConvId?: string) => Promise<void>;
+  deleteMessage: (messageId: string, targetConvId?: string) => Promise<void>;
   refreshConversations: () => Promise<void>;
   clearError: () => void;
 }
@@ -65,6 +68,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
 
       setConversations(convs);
+      chatService.updateConversationsPresence();
       setDirectoryUsers(dir);
       setTotalUnreadCount(chatService.getTotalUnreadCount());
 
@@ -88,7 +92,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = chatService.subscribe((event: ChatEvent) => {
       if (event.conversations) {
-        setConversations(event.conversations);
+        setConversations([...event.conversations]);
       }
 
       if (typeof event.totalUnread === 'number') {
@@ -286,6 +290,62 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [activeConversation, currentUserId]
   );
 
+  const editMessage = useCallback(
+    async (messageId: string, newText: string, targetConvId?: string) => {
+      const convId = targetConvId || activeConversationId;
+      if (!convId) return;
+      try {
+        setError(null);
+        await chatService.editMessage(convId, messageId, newText);
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === messageId ? { ...m, text: newText.trim(), isEdited: true } : m
+                  ),
+                }
+              : c
+          )
+        );
+      } catch (err: any) {
+        setError(err.message || 'Gagal mengubah pesan.');
+        throw err;
+      }
+    },
+    [activeConversationId]
+  );
+
+  const deleteMessage = useCallback(
+    async (messageId: string, targetConvId?: string) => {
+      const convId = targetConvId || activeConversationId;
+      if (!convId) return;
+      try {
+        setError(null);
+        await chatService.deleteMessage(convId, messageId);
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === messageId
+                      ? { ...m, text: 'Pesan telah dihapus', isDeleted: true, attachment: undefined }
+                      : m
+                  ),
+                }
+              : c
+          )
+        );
+      } catch (err: any) {
+        setError(err.message || 'Gagal menghapus pesan.');
+        throw err;
+      }
+    },
+    [activeConversationId]
+  );
+
   const refreshConversations = useCallback(async () => {
     const convs = await chatService.getConversations(currentUserId);
     setConversations(convs);
@@ -295,6 +355,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearError = useCallback(() => {
     setError(null);
   }, []);
+
+  const sendTyping = useCallback(
+    (isTyping: boolean) => {
+      if (activeConversationId) {
+        chatService.sendTyping(activeConversationId, isTyping);
+      }
+    },
+    [activeConversationId]
+  );
 
   return (
     <ChatContext.Provider
@@ -308,11 +377,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error,
         typingMap,
         selectConversation,
+        sendTyping,
         sendMessage,
         uploadAttachment,
         createNewConversation,
         simulateIncomingMessage,
         retrySendMessage,
+        editMessage,
+        deleteMessage,
         refreshConversations,
         clearError,
       }}

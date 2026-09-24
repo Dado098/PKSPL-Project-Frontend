@@ -15,6 +15,7 @@ import { useAnalyst } from '../../context/AnalystContext';
 import { discussionService } from '../../services/discussionService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getEcho } from '../../../lib/echo';
+import { analystDashboardService } from '../../services/analystDashboardService';
 
 interface AnalystSidebarProps {
   isMobile?: boolean;
@@ -25,6 +26,16 @@ export const AnalystSidebar: React.FC<AnalystSidebarProps> = ({ isMobile = false
   const { logout } = useAuth() || {};
   const location = useLocation();
   const [unreadChatCount, setUnreadChatCount] = React.useState<number>(0);
+  const [waitingReviewCount, setWaitingReviewCount] = React.useState<number>(0);
+
+  // Ambil jumlah proyek yang butuh review secara dinamis dari database
+  React.useEffect(() => {
+    analystDashboardService.getProjects()
+      .then(res => {
+        setWaitingReviewCount(res.waitingReviewCount || 0);
+      })
+      .catch(() => {});
+  }, [location.pathname]);
 
   React.useEffect(() => {
     const updateCount = () => {
@@ -67,11 +78,11 @@ export const AnalystSidebar: React.FC<AnalystSidebarProps> = ({ isMobile = false
       title: 'Review Proyek',
       path: '/analyst/projects',
       icon: ClipboardCheck,
-      badge: '4' // Jumlah proyek siap review
+      badge: waitingReviewCount > 0 ? String(waitingReviewCount) : undefined
     },
     {
-      title: 'Diskusi',
-      path: '/analyst/discussions',
+      title: 'Pesan',
+      path: '/analyst/messages',
       icon: MessageSquare,
       badge: unreadChatCount > 0 ? String(unreadChatCount) : undefined
     },
@@ -170,7 +181,9 @@ export const AnalystSidebar: React.FC<AnalystSidebarProps> = ({ isMobile = false
 
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path;
+          const isActive = item.path === '/analyst/messages'
+            ? location.pathname.startsWith('/analyst/messages') || location.pathname.startsWith('/analyst/discussions')
+            : location.pathname === item.path;
 
           return (
             <NavLink

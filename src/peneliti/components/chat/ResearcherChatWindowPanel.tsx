@@ -20,13 +20,17 @@ import {
   AlertCircle,
   RefreshCw,
   Eye,
-  ChevronDown
+  ChevronDown,
+  Pencil,
+  Trash2,
+  Ban,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ResearcherChatWindowPanelProps {
   conversation: Conversation;
   isTyping?: boolean;
+  onTyping?: (isTyping: boolean) => void;
   onSendMessage: (
     text: string,
     attachment?: { name: string; type: 'file' | 'image' | 'shp'; size: string; url?: string; file?: File }
@@ -38,15 +42,20 @@ interface ResearcherChatWindowPanelProps {
   ) => Promise<{ name: string; type: 'file' | 'shp' | 'image'; size: string; url?: string; file?: File }>;
   onBackMobile: () => void;
   onRetryMessage?: (msgId: string) => void;
+  onEditMessage?: (msgId: string, newText: string, conversationId?: string) => Promise<void>;
+  onDeleteMessage?: (msgId: string, conversationId?: string) => Promise<void>;
 }
 
 export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps> = ({
   conversation,
   isTyping = false,
+  onTyping,
   onSendMessage,
   onUploadFile,
   onBackMobile,
   onRetryMessage,
+  onEditMessage,
+  onDeleteMessage,
 }) => {
   const navigate = useNavigate();
   const [inputText, setInputText] = useState('');
@@ -77,7 +86,126 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [currentAttachmentType, setCurrentAttachmentType] = useState<'file' | 'shp' | 'image'>('file');
+
+  // States for Edit & Delete
+  const [activeMenuMsgId, setActiveMenuMsgId] = useState<string | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState<boolean>(false);
+  const [deletingMsg, setDeletingMsg] = useState<ChatMessage | null>(null);
+  const [isSubmittingDelete, setIsSubmittingDelete] = useState<boolean>(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Close dropdown menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-chat-menu]')) {
+        setActiveMenuMsgId(null);
+      }
+    };
+    if (activeMenuMsgId) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeMenuMsgId]);
+
+  // Focus textarea when editing starts
+  useEffect(() => {
+    if (editingMsgId) {
+      setTimeout(() => {
+        editInputRef.current?.focus();
+        editInputRef.current?.select();
+      }, 50);
+    }
+  }, [editingMsgId]);
+
+  const handleStartEdit = (msg: ChatMessage) => {
+    setActiveMenuMsgId(null);
+    setEditingMsgId(msg.id);
+    setEditingText(msg.text || '');
+    setActionError(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMsgId(null);
+    setEditingText('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingText.trim() || !editingMsgId) {
+      handleCancelEdit();
+      return;
+    }
+    if (!onEditMessage) return;
+
+    try {
+      setIsSubmittingEdit(true);
+      setActionError(null);
+      await onEditMessage(editingMsgId, editingText.trim(), conversation.id);
+      setEditingMsgId(null);
+      setEditingText('');
+    } catch (err: any) {
+      console.error('[ResearcherChatWindowPanel] Gagal menyimpan edit pesan:', err);
+      setActionError(err.message || 'Gagal menyimpan perubahan pesan. Pastikan Anda memiliki izin.');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingMsg || !onDeleteMessage) return;
+    try {
+      setIsSubmittingDelete(true);
+      setActionError(null);
+      await onDeleteMessage(deletingMsg.id, conversation.id);
+      setDeletingMsg(null);
+    } catch (err: any) {
+      console.error('[ResearcherChatWindowPanel] Gagal menghapus pesan:', err);
+      setActionError(err.message || 'Gagal menghapus pesan. Pastikan Anda memiliki izin.');
+    } finally {
+      setIsSubmittingDelete(false);
+    }
+  };
+
+  // Cleanup typing timeout on unmount or conversation change
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      onTyping?.(false);
+    };
+  }, [conversation.id, onTyping]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInputText(val);
+
+    if (onTyping) {
+      if (val.trim().length > 0) {
+        onTyping(true);
+
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+          onTyping(false);
+        }, 2500);
+      } else {
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+        onTyping(false);
+      }
+    }
+  };
 
   // Quick replies for Researcher context
   const quickReplies = [
@@ -109,22 +237,18 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
     }
   };
 
-  // Scroll to bottom on conversation change
+  // Auto-scroll on mount & new messages if not scrolled up
   useEffect(() => {
-    scrollToBottom('auto');
-    setIsUserScrolledUp(false);
-    setHasNewUnreadWhileScrolled(false);
-    inputRef.current?.focus();
+    if (!isUserScrolledUp) {
+      scrollToBottom('auto');
+    } else {
+      setHasNewUnreadWhileScrolled(true);
+    }
   }, [conversation.id, scrollToBottom]);
 
-  // Handle new incoming messages
   const lastMessageId = conversation.messages[conversation.messages.length - 1]?.id;
   useEffect(() => {
-    if (!lastMessageId) return;
-
-    if (isUserScrolledUp) {
-      setHasNewUnreadWhileScrolled(true);
-    } else {
+    if (!isUserScrolledUp) {
       scrollToBottom('smooth');
     }
   }, [lastMessageId, isUserScrolledUp, scrollToBottom]);
@@ -132,6 +256,11 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
   // Handle Send
   const handleSend = async () => {
     if ((!inputText.trim() && !selectedAttachment) || isUploading) return;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    onTyping?.(false);
 
     const textToSend = inputText.trim();
     const attachmentToSend = selectedAttachment || undefined;
@@ -285,7 +414,11 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
                 </span>
               ) : (
                 <span className="text-slate-400">
-                  Terakhir dilihat {conversation.lastSeen || 'Hari ini'}
+                  {conversation.lastSeen
+                    ? conversation.lastSeen.toLowerCase().startsWith('terakhir') || conversation.lastSeen.toLowerCase().startsWith('aktif')
+                      ? conversation.lastSeen
+                      : `Terakhir online ${conversation.lastSeen}`
+                    : 'Terakhir online baru saja'}
                 </span>
               )}
 
@@ -374,6 +507,23 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
         </div>
       )}
 
+      {/* Action Error Banner if any */}
+      {actionError && (
+        <div className="mx-4 my-2 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center justify-between shadow-2xs z-20 animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-medium">{actionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="p-1 text-rose-400 hover:text-rose-700 rounded-md"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* ------------------------------------------------------------- */}
       {/* 2. CHAT MESSAGE SCROLLABLE AREA                               */}
       {/* ------------------------------------------------------------- */}
@@ -408,6 +558,8 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
         ) : (
           displayedMessages.map((msg) => {
             const isMe = msg.isOutgoing;
+            const isDeleted = Boolean(msg.isDeleted);
+            const isEditing = editingMsgId === msg.id;
 
             return (
               <div
@@ -421,105 +573,235 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
                   </span>
                 )}
 
-                {/* Message Bubble */}
-                <div
-                  className={`
-                    max-w-[85%] sm:max-w-md md:max-w-lg lg:max-w-xl p-3.5 text-xs leading-relaxed transition-shadow
-                    ${
-                      isMe
-                        ? 'bg-[#2563EA] text-white rounded-2xl rounded-tr-xs shadow-xs'
-                        : 'bg-white text-slate-800 border border-slate-200/90 rounded-2xl rounded-tl-xs shadow-2xs'
-                    }
-                    ${msg.error ? 'border-rose-400 ring-2 ring-rose-200' : ''}
-                  `}
-                >
-                  {/* Attachment Card if present */}
-                  {msg.attachment && (
+                {/* Message Bubble + Actions Row */}
+                <div className={`flex items-end gap-1.5 max-w-[85%] sm:max-w-md md:max-w-lg lg:max-w-xl ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                  {/* Action Menu (⋮) untuk pesan outgoing & belum dihapus */}
+                  {isMe && !isDeleted && !isEditing && (
                     <div
-                      className={`
-                        mb-2.5 p-2.5 rounded-xl flex items-center justify-between gap-2.5
-                        ${isMe ? 'bg-blue-700/60 text-white' : 'bg-slate-100 text-slate-800'}
-                      `}
+                      data-chat-menu
+                      className="relative self-center shrink-0"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                            msg.attachment.type === 'file'
-                              ? 'bg-emerald-500 text-white'
-                              : msg.attachment.type === 'shp'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-purple-600 text-white'
-                          }`}
-                        >
-                          {msg.attachment.type === 'shp' ? (
-                            <MapPin className="w-5 h-5" />
-                          ) : msg.attachment.type === 'image' ? (
-                            <ImageIcon className="w-5 h-5" />
-                          ) : (
-                            <FileText className="w-5 h-5" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold truncate text-[11px]">{msg.attachment.name}</div>
-                          <div className="text-[10px] opacity-80">
-                            {msg.attachment.size} •{' '}
-                            {msg.attachment.type === 'shp'
-                              ? 'Layer GIS'
-                              : msg.attachment.type === 'image'
-                              ? 'Gambar / Bagan'
-                              : 'Excel Spreadsheet'}
-                          </div>
-                        </div>
-                      </div>
+                      <button
+                        type="button"
+                        data-chat-menu
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuMsgId(activeMenuMsgId === msg.id ? null : msg.id);
+                        }}
+                        className="p-1.5 rounded-full text-slate-500 hover:text-slate-800 bg-white hover:bg-slate-100 border border-slate-200/90 shadow-2xs transition-all cursor-pointer"
+                        title="Opsi pesan (Edit / Hapus)"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
 
-                      {/* Download or Preview Actions */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        {msg.attachment.type === 'image' && msg.attachment.url && (
-                          <button
-                            onClick={() =>
-                              setPreviewImage({
-                                url: msg.attachment!.url!,
-                                name: msg.attachment!.name,
-                              })
-                            }
-                            title="Lihat Pratinjau Gambar"
-                            className="p-1.5 rounded-lg hover:bg-black/10 transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleDownloadFile(msg.attachment!)}
-                          title="Unduh Berkas Lampiran"
-                          className="p-1.5 rounded-lg hover:bg-black/10 transition-colors"
+                      {activeMenuMsgId === msg.id && (
+                        <div
+                          data-chat-menu
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className="absolute right-0 bottom-full mb-1 z-30 w-28 bg-white rounded-xl shadow-lg border border-slate-200 py-1 text-xs animate-in fade-in zoom-in-95 duration-100"
                         >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
+                          <button
+                            type="button"
+                            data-chat-menu
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEdit(msg);
+                            }}
+                            className="w-full px-3 py-2 text-left flex items-center gap-2 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            data-chat-menu
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuMsgId(null);
+                              setActionError(null);
+                              setDeletingMsg(msg);
+                            }}
+                            className="w-full px-3 py-2 text-left flex items-center gap-2 text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Sanitized Message Text */}
-                  {msg.text && (
-                    <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-                  )}
-
-                  {/* Bubble Footer: Timestamp & Read Status */}
+                  {/* Message Bubble */}
                   <div
                     className={`
-                      flex items-center justify-end gap-1 mt-1 text-[10px] select-none
-                      ${isMe ? 'text-blue-100' : 'text-slate-400'}
+                      p-3.5 text-xs leading-relaxed transition-all flex-1
+                      ${
+                        isDeleted
+                          ? isMe
+                            ? 'bg-blue-50/70 border border-blue-200 text-blue-900/60 rounded-2xl rounded-tr-xs italic'
+                            : 'bg-slate-100/80 border border-slate-200 text-slate-500 rounded-2xl rounded-tl-xs italic'
+                          : isMe
+                          ? 'bg-[#2563EA] text-white rounded-2xl rounded-tr-xs shadow-xs'
+                          : 'bg-white text-slate-800 border border-slate-200/90 rounded-2xl rounded-tl-xs shadow-2xs'
+                      }
+                      ${msg.error ? 'border-rose-400 ring-2 ring-rose-200' : ''}
                     `}
                   >
-                    <span>{msg.timestamp}</span>
-                    {isMe && (
-                      <span title={msg.status === 'read' ? 'Telah dibaca' : msg.status === 'delivered' ? 'Terkirim ke server' : 'Mengirim...'}>
-                        {msg.status === 'read' ? (
-                          <CheckCheck className="w-3.5 h-3.5 text-white" />
-                        ) : (
-                          <Check className="w-3.5 h-3.5 text-blue-200" />
+                    {/* Inline Edit Form */}
+                    {isEditing ? (
+                      <div className="min-w-[220px]">
+                        <textarea
+                          ref={editInputRef}
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSaveEdit();
+                            } else if (e.key === 'Escape') {
+                              handleCancelEdit();
+                            }
+                          }}
+                          disabled={isSubmittingEdit}
+                          className="w-full p-2 text-xs rounded-lg bg-blue-700 text-white placeholder-blue-200 border border-blue-400 focus:outline-none focus:ring-2 focus:ring-white resize-none"
+                          rows={2}
+                        />
+                        <div className="flex items-center justify-end gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            disabled={isSubmittingEdit}
+                            className="px-2.5 py-1 text-[11px] font-medium text-blue-100 hover:text-white hover:bg-blue-700 rounded-lg transition-colors"
+                          >
+                            Batal
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveEdit}
+                            disabled={isSubmittingEdit || !editingText.trim()}
+                            className="px-3 py-1 text-[11px] font-semibold bg-white text-blue-700 hover:bg-blue-50 rounded-lg shadow-2xs transition-colors disabled:opacity-50"
+                          >
+                            {isSubmittingEdit ? 'Menyimpan...' : 'Simpan'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Attachment Card if present and not deleted */}
+                        {!isDeleted && msg.attachment && (
+                          <div
+                            className={`
+                              mb-2.5 p-2.5 rounded-xl flex items-center justify-between gap-2.5
+                              ${isMe ? 'bg-blue-700/60 text-white' : 'bg-slate-100 text-slate-800'}
+                            `}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div
+                                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                                  msg.attachment.type === 'file'
+                                    ? 'bg-emerald-500 text-white'
+                                    : msg.attachment.type === 'shp'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-purple-600 text-white'
+                                }`}
+                              >
+                                {msg.attachment.type === 'shp' ? (
+                                  <MapPin className="w-5 h-5" />
+                                ) : msg.attachment.type === 'image' ? (
+                                  <ImageIcon className="w-5 h-5" />
+                                ) : (
+                                  <FileText className="w-5 h-5" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold truncate text-[11px]">{msg.attachment.name}</div>
+                                <div className="text-[10px] opacity-80">
+                                  {msg.attachment.size} •{' '}
+                                  {msg.attachment.type === 'shp'
+                                    ? 'Layer GIS'
+                                    : msg.attachment.type === 'image'
+                                    ? 'Gambar / Bagan'
+                                    : 'Excel Spreadsheet'}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Download or Preview Actions */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {msg.attachment.type === 'image' && msg.attachment.url && (
+                                <button
+                                  onClick={() =>
+                                    setPreviewImage({
+                                      url: msg.attachment!.url!,
+                                      name: msg.attachment!.name,
+                                    })
+                                  }
+                                  title="Lihat Pratinjau Gambar"
+                                  className="p-1.5 rounded-lg hover:bg-black/10 transition-colors"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDownloadFile(msg.attachment!)}
+                                title="Unduh Berkas Lampiran"
+                                className="p-1.5 rounded-lg hover:bg-black/10 transition-colors"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         )}
-                      </span>
+
+                        {/* Sanitized Message Text or Deleted Tombstone */}
+                        {isDeleted ? (
+                          <div className="flex items-center gap-1.5">
+                            <Ban className="w-3.5 h-3.5 opacity-60 shrink-0" />
+                            <span>Pesan telah dihapus</span>
+                          </div>
+                        ) : (
+                          msg.text && (
+                            <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                          )
+                        )}
+                      </>
+                    )}
+
+                    {/* Bubble Footer: Timestamp, (diedit) & Read Status */}
+                    {!isEditing && (
+                      <div
+                        className={`
+                          flex items-center justify-end gap-1 mt-1 text-[10px] select-none
+                          ${isDeleted ? (isMe ? 'text-blue-900/40' : 'text-slate-400') : (isMe ? 'text-blue-100' : 'text-slate-400')}
+                        `}
+                      >
+                        {!isDeleted && msg.isEdited && (
+                          <span className="text-[9px] opacity-80 mr-0.5 italic">(diedit)</span>
+                        )}
+                        <span>{msg.timestamp}</span>
+                        {isMe && !isDeleted && (
+                          <span
+                            title={
+                              msg.status === 'read'
+                                ? 'Dibaca'
+                                : msg.status === 'delivered'
+                                ? 'Tersampaikan (lawan bicara online)'
+                                : 'Terkirim (lawan bicara offline)'
+                            }
+                          >
+                            {msg.status === 'read' ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-sky-300 stroke-[2.5]" />
+                            ) : msg.status === 'delivered' ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-blue-200/70" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5 text-blue-200/70" />
+                            )}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -731,7 +1013,7 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
               ref={inputRef}
               rows={1}
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Ketik pesan..."
               className="w-full max-h-32 px-4 py-2.5 bg-slate-100/90 hover:bg-slate-100 focus:bg-white border border-transparent focus:border-[#2563EA] rounded-2xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all resize-none"
@@ -779,6 +1061,46 @@ export const ResearcherChatWindowPanel: React.FC<ResearcherChatWindowPanelProps>
                 alt={previewImage.name}
                 className="max-w-full max-h-[60vh] object-contain rounded-lg"
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 6. DELETE CONFIRMATION MODAL                                  */}
+      {/* ------------------------------------------------------------- */}
+      {deletingMsg && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Hapus pesan?</h3>
+                <p className="text-xs text-slate-500">Pesan ini akan dihapus dari percakapan.</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-4 italic line-clamp-2">
+              "{deletingMsg.text || (deletingMsg.attachment ? 'Lampiran' : '')}"
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingMsg(null)}
+                disabled={isSubmittingDelete}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isSubmittingDelete}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors shadow-2xs disabled:opacity-50"
+              >
+                {isSubmittingDelete ? 'Menghapus...' : 'Hapus'}
+              </button>
             </div>
           </div>
         </div>

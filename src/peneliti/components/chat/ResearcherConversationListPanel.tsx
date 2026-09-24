@@ -7,6 +7,8 @@ import {
   MoreVertical,
   X,
   Sparkles,
+  CheckCheck,
+  Check,
 } from 'lucide-react';
 
 interface ResearcherConversationListPanelProps {
@@ -325,15 +327,33 @@ export const ResearcherConversationListPanel: React.FC<ResearcherConversationLis
 
                   {/* Bottom line: Last message snippet & Unread badge */}
                   <div className="flex items-center justify-between gap-2 mt-1">
-                    <p
-                      className={`text-xs truncate ${
-                        conv.unreadCount > 0
-                          ? 'text-slate-900 font-semibold'
-                          : 'text-slate-500 group-hover:text-slate-700'
-                      }`}
-                    >
-                      {conv.lastMessageSnippet}
-                    </p>
+                    {(() => {
+                      const lastMsg = conv.messages && conv.messages.length > 0
+                        ? conv.messages[conv.messages.length - 1]
+                        : null;
+                      return (
+                        <p
+                          className={`text-xs truncate flex items-center min-w-0 ${
+                            conv.unreadCount > 0
+                              ? 'text-slate-900 font-semibold'
+                              : 'text-slate-500 group-hover:text-slate-700'
+                          }`}
+                        >
+                          {lastMsg?.isOutgoing && (
+                            <span className="inline-flex items-center mr-1 shrink-0">
+                              {lastMsg.status === 'read' ? (
+                                <CheckCheck className="w-3.5 h-3.5 text-sky-500 stroke-[2.5]" />
+                              ) : lastMsg.status === 'delivered' ? (
+                                <CheckCheck className="w-3.5 h-3.5 text-slate-400" />
+                              ) : (
+                                <Check className="w-3.5 h-3.5 text-slate-400" />
+                              )}
+                            </span>
+                          )}
+                          <span className="truncate">{conv.lastMessageSnippet}</span>
+                        </p>
+                      );
+                    })()}
 
                     {conv.unreadCount > 0 && (
                       <span className="shrink-0 bg-[#2563EA] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full min-w-[18px] text-center shadow-xs animate-in zoom-in-50 duration-150">

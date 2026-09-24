@@ -15,11 +15,14 @@ export const ResearcherMessagesPage: React.FC = () => {
     error,
     typingMap,
     selectConversation,
+    sendTyping,
     sendMessage,
     uploadAttachment,
     createNewConversation,
     simulateIncomingMessage,
     retrySendMessage,
+    editMessage,
+    deleteMessage,
     clearError,
   } = useChat();
 
@@ -79,10 +82,13 @@ export const ResearcherMessagesPage: React.FC = () => {
               key={activeConversation.id}
               conversation={activeConversation}
               isTyping={Boolean(typingMap[activeConversation.id])}
+              onTyping={sendTyping}
               onSendMessage={sendMessage}
               onUploadFile={uploadAttachment}
               onBackMobile={() => selectConversation(null)}
               onRetryMessage={retrySendMessage}
+              onEditMessage={editMessage}
+              onDeleteMessage={deleteMessage}
             />
           ) : (
             <ResearcherEmptyChatState />

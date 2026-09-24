@@ -26,6 +26,11 @@ interface ChatConversationAreaProps {
   onBackToList?: () => void; // Untuk tampilan mobile
   isLoading?: boolean;
   currentUserId?: string | number;
+  isTyping?: boolean;
+  typingUserName?: string;
+  onTyping?: (isTyping: boolean) => void;
+  onEditMessage?: (messageId: string, newText: string) => Promise<void>;
+  onDeleteMessage?: (messageId: string) => Promise<void>;
 }
 
 export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
@@ -36,16 +41,25 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
   onBackToList,
   isLoading = false,
   currentUserId,
+  isTyping = false,
+  typingUserName,
+  onTyping,
+  onEditMessage,
+  onDeleteMessage,
 }) => {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll ke pesan terbawah saat messages bertambah atau conversation berganti
+  // Auto-scroll ke pesan terbawah saat messages bertambah, conversation berganti, atau sedang mengetik
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, conversation.id]);
+  }, [messages, conversation.id, isTyping]);
 
-  const activeProject = researcher.associatedProjects?.[0];
+  const isAdministrator =
+    researcher.name.toLowerCase().includes('admin') ||
+    researcher.email?.toLowerCase().includes('admin') ||
+    researcher.academicTitle?.toLowerCase().includes('admin');
+  const activeProject = !isAdministrator ? researcher.associatedProjects?.[0] : null;
 
   return (
     <div className="h-full flex flex-col bg-slate-50/40 relative">
@@ -58,7 +72,7 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
               type="button"
               onClick={onBackToList}
               className="md:hidden p-1.5 -ml-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-              title="Kembali ke daftar peneliti"
+              title="Kembali ke daftar pesan"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -66,7 +80,11 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
 
           {/* Avatar with Status Dot */}
           <div className="relative shrink-0">
-            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center border border-blue-200 shadow-2xs">
+            <div className={`w-10 h-10 rounded-full font-bold text-sm flex items-center justify-center border shadow-2xs ${
+              isAdministrator
+                ? 'bg-purple-100 text-purple-700 border-purple-200'
+                : 'bg-blue-100 text-blue-700 border-blue-200'
+            }`}>
               {researcher.name.charAt(0)}
             </div>
             <span
@@ -76,23 +94,39 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
             />
           </div>
 
-          {/* Name & Academic Title / Status */}
+          {/* Name & Role Badge / Status */}
           <div className="truncate min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
                 {researcher.name}
               </h2>
-              <span className="hidden sm:inline-block px-2 py-0.2 text-[10px] font-semibold bg-slate-100 text-slate-600 rounded-full border border-slate-200 shrink-0">
-                Peneliti
+              <span className={`hidden sm:inline-block px-2 py-0.2 text-[10px] font-semibold rounded-full border shrink-0 ${
+                isAdministrator
+                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}>
+                {isAdministrator
+                  ? 'Administrator'
+                  : (researcher.academicTitle && !researcher.academicTitle.toLowerCase().includes('peneliti utama')
+                    ? researcher.academicTitle
+                    : 'Peneliti')}
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  researcher.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                  researcher.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
                 }`}
               />
-              <span className="truncate">{researcher.lastSeen}</span>
+              <span className={`truncate ${researcher.isOnline ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
+                {researcher.isOnline
+                  ? 'Online'
+                  : researcher.lastSeen
+                  ? researcher.lastSeen.toLowerCase().startsWith('terakhir') || researcher.lastSeen.toLowerCase().startsWith('aktif')
+                    ? researcher.lastSeen
+                    : `Terakhir online ${researcher.lastSeen}`
+                  : 'Terakhir online baru saja'}
+              </span>
               <span className="opacity-40">•</span>
               <span className="truncate max-w-[200px] text-slate-400 hidden sm:inline">
                 {researcher.specialization}
@@ -123,7 +157,7 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
         {/* Banner Percakapan Aman & Internal */}
         <div className="flex justify-center">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 text-slate-600 text-[10px] font-medium border border-slate-300/50">
-            <span>🔒 Kanal Diskusi Resmi Internal PKSPL IPB University</span>
+            <span>🔒 Kanal Pesan Resmi Internal PKSPL IPB University</span>
           </div>
         </div>
 
@@ -147,8 +181,24 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
               message={msg}
               researcherName={researcher.name}
               currentUserId={currentUserId}
+              onEdit={onEditMessage}
+              onDelete={onDeleteMessage}
             />
           ))
+        )}
+
+        {/* Real-time Typing Indicator */}
+        {isTyping && (
+          <div className="flex items-center gap-2 p-2 bg-white/95 border border-slate-200 rounded-xl w-fit shadow-2xs animate-in fade-in duration-200">
+            <div className="flex gap-1 items-center px-1">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className="text-[11px] text-slate-500 font-medium">
+              {typingUserName || researcher.name} sedang mengetik...
+            </span>
+          </div>
         )}
 
         <div ref={messagesEndRef} />
@@ -159,6 +209,7 @@ export const ChatConversationArea: React.FC<ChatConversationAreaProps> = ({
         researcher={researcher}
         onSendMessage={onSendMessage}
         disabled={isLoading}
+        onTyping={onTyping}
       />
     </div>
   );

@@ -160,6 +160,43 @@ export const apiClient = {
     }
 
     return response.json();
+  },
+
+  async delete<T>(endpoint: string): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || localStorage.getItem('pkspl_token');
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (!response.ok) {
+      let errorData = null;
+      try {
+        errorData = await response.json();
+      } catch {
+        // Fallback
+      }
+      throw new ApiError(
+        errorData?.message || `Request failed with status ${response.status}`,
+        response.status,
+        errorData
+      );
+    }
+
+    try {
+      return await response.json();
+    } catch {
+      return null as any;
+    }
   }
 };
 

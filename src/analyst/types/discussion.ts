@@ -50,6 +50,10 @@ export interface ChatMessage {
   timestamp: string; // Format tampilan 'HH:mm'
   createdAt: string; // ISO string untuk pengurutan
   isRead: boolean;
+  status?: 'sent' | 'delivered' | 'read';
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  isOutgoing?: boolean;
   projectContext?: ProjectContext;
   attachments?: ChatAttachment[];
 }

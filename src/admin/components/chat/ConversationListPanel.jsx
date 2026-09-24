@@ -5,6 +5,7 @@ import {
   MoreVertical,
   Filter,
   CheckCheck,
+  Check,
   User,
   ShieldCheck,
   Building,
@@ -217,13 +218,24 @@ export const ConversationListPanel = ({
                   {/* Bottom line: Last message snippet & Unread badge */}
                   <div className="flex items-center justify-between gap-2 mt-1">
                     <p
-                      className={`text-xs truncate ${
+                      className={`text-xs truncate flex items-center min-w-0 ${
                         conv.unreadCount > 0
                           ? 'text-slate-900 font-semibold'
                           : 'text-slate-500 group-hover:text-slate-700'
                       }`}
                     >
-                      {conv.lastMessageSnippet}
+                      {conv.lastMessageIsOutgoing && (
+                        <span className="inline-flex items-center mr-1 shrink-0">
+                          {conv.lastMessageStatus === 'read' ? (
+                            <CheckCheck className="w-3.5 h-3.5 text-sky-500 stroke-[2.5]" />
+                          ) : conv.lastMessageStatus === 'delivered' ? (
+                            <CheckCheck className="w-3.5 h-3.5 text-slate-400" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                        </span>
+                      )}
+                      <span className="truncate">{conv.lastMessageSnippet}</span>
                     </p>
 
                     {conv.unreadCount > 0 && (

@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import GoogleCallbackPage from './pages/GoogleCallbackPage'
 import EmailVerifyCallbackPage from './pages/EmailVerifyCallbackPage'
 import FloatingLanguageSwitcher from './components/FloatingLanguageSwitcher'
+import GlobalChatNotification from './components/chat/GlobalChatNotification'
 import Navbar from './components/Navbar'
 import HeroSection from './components/HeroSection'
 import AboutSection from './components/AboutSection'
@@ -132,6 +133,7 @@ function App() {
               <AnalystProvider>
                 <Toaster position="top-center" reverseOrder={false} />
                 <FloatingLanguageSwitcher />
+                <GlobalChatNotification />
             <Routes>
               <Route path="/" element={<LandingPageContent />} />
               <Route path="/login" element={<LoginPage />} />
@@ -176,9 +178,9 @@ function App() {
                   <Route path="/peneliti/projects/:projectId/messages" element={<ResearcherMessagesPage />} />
                   <Route path="/peneliti/projects/:projectId/komunikasi" element={<ResearcherMessagesPage />} />
                   <Route path="/peneliti/projects/:projectId/pesan" element={<ResearcherMessagesPage />} />
+                  <Route path="/peneliti/messages" element={<ResearcherMessagesPage />} />
+                  <Route path="/peneliti/pesan" element={<ResearcherMessagesPage />} />
                 </Route>
-
-                <Route path="/peneliti/messages" element={<Navigate to="/peneliti/projects" replace />} />
 
                 {/* Backward-compatibility / Legacy redirects for /valuasi */}
                 <Route path="/valuasi" element={<Navigate to="/peneliti/projects" replace />} />
@@ -215,6 +217,8 @@ function App() {
                   <Route path="/analyst/dashboard" element={<AnalystDashboardPage />} />
                   <Route path="/analyst/projects" element={<ProjectReviewPlaceholderPage />} />
                   <Route path="/analyst/projects/:projectId" element={<AnalystProjectReviewPage />} />
+                  <Route path="/analyst/messages" element={<AnalystDiscussionPage />} />
+                  <Route path="/analyst/messages/:researcherId" element={<AnalystDiscussionPage />} />
                   <Route path="/analyst/discussions" element={<AnalystDiscussionPage />} />
                   <Route path="/analyst/discussions/:researcherId" element={<AnalystDiscussionPage />} />
                 </Route>

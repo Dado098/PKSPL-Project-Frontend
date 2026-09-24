@@ -1,4 +1,5 @@
 import { apiClient } from '../../analyst/services/api';
+import { getEcho } from '../../lib/echo';
 
 /**
  * Helper untuk menentukan warna latar gradien avatar berdasarkan role
@@ -69,17 +70,29 @@ export const formatLastSeen = (val, isOnline) => {
   try {
     const date = new Date(val);
     if (isNaN(date.getTime())) return String(val);
-    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
     if (diff < 60) return 'Baru saja';
     if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
-    return `${Math.floor(diff / 86400)} hari lalu`;
+    const isToday = now.toDateString() === date.toDateString();
+    const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    if (isToday) return `Hari ini pukul ${timeStr}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (yesterday.toDateString() === date.toDateString()) return `Kemarin pukul ${timeStr}`;
+    return `${date.getDate()} ${date.toLocaleString('id-ID', { month: 'short' })} pukul ${timeStr}`;
   } catch {
     return String(val);
   }
 };
 
 export const adminChatService = {
+  formatTime,
+  formatFileSize,
+  formatLastSeen,
+  getAvatarBg,
+  getInitials,
+
   /**
    * Mengambil daftar seluruh percakapan yang diikuti Admin dari database
    */
@@ -106,6 +119,11 @@ export const adminChatService = {
           const latestMsg = item.latestMessage || item.latest_message;
           const isOnline = Boolean(otherUser.is_online ?? otherUser.isOnline);
 
+          const latestSenderId = String(latestMsg?.sender_id || latestMsg?.id_sender || latestMsg?.senderId || '');
+          const isLatestOutgoing = currentUserId ? latestSenderId === String(currentUserId) : false;
+          const isLatestRead = Boolean(latestMsg?.isRead ?? latestMsg?.read_at ?? latestMsg?.is_read);
+          const latestStatus = latestMsg?.status || (isLatestRead ? 'read' : (isLatestOutgoing ? (isOnline ? 'delivered' : 'sent') : 'delivered'));
+
           return {
             id: String(item.id || item.id_conversation),
             userId: String(otherUserId || ''),
@@ -122,6 +140,8 @@ export const adminChatService = {
               ? latestMsg.message || (latestMsg.attachments?.length > 0 ? `📎 ${latestMsg.attachments[0].file_name}` : '')
               : '',
             lastMessageTime: formatTime(latestMsg?.created_at || item.updated_at),
+            lastMessageIsOutgoing: isLatestOutgoing,
+            lastMessageStatus: latestStatus,
             messages: [],
           };
         });
@@ -171,7 +191,7 @@ export const adminChatService = {
       if (res && Array.isArray(res.data)) {
         return res.data.map((m) => {
           const senderId = String(m.sender_id || m.id_sender || m.senderId || '');
-          const isOutgoing = currentUserId ? senderId === String(currentUserId) : false;
+          const isOutgoing = Boolean(m.isOutgoing ?? m.is_outgoing) || (currentUserId ? senderId === String(currentUserId) : false);
           const firstAtt = m.attachments?.[0];
 
           let attachment = null;
@@ -185,17 +205,25 @@ export const adminChatService = {
             };
           }
 
+          const isDeleted = Boolean(m.isDeleted ?? m.is_deleted);
+          const isEdited = Boolean(m.isEdited ?? m.is_edited);
+          const isRead = Boolean(m.isRead ?? m.read_at ?? m.is_read);
+          const computedStatus = m.status || (isRead ? 'read' : (isOutgoing ? 'sent' : 'delivered'));
+
           return {
             id: String(m.id || m.id_message),
             conversationId: String(m.conversation_id || m.id_conversation || conversationId),
             senderId,
             senderName: m.sender_name || m.senderName || m.sender?.nama || 'Pengguna',
-            text: m.message || m.text || '',
+            text: isDeleted ? 'Pesan telah dihapus' : (m.message || m.text || ''),
             timestamp: formatTime(m.created_at || m.createdAt),
             createdAt: m.created_at || m.createdAt,
             isOutgoing,
-            status: m.read_at ? 'read' : 'sent',
-            attachment,
+            isRead,
+            status: computedStatus,
+            isEdited,
+            isDeleted,
+            attachment: isDeleted ? null : attachment,
           };
         });
       }
@@ -208,7 +236,7 @@ export const adminChatService = {
   /**
    * Mengirim pesan baru ke percakapan (teks dan/atau berkas lampiran)
    */
-  async sendMessage(conversationId, text, file, currentUserId, currentUserName) {
+  async sendMessage(conversationId, text, file, currentUserId, currentUserName, isRecipientOnline = false) {
     try {
       let res;
       if (file) {
@@ -236,6 +264,8 @@ export const adminChatService = {
           };
         }
 
+        const initialStatus = isRecipientOnline ? 'delivered' : 'sent';
+
         return {
           id: String(m.id || m.id_message),
           conversationId: String(conversationId),
@@ -245,12 +275,41 @@ export const adminChatService = {
           timestamp: formatTime(m.created_at || new Date().toISOString()),
           createdAt: m.created_at || new Date().toISOString(),
           isOutgoing: true,
-          status: 'read',
+          status: m.status || initialStatus,
+          isRead: Boolean(m.isRead ?? m.is_read ?? false),
           attachment,
         };
       }
     } catch (e) {
       console.error('[adminChatService] Gagal mengirim pesan ke backend:', e);
+      throw e;
+    }
+  },
+
+  /**
+   * Mengedit pesan milik user sendiri
+   */
+  async editMessage(conversationId, messageId, newText) {
+    try {
+      const res = await apiClient.put(`/conversations/${conversationId}/messages/${messageId}`, {
+        message: newText.trim(),
+        text: newText.trim(),
+      });
+      return res?.data;
+    } catch (e) {
+      console.error('[adminChatService] Gagal edit pesan:', e);
+      throw e;
+    }
+  },
+
+  /**
+   * Menghapus pesan milik user sendiri (soft delete)
+   */
+  async deleteMessage(conversationId, messageId) {
+    try {
+      await apiClient.delete(`/conversations/${conversationId}/messages/${messageId}`);
+    } catch (e) {
+      console.error('[adminChatService] Gagal hapus pesan:', e);
       throw e;
     }
   },
@@ -263,6 +322,33 @@ export const adminChatService = {
       await apiClient.post(`/conversations/${conversationId}/read`);
     } catch (e) {
       console.warn(`[adminChatService] Gagal menandai baca conv #${conversationId}:`, e);
+    }
+  },
+
+  /**
+   * Mengirim sinyal indikator sedang mengetik (whisper + API)
+   */
+  async sendTyping(conversationId, isTyping = true, currentUserId = null) {
+    const echo = getEcho();
+    if (echo && conversationId && !isNaN(Number(conversationId))) {
+      try {
+        const channel = echo.private(`conversation.${conversationId}`);
+        channel.whisper('typing', {
+          conversationId,
+          userId: currentUserId,
+          isTyping,
+        });
+      } catch (err) {
+        // whisper error ignored
+      }
+    }
+
+    try {
+      await apiClient.post(`/conversations/${conversationId}/typing`, {
+        is_typing: isTyping,
+      });
+    } catch (e) {
+      // API error ignored
     }
   },
 
@@ -311,5 +397,17 @@ export const adminChatService = {
       // ignore
     }
     return 0;
+  },
+
+  /**
+   * Mengirim heartbeat untuk memperbarui status online user
+   */
+  startHeartbeat() {
+    if (this._heartbeatTimer) return;
+    this._heartbeatTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        apiClient.post('/chat/heartbeat').catch(() => {});
+      }
+    }, 45000);
   },
 };

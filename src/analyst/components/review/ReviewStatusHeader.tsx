@@ -18,6 +18,7 @@ import {
 interface ReviewStatusHeaderProps {
   projectCode: string;
   projectName: string;
+  lead?: string;
   status: ProjectStatus;
   totalComments: number;
   openComments: number;
@@ -31,6 +32,7 @@ interface ReviewStatusHeaderProps {
 export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
   projectCode,
   projectName,
+  lead,
   status,
   totalComments,
   openComments,
@@ -81,6 +83,12 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               {projectName}
             </h1>
+            {lead && (
+              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium pt-0.5">
+                <span className="text-slate-400">Peneliti:</span>
+                <span className="text-slate-900 font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{lead}</span>
+              </div>
+            )}
             <p className="text-xs text-slate-500">
               Telaah mendalam data penelitian, data spasial GIS, metodologi, dan perhitungan Total Economic Value (TEV).
             </p>

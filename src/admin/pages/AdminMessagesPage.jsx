@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ConversationListPanel } from '../components/chat/ConversationListPanel';
 import { ChatWindowPanel } from '../components/chat/ChatWindowPanel';
 import { EmptyChatState } from '../components/chat/EmptyChatState';
 import { useAuth } from '../../contexts/AuthContext';
-import { adminChatService } from '../services/adminChatService';
+import { adminChatService, formatTime, formatFileSize } from '../services/adminChatService';
 import { getEcho } from '../../lib/echo';
 
 export const AdminMessagesPage = () => {
@@ -20,6 +20,20 @@ export const AdminMessagesPage = () => {
   const [activeMessages, setActiveMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+
+  // Real-time Typing Indicator States
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUserName, setTypingUserName] = useState('');
+  const typingTimeoutRef = useRef(null);
+
+  // Reset typing saat percakapan berganti
+  useEffect(() => {
+    setIsTyping(false);
+    setTypingUserName('');
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+  }, [activeConversationId]);
 
   // 1. Muat data awal percakapan & direktori pengguna resmi
   const loadInitialData = useCallback(async () => {
@@ -59,6 +73,7 @@ export const AdminMessagesPage = () => {
 
   useEffect(() => {
     loadInitialData();
+    adminChatService.startHeartbeat();
   }, [loadInitialData]);
 
   // 2. Muat riwayat pesan saat activeConversationId berubah
@@ -111,7 +126,7 @@ export const AdminMessagesPage = () => {
       });
     }
 
-    // Listen on active conversation channel untuk pesan masuk instan
+    // Listen on active conversation channel untuk pesan masuk & indikator mengetik secara instan
     let convChannel = null;
     if (activeConversationId && !isNaN(Number(activeConversationId))) {
       convChannel = echo.private(`conversation.${activeConversationId}`);
@@ -123,15 +138,15 @@ export const AdminMessagesPage = () => {
             senderId: String(event.message.sender_id || event.message.id_sender),
             senderName: event.message.sender_name || event.message.senderName || 'Pengguna',
             text: event.message.message || event.message.text || '',
-            timestamp: adminChatService.formatTime(event.message.created_at),
-            createdAt: event.message.created_at,
-            isOutgoing: String(event.message.sender_id || event.message.id_sender) === String(currentUserId),
-            status: 'read',
+            timestamp: formatTime(event.message.created_at || event.message.createdAt),
+            createdAt: event.message.created_at || event.message.createdAt,
+            isOutgoing: Boolean(event.message.isOutgoing ?? event.message.is_outgoing) || (currentUserId ? String(event.message.sender_id || event.message.id_sender) === String(currentUserId) : false),
+            status: event.message.status || (String(event.message.sender_id || event.message.id_sender) === String(currentUserId) ? 'sent' : 'delivered'),
             attachment: event.message.attachments?.[0] ? {
-              id: event.message.attachments[0].id,
-              name: event.message.attachments[0].file_name,
-              size: adminChatService.formatFileSize(event.message.attachments[0].file_size),
-              type: event.message.attachments[0].file_type,
+              id: event.message.attachments[0].id || event.message.attachments[0].id_attachment,
+              name: event.message.attachments[0].file_name || event.message.attachments[0].fileName,
+              size: event.message.attachments[0].fileSize || formatFileSize(event.message.attachments[0].file_size),
+              type: event.message.attachments[0].file_type || event.message.attachments[0].fileType,
               url: event.message.attachments[0].url,
             } : null,
           };
@@ -140,6 +155,7 @@ export const AdminMessagesPage = () => {
             if (prev.some((m) => m.id === incoming.id)) return prev;
             return [...prev, incoming];
           });
+          setIsTyping(false);
 
           // Otomatis tandai telah dibaca jika thread sedang aktif
           adminChatService.markAsRead(activeConversationId);
@@ -148,14 +164,175 @@ export const AdminMessagesPage = () => {
           );
         }
       });
+
+      // Sinyal pengetikan cepat via Client Whisper
+      convChannel.listenForWhisper('typing', (event) => {
+        if (event?.userId && String(event.userId) !== String(currentUserId)) {
+          if (event.isTyping !== false) {
+            setIsTyping(true);
+            if (event.userName) setTypingUserName(event.userName);
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+              setIsTyping(false);
+            }, 3500);
+          } else {
+            setIsTyping(false);
+          }
+        }
+      });
+
+      // Sinyal pengetikan via backend broadcast UserTyping
+      convChannel.listen('.UserTyping', (event) => {
+        if (event?.userId && String(event.userId) !== String(currentUserId)) {
+          if (event.isTyping) {
+            setIsTyping(true);
+            if (event.userName) setTypingUserName(event.userName);
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+              setIsTyping(false);
+            }, 3500);
+          } else {
+            setIsTyping(false);
+          }
+        }
+      });
+
+      // Sinyal saat pesan telah dibaca oleh lawan bicara (WhatsApp Blue Checkmarks)
+      convChannel.listen('.MessagesRead', (event) => {
+        setActiveMessages((prev) =>
+          prev.map((m) => (m.isOutgoing ? { ...m, status: 'read', isRead: true } : m))
+        );
+      });
+
+      // Update pesan saat diedit realtime
+      convChannel.listen('.ChatMessageUpdated', (event) => {
+        if (event?.message) {
+          const raw = event.message;
+          const msgId = String(raw.id || raw.id_message);
+          setActiveMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId
+                ? {
+                    ...m,
+                    text: raw.message || raw.text || m.text,
+                    isEdited: true,
+                  }
+                : m
+            )
+          );
+        }
+      });
+
+      // Update pesan saat dihapus realtime
+      convChannel.listen('.ChatMessageDeleted', (event) => {
+        const deletedId = String(event.message_id || event.message?.id || event.message?.id_message);
+        setActiveMessages((prev) =>
+          prev.map((m) =>
+            m.id === deletedId
+              ? {
+                  ...m,
+                  text: 'Pesan telah dihapus',
+                  isDeleted: true,
+                  attachment: null,
+                }
+              : m
+          )
+        );
+      });
     }
+
+    // Presence channel 'online' untuk mendeteksi status user online realtime
+    const presenceChannel = echo.join('online');
+    presenceChannel.here((users) => {
+      const onlineIds = new Set(users.map((u) => String(u.id || u.id_user)));
+      setConversations((prev) =>
+        prev.map((c) => {
+          const isOnline = onlineIds.has(String(c.userId));
+          return {
+            ...c,
+            isOnline,
+            lastSeen: isOnline ? 'Online' : c.lastSeen,
+          };
+        })
+      );
+      setDirectoryUsers((prev) =>
+        prev.map((u) => {
+          const isOnline = onlineIds.has(String(u.id));
+          return {
+            ...u,
+            isOnline,
+            lastSeen: isOnline ? 'Online' : u.lastSeen,
+          };
+        })
+      );
+    });
+
+    presenceChannel.joining((u) => {
+      const uid = String(u.id || u.id_user);
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (String(c.userId) === uid) {
+            return { ...c, isOnline: true, lastSeen: 'Online' };
+          }
+          return c;
+        })
+      );
+      setDirectoryUsers((prev) =>
+        prev.map((u) => {
+          if (String(u.id) === uid) {
+            return { ...u, isOnline: true, lastSeen: 'Online' };
+          }
+          return u;
+        })
+      );
+      // Jika lawan bicara yang sedang dibuka bergabung online, pesan outgoing status 'sent' berubah ke 'delivered'
+      setActiveMessages((prev) =>
+        prev.map((m) => {
+          if (m.isOutgoing && m.status === 'sent') {
+            return { ...m, status: 'delivered' };
+          }
+          return m;
+        })
+      );
+    });
+
+    presenceChannel.leaving((u) => {
+      const uid = String(u.id || u.id_user);
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (String(c.userId) === uid) {
+            return { ...c, isOnline: false, lastSeen: 'Baru saja' };
+          }
+          return c;
+        })
+      );
+      setDirectoryUsers((prev) =>
+        prev.map((u) => {
+          if (String(u.id) === uid) {
+            return { ...u, isOnline: false, lastSeen: 'Baru saja' };
+          }
+          return u;
+        })
+      );
+    });
 
     return () => {
       if (convChannel && activeConversationId) {
         convChannel.stopListening('.ChatMessageSent');
+        convChannel.stopListeningForWhisper('typing');
+        convChannel.stopListening('.UserTyping');
+        convChannel.stopListening('.MessagesRead');
+        convChannel.stopListening('.ChatMessageUpdated');
+        convChannel.stopListening('.ChatMessageDeleted');
       }
       if (userChannel && currentUserId) {
         userChannel.stopListening('.ChatMessageSent');
+      }
+      if (presenceChannel) {
+        echo.leave('online');
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
       }
     };
   }, [currentUserId, activeConversationId]);
@@ -195,12 +372,16 @@ export const AdminMessagesPage = () => {
 
     try {
       setIsSending(true);
+      const activeConv = conversations.find((c) => c.id === activeConversationId);
+      const isRecipientOnline = Boolean(activeConv?.isOnline);
+
       const sentMsg = await adminChatService.sendMessage(
         activeConversationId,
         text,
         file,
         currentUserId,
-        currentUserName
+        currentUserName,
+        isRecipientOnline
       );
 
       setActiveMessages((prev) => {
@@ -215,6 +396,36 @@ export const AdminMessagesPage = () => {
       console.error('[AdminMessagesPage] Gagal mengirim pesan:', err);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleEditMessage = async (messageId, newText) => {
+    if (!activeConversationId) return;
+    try {
+      const updated = await adminChatService.editMessage(activeConversationId, messageId, newText);
+      setActiveMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, text: updated?.text || newText, isEdited: true } : m))
+      );
+    } catch (err) {
+      console.error('[AdminMessagesPage] Gagal mengedit pesan:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!activeConversationId) return;
+    try {
+      await adminChatService.deleteMessage(activeConversationId, messageId);
+      setActiveMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, text: 'Pesan telah dihapus', isDeleted: true, attachment: null }
+            : m
+        )
+      );
+    } catch (err) {
+      console.error('[AdminMessagesPage] Gagal menghapus pesan:', err);
+      throw err;
     }
   };
 
@@ -267,8 +478,18 @@ export const AdminMessagesPage = () => {
         {activeConversation ? (
           <ChatWindowPanel
             conversation={activeConversation}
+            isTyping={isTyping}
+            typingUserName={typingUserName}
+            onTyping={(typing) => {
+              if (activeConversationId) {
+                adminChatService.sendTyping(activeConversationId, typing, currentUserId);
+              }
+            }}
             onSendMessage={handleSendMessage}
             onBackMobile={() => setActiveConversationId(null)}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
+            currentUserId={currentUserId}
           />
         ) : (
           <EmptyChatState />

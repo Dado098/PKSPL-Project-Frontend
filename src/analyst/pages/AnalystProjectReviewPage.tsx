@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnnotationItem, ReviewComment, ToolMode } from '../types/annotation';
 import { ProjectStatus } from '../types/project';
 import { annotationService } from '../services/annotationService';
 import { getProjectResearchData } from '../mock/projectResearchDataMock';
 import { getMockProjectById } from '../mock/analystDashboardMock';
+import { analystDashboardService } from '../services/analystDashboardService';
+import { AttentionProject } from '../types/analystDashboard';
 import { ReviewStatusHeader } from '../components/review/ReviewStatusHeader';
 import { ReviewToolbar } from '../components/review/ReviewToolbar';
 import { AnnotationOverlay } from '../components/review/AnnotationOverlay';
@@ -19,9 +21,12 @@ export const AnalystProjectReviewPage: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
 
-  const effectiveId = projectId || 'PKS-994KY1';
+  const effectiveId = projectId || 'PRJ-001';
   const initialMeta = getMockProjectById(effectiveId);
   const researchData = getProjectResearchData(effectiveId);
+
+  // Dynamic project metadata dari database
+  const [projectMeta, setProjectMeta] = useState<AttentionProject | null>(initialMeta || null);
 
   // Status Review State
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>(() =>
@@ -57,15 +62,47 @@ export const AnalystProjectReviewPage: React.FC = () => {
   const [tandaiSelesaiOpen, setTandaiSelesaiOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Sync state when projectId changes
+  // Sync state & fetch project data from database when projectId changes
   useEffect(() => {
+    let isMounted = true;
+
+    // Fetch detail dari API backend
+    analystDashboardService.getProjectById(effectiveId)
+      .then((meta) => {
+        if (isMounted && meta) {
+          setProjectMeta(meta);
+          const savedStatus = annotationService.getProjectStatus(effectiveId, meta.status);
+          setProjectStatus(savedStatus);
+        }
+      })
+      .catch((err) => {
+        console.warn('Gagal memuat detail proyek dari database:', err);
+      });
+
     const loadedAnnos = annotationService.getAnnotations(effectiveId);
     setAnnotations(loadedAnnos);
     setHistory([loadedAnnos]);
     setHistoryIndex(0);
     setComments(annotationService.getComments(effectiveId));
     setProjectStatus(annotationService.getProjectStatus(effectiveId, initialMeta?.status || 'SIAP_REVIEW'));
+
+    return () => {
+      isMounted = false;
+    };
   }, [effectiveId]);
+
+  // Gabungkan research data dengan metadata aktual dari database (kode proyek, nama peneliti, ekosistem, lokasi)
+  const activeResearchData = useMemo(() => {
+    return {
+      ...researchData,
+      projectCode: projectMeta?.code || researchData.projectCode || effectiveId,
+      projectName: projectMeta?.name || researchData.projectName,
+      lead: projectMeta?.lead || researchData.lead,
+      researcherName: projectMeta?.lead || researchData.researcherName,
+      ecosystem: projectMeta?.ecosystem || researchData.ecosystem,
+      location: projectMeta?.location || researchData.location
+    };
+  }, [researchData, projectMeta, effectiveId]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -236,8 +273,9 @@ export const AnalystProjectReviewPage: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-6 pb-20 relative font-sans">
       {/* 1. Header Status & Action Toolbar */}
       <ReviewStatusHeader
-        projectCode={researchData.projectCode}
-        projectName={researchData.projectName}
+        projectCode={activeResearchData.projectCode}
+        projectName={activeResearchData.projectName}
+        lead={activeResearchData.lead}
         status={projectStatus}
         totalComments={comments.length}
         openComments={openComments}
@@ -288,15 +326,15 @@ export const AnalystProjectReviewPage: React.FC = () => {
         {/* MAP LOKASI PENELITIAN AT THE VERY TOP (Sesuai Syarat Utama) */}
         <section aria-label="Peta Lokasi Penelitian">
           <ResearchMapView
-            spatial={researchData.spatial}
-            landCovers={researchData.landCovers}
-            locationText={researchData.location}
+            spatial={activeResearchData.spatial}
+            landCovers={activeResearchData.landCovers}
+            locationText={activeResearchData.location}
           />
         </section>
 
         {/* 8 Research Sections View (READ ONLY) */}
         <ResearchSectionsView
-          data={researchData}
+          data={activeResearchData}
           onOpenSectionComment={handleOpenSectionComment}
         />
       </div>
