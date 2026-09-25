@@ -50,6 +50,83 @@ const INITIAL_COMMENTS: Record<string, ReviewComment[]> = {
       status: 'resolved',
       replies: []
     }
+  ],
+  'PRJ-004': [
+    {
+      id: 'comm-004-1',
+      projectId: 'PRJ-004',
+      section: '05. DATA VALUASI',
+      x: 35,
+      y: 48,
+      author: 'Analyst PKSPL',
+      authorRole: 'Quality Analyst',
+      timestamp: '25 September 2026 • 08:15',
+      content: 'Nilai harga pasar komoditas perikanan dan kepiting bakau mohon dicek kembali dengan standar HET regional Bali.',
+      status: 'open',
+      replies: [
+        {
+          id: 'rep-004-1',
+          author: 'Dr. Ir. Retno Wulandari, M.Si.',
+          authorRole: 'Peneliti Utama',
+          content: 'Baik, kami telah menyesuaikan tabel referensi dengan data TPI Kedonganan terbaru.',
+          timestamp: '25 September 2026 • 08:30'
+        }
+      ]
+    },
+    {
+      id: 'comm-004-2',
+      projectId: 'PRJ-004',
+      section: '01. INDEX & AREA TUTUPAN LAHAN',
+      x: 52,
+      y: 28,
+      author: 'Dr. Benny Nababan',
+      authorRole: 'Quality Analyst',
+      timestamp: '25 September 2026 • 08:18',
+      content: 'Luas tutupan mangrove jarang pada sempadan pesisir (15 ha) mohon diverifikasi dengan polygon digitasi GIS.',
+      status: 'open',
+      replies: []
+    },
+    {
+      id: 'comm-004-3',
+      projectId: 'PRJ-004',
+      section: '02. DATA SPASIAL',
+      x: 68,
+      y: 36,
+      author: 'Analyst PKSPL',
+      authorRole: 'Quality Analyst',
+      timestamp: '25 September 2026 • 08:20',
+      content: 'Metadata CRS shapefile EPSG:4326 telah terverifikasi, pastikan batas delineasi sempadan terhubung dengan data spasial.',
+      status: 'open',
+      replies: []
+    }
+  ],
+  '4': [
+    {
+      id: 'comm-004-1',
+      projectId: '4',
+      section: '05. DATA VALUASI',
+      x: 35,
+      y: 48,
+      author: 'Analyst PKSPL',
+      authorRole: 'Quality Analyst',
+      timestamp: '25 September 2026 • 08:15',
+      content: 'Nilai harga pasar komoditas perikanan dan kepiting bakau mohon dicek kembali dengan standar HET regional Bali.',
+      status: 'open',
+      replies: []
+    },
+    {
+      id: 'comm-004-2',
+      projectId: '4',
+      section: '01. INDEX & AREA TUTUPAN LAHAN',
+      x: 52,
+      y: 28,
+      author: 'Dr. Benny Nababan',
+      authorRole: 'Quality Analyst',
+      timestamp: '25 September 2026 • 08:18',
+      content: 'Luas tutupan mangrove jarang pada sempadan pesisir (15 ha) mohon diverifikasi dengan polygon digitasi GIS.',
+      status: 'open',
+      replies: []
+    }
   ]
 };
 
@@ -69,13 +146,95 @@ const INITIAL_ANNOTATIONS: Record<string, AnnotationItem[]> = {
       commentId: 'comm-01',
       createdAt: '2026-09-15 14:45'
     }
+  ],
+  'PRJ-004': [
+    {
+      id: 'anno-004-1',
+      projectId: 'PRJ-004',
+      type: 'rectangle',
+      color: '#ef4444',
+      strokeWidth: 2.5,
+      x: 120,
+      y: 980,
+      width: 520,
+      height: 70,
+      section: '05. DATA VALUASI',
+      commentId: 'comm-004-1',
+      createdAt: '2026-09-25 08:15'
+    },
+    {
+      id: 'anno-004-2',
+      projectId: 'PRJ-004',
+      type: 'text_note',
+      color: '#e11d48',
+      strokeWidth: 2,
+      x: 660,
+      y: 980,
+      textNote: 'Perlu verifikasi standar HET Bali',
+      section: '05. DATA VALUASI',
+      createdAt: '2026-09-25 08:16'
+    }
+  ],
+  '4': [
+    {
+      id: 'anno-004-1',
+      projectId: '4',
+      type: 'rectangle',
+      color: '#ef4444',
+      strokeWidth: 2.5,
+      x: 120,
+      y: 980,
+      width: 520,
+      height: 70,
+      section: '05. DATA VALUASI',
+      commentId: 'comm-004-1',
+      createdAt: '2026-09-25 08:15'
+    }
   ]
+};
+
+const PROJECT_ALIAS_MAP: Record<string, string[]> = {
+  'PRJ-001': ['PRJ-001', '1', 'PKS-994KY1'],
+  '1': ['PRJ-001', '1', 'PKS-994KY1'],
+  'PKS-994KY1': ['PRJ-001', '1', 'PKS-994KY1'],
+
+  'PRJ-002': ['PRJ-002', '2', 'PKS-KKPRIV'],
+  '2': ['PRJ-002', '2', 'PKS-KKPRIV'],
+  'PKS-KKPRIV': ['PRJ-002', '2', 'PKS-KKPRIV'],
+
+  'PRJ-003': ['PRJ-003', '3'],
+  '3': ['PRJ-003', '3'],
+
+  'PRJ-004': ['PRJ-004', '4'],
+  '4': ['PRJ-004', '4'],
+
+  'PRJ-005': ['PRJ-005', '5'],
+  '5': ['PRJ-005', '5'],
+
+  'PRJ-006': ['PRJ-006', '6'],
+  '6': ['PRJ-006', '6'],
+
+  'PRJ-007': ['PRJ-007', '7'],
+  '7': ['PRJ-007', '7'],
+
+  'PRJ-008': ['PRJ-008', '8', 'PKS-UW8J6F'],
+  '8': ['PRJ-008', '8', 'PKS-UW8J6F'],
+  'PKS-UW8J6F': ['PRJ-008', '8', 'PKS-UW8J6F'],
+
+  'PRJ-009': ['PRJ-009', '9'],
+  '9': ['PRJ-009', '9'],
+
+  'PRJ-010': ['PRJ-010', '10'],
+  '10': ['PRJ-010', '10'],
+
+  'PRJ-ANTAM': ['PRJ-ANTAM', '11'],
+  '11': ['PRJ-ANTAM', '11'],
 };
 
 const getProjectAliases = (projectId: string): string[] => {
   const norm = String(projectId || '').trim();
-  if (norm === 'PRJ-001' || norm === '1' || norm === 'PKS-994KY1') {
-    return ['PRJ-001', '1', 'PKS-994KY1'];
+  if (PROJECT_ALIAS_MAP[norm]) {
+    return PROJECT_ALIAS_MAP[norm];
   }
   return [norm];
 };

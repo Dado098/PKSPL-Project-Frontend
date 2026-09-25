@@ -308,7 +308,7 @@ export const ResearchSectionsView: React.FC<ResearchSectionsViewProps> = ({
       {/* ============================================================== */}
       {/* 05. DATA VALUASI */}
       {/* ============================================================== */}
-      <ValuationSection onOpenSectionComment={onOpenSectionComment} />
+      <ValuationSection data={data} onOpenSectionComment={onOpenSectionComment} />
 
       {/* ============================================================== */}
       {/* 06. PERHITUNGAN */}

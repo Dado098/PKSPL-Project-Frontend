@@ -345,7 +345,138 @@ class ValuationService {
     return MOCK_VALUATION_AREAS;
   }
 
-  getValuationByArea(areaId: string, projectId?: string): AreaValuationData {
+  getValuationByArea(areaId: string, projectData?: any): AreaValuationData {
+    if (projectData?.landCovers && Array.isArray(projectData.landCovers) && projectData.landCovers.length > 0) {
+      const match = projectData.landCovers.find((lc: any) => lc.id === areaId || lc.code === areaId || lc.name === areaId) || projectData.landCovers[0];
+      if (match) {
+        const areaHa = Number(match.areaHa) || 50;
+        const total = Number(match.totalValue) || 10000000000;
+        const provVal = Math.round(total * 0.28);
+        const regVal = Math.round(total * 0.45);
+        const suppVal = Math.round(total * 0.15);
+        const cultVal = Math.max(0, total - provVal - regVal - suppVal);
+
+        const isCoral = (projectData.ecosystem || '').toLowerCase().includes('karang');
+
+        return {
+          areaId: match.id,
+          areaCode: match.code,
+          areaName: match.name,
+          areaHa: areaHa,
+          categories: {
+            provisioning: {
+              category: 'provisioning',
+              code: 'A',
+              title: 'Provisioning Services (Jasa Penyediaan)',
+              method: 'Market Price',
+              dataCount: 2,
+              totalValue: provVal,
+              rows: [
+                {
+                  id: `${match.id}-prov-1`,
+                  commodity: isCoral ? 'Hasil Tangkapan Ikan Karang Konsumsi' : 'Hasil Tangkapan Kepiting & Ikan Estuari',
+                  productivity: isCoral ? '380 kg/ha/tahun' : '520 kg/ha/tahun',
+                  unit: 'kg/tahun',
+                  pricePerUnit: isCoral ? 85000 : 125000,
+                  areaHa: areaHa,
+                  totalValue: Math.round(provVal * 0.65),
+                  source: 'Survei Pasar & TPI Daerah 2026'
+                },
+                {
+                  id: `${match.id}-prov-2`,
+                  commodity: isCoral ? 'Bibit Karang & Benih Biota Karang' : 'Biomassa Kayu Bakau & Bibit Silvofishery',
+                  productivity: isCoral ? '150 koloni/ha' : '45 m³/ha',
+                  unit: isCoral ? 'koloni' : 'm³/ha',
+                  pricePerUnit: isCoral ? 65000 : 2850000,
+                  areaHa: areaHa,
+                  totalValue: Math.round(provVal * 0.35),
+                  source: 'Catatan Nelayan Lokal PKSPL'
+                }
+              ]
+            },
+            regulating: {
+              category: 'regulating',
+              code: 'B',
+              title: 'Regulating Services (Jasa Pengaturan)',
+              method: isCoral ? 'Breakwater & Wave Attenuation' : 'Replacement Cost & Carbon Storage',
+              dataCount: 2,
+              totalValue: regVal,
+              rows: [
+                {
+                  id: `${match.id}-reg-1`,
+                  assetFunction: isCoral ? 'Breakwater & Wave Attenuation (Peredam Ombak)' : 'Konstruksi Seawall Alternatif (Pencegah Erosi)',
+                  lengthParameter: '3.5 km garis pantai',
+                  unitCost: Math.round(regVal * 0.6 / 3.5),
+                  totalValue: Math.round(regVal * 0.6),
+                  source: 'Pedoman Standar PU SDA Pesisir'
+                },
+                {
+                  id: `${match.id}-reg-2`,
+                  assetFunction: isCoral ? 'Stabilisasi Garis Pantai & Perlindungan Abrasi' : 'Sekuestrasi Karbon Biru (Blue Carbon Storage)',
+                  lengthParameter: `${areaHa} ha zona pelindung`,
+                  unitCost: Math.round(regVal * 0.4 / areaHa),
+                  totalValue: Math.round(regVal * 0.4),
+                  source: 'IPCC Wetland Supplement & Bappenas'
+                }
+              ]
+            },
+            supporting: {
+              category: 'supporting',
+              code: 'C',
+              title: 'Supporting Services (Jasa Pendukung)',
+              method: 'Habitat & Nursery Ground',
+              dataCount: 2,
+              totalValue: suppVal,
+              rows: [
+                {
+                  id: `${match.id}-supp-1`,
+                  habitatFunction: 'Daerah Asuhan & Pemijahan (Nursery Ground)',
+                  ecosystemAreaHa: areaHa,
+                  recruitmentContribution: Math.round(suppVal * 0.7 / areaHa),
+                  totalValue: Math.round(suppVal * 0.7),
+                  source: 'Studi Ekologi Pesisir PKSPL IPB'
+                },
+                {
+                  id: `${match.id}-supp-2`,
+                  habitatFunction: 'Keanekaragaman Hayati & Habitat Biota Langka',
+                  ecosystemAreaHa: areaHa,
+                  recruitmentContribution: Math.round(suppVal * 0.3 / areaHa),
+                  totalValue: Math.round(suppVal * 0.3),
+                  source: 'BKSDA & Tim Peneliti IPB'
+                }
+              ]
+            },
+            cultural: {
+              category: 'cultural',
+              code: 'D',
+              title: 'Cultural Services (Jasa Kultural / Wisata)',
+              method: 'Travel Cost Method (TCM)',
+              dataCount: 2,
+              totalValue: cultVal,
+              rows: [
+                {
+                  id: `${match.id}-cult-1`,
+                  tourismProgram: isCoral ? 'Wisata Selam & Snorkeling Bahari' : 'Ekowisata Boardwalk & Hutan Mangrove',
+                  respondentCount: 35000,
+                  costPerUnit: Math.round(cultVal * 0.75 / 35000),
+                  totalValue: Math.round(cultVal * 0.75),
+                  source: 'Survei Wisatawan Mancanegara & Domestik'
+                },
+                {
+                  id: `${match.id}-cult-2`,
+                  tourismProgram: 'Wisata Edukasi Lingkungan & Penelitian Lapangan',
+                  respondentCount: 8500,
+                  costPerUnit: Math.round(cultVal * 0.25 / 8500),
+                  totalValue: Math.round(cultVal * 0.25),
+                  source: 'Tiket Masuk & Registrasi Pengunjung'
+                }
+              ]
+            }
+          }
+        };
+      }
+    }
+
     let selectedData: AreaValuationData;
 
     if (areaId === 'poly-2' || areaId === 'IDX-002') {
@@ -353,11 +484,9 @@ class ValuationService {
     } else if (areaId === 'poly-3' || areaId === 'IDX-003') {
       selectedData = DATA_ZONA_RESTORASI;
     } else {
-      // Default ke Mangrove Barat (IDX-001) sesuai desain referensi
       selectedData = DATA_MANGROVE_BARAT;
     }
 
-    // Pastikan totalValue per kategori dihitung secara dinamis dari baris data
     const computeTotal = (rows: { totalValue: number }[]) =>
       rows.reduce((sum, r) => sum + (r.totalValue || 0), 0);
 

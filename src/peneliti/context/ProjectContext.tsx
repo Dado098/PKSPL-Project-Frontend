@@ -450,10 +450,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return projectIndices[found.id];
       }
     }
-    if (projectId === 'PRJ-001' || projectId === '1' || projectId === 'PKS-994KY1' || (found && (found.code === 'PRJ-001' || found.id === '1' || found.code === 'PKS-994KY1'))) {
-      return INITIAL_INDEX_LIST;
-    }
-    return [];
+    const mockIdx =
+      ALL_PROJECT_INDICES[projectId] ||
+      (found?.code ? ALL_PROJECT_INDICES[found.code] : undefined) ||
+      (found?.id ? ALL_PROJECT_INDICES[found.id] : undefined) ||
+      getFallbackIndicesForProject(found?.code || projectId);
+
+    return mockIdx || [];
   };
 
   const getProjectLayers = (projectId: string): MapLayer[] => {
@@ -469,10 +472,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return projectLayers[found.id];
       }
     }
-    if (projectId === 'PRJ-001' || projectId === '1' || projectId === 'PKS-994KY1' || (found && (found.code === 'PRJ-001' || found.id === '1' || found.code === 'PKS-994KY1'))) {
-      return INITIAL_MAP_LAYERS;
-    }
-    return [];
+    const mockLyr =
+      ALL_PROJECT_LAYERS[projectId] ||
+      (found?.code ? ALL_PROJECT_LAYERS[found.code] : undefined) ||
+      (found?.id ? ALL_PROJECT_LAYERS[found.id] : undefined) ||
+      getFallbackLayersForProject(found?.code || projectId);
+
+    return mockLyr || [];
   };
 
   // Enrich stored land covers with mock registry serviceDetails/totalValue if missing (handles stale localStorage)

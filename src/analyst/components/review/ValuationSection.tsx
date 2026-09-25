@@ -1,21 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { valuationService } from '../../services/valuationService';
 import { ValuationAreaSelector } from './ValuationAreaSelector';
 import { ValuationAccordion } from './ValuationAccordion';
+import { ProjectResearchFullData } from '../../types/researchData';
 
 interface ValuationSectionProps {
   onOpenSectionComment: (sectionName: string) => void;
   initialAreaId?: string;
+  data?: ProjectResearchFullData;
 }
 
 export const ValuationSection: React.FC<ValuationSectionProps> = ({
   onOpenSectionComment,
-  initialAreaId = 'poly-1'
+  initialAreaId = 'poly-1',
+  data
 }) => {
-  const [selectedAreaId, setSelectedAreaId] = useState<string>(initialAreaId);
-  const areas = valuationService.getAvailableAreas();
-  const areaValuationData = valuationService.getValuationByArea(selectedAreaId);
+  const dynamicAreas = data?.landCovers && data.landCovers.length > 0
+    ? data.landCovers.map((lc) => ({
+        id: lc.id,
+        code: lc.code,
+        name: lc.name,
+        areaHa: lc.areaHa,
+        indexCode: lc.indexCode || 'IDX'
+      }))
+    : valuationService.getAvailableAreas();
+
+  const [selectedAreaId, setSelectedAreaId] = useState<string>(() => {
+    return dynamicAreas[0]?.id || initialAreaId;
+  });
+
+  useEffect(() => {
+    if (dynamicAreas.length > 0 && !dynamicAreas.some((a) => a.id === selectedAreaId)) {
+      setSelectedAreaId(dynamicAreas[0].id);
+    }
+  }, [data?.projectId, dynamicAreas, selectedAreaId]);
+
+  const areas = dynamicAreas;
+  const areaValuationData = valuationService.getValuationByArea(selectedAreaId, data);
 
   // Default state sesuai instruksi:
   // - Provisioning OPEN
