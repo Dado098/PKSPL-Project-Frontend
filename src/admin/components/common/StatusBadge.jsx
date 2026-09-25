@@ -30,9 +30,10 @@ export const StatusBadge = ({ status = 'DRAFT', size = 'md' }) => {
       label = 'Menunggu Analyst';
       break;
     case 'PERLU_PERBAIKAN':
+    case 'REVISI':
       bg = 'bg-rose-50 text-rose-700 border-rose-200';
       dot = 'bg-rose-500 animate-pulse';
-      label = 'Perlu Perbaikan';
+      label = normalized === 'REVISI' ? 'Revisi' : 'Perlu Perbaikan';
       break;
     case 'SELESAI':
       bg = 'bg-emerald-50 text-emerald-700 border-emerald-200';

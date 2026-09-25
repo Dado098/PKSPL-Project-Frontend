@@ -43,5 +43,20 @@ export const INITIAL_PROJECTS: Project[] = [
     updatedAt: '2025-01-20 16:45',
     submittedAt: '2025-01-18',
     hasShp: true,
+  },
+  {
+    id: '4',
+    code: 'PRJ-004',
+    name: 'Restorasi Karbon Biru Mangrove Teluk Benoa',
+    description: 'Restorasi dan valuasi jasa ekosistem karbon biru mangrove kawasan Teluk Benoa pasca revitalisasi.',
+    status: 'PERLU_PERBAIKAN',
+    lead: 'Dr. Ir. Retno Wulandari, M.Si.',
+    location: 'Taman Hutan Raya Ngurah Rai & Teluk Benoa, Badung, Bali',
+    ecosystem: 'Ekosistem Mangrove & Estuari Pesisir',
+    year: 2026,
+    createdAt: '2026-01-15',
+    updatedAt: '2026-03-20 10:00',
+    hasShp: true,
+    reviewedBy: 'Quality Analyst PKSPL'
   }
 ];

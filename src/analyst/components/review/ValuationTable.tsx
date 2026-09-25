@@ -12,11 +12,18 @@ interface ValuationTableProps {
   rows: any[];
 }
 
-export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows }) => {
-  const formatIDR = (val: number) => `Rp ${val.toLocaleString('id-ID')}`;
+export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows = [] }) => {
+  const formatIDR = (val?: number | string | null) => {
+    if (val === undefined || val === null || val === '') return 'Rp 0';
+    const num = typeof val === 'number' ? val : Number(val);
+    if (isNaN(num)) return 'Rp 0';
+    return `Rp ${num.toLocaleString('id-ID')}`;
+  };
+
+  const safeRows = Array.isArray(rows) ? rows : [];
 
   if (category === 'provisioning') {
-    const provRows = rows as ProvisioningRow[];
+    const provRows = safeRows as (ProvisioningRow & any)[];
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-xs">
@@ -34,34 +41,34 @@ export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows }
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {provRows.map((row) => (
-              <tr key={row.no} className="hover:bg-slate-50/70 transition-colors">
+            {provRows.map((row, idx) => (
+              <tr key={row.id || row.no || idx} className="hover:bg-slate-50/70 transition-colors">
                 <td className="py-2.5 px-3 text-center font-mono text-slate-400 font-semibold">
-                  {row.no}
+                  {row.no ?? (idx + 1)}
                 </td>
                 <td className="py-2.5 px-3 font-semibold text-slate-900">
-                  {row.commodity}
+                  {row.commodity || row.item || row.namaKomoditas || '-'}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                  {row.productivity}
+                  {row.productivity ?? row.produktivitas ?? '-'}
                 </td>
                 <td className="py-2.5 px-3 text-slate-500">
-                  {row.unit}
+                  {row.unit || row.satuan || '-'}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                  {formatIDR(row.unitPrice)}
+                  {formatIDR(row.unitPrice ?? row.pricePerUnit ?? row.hargaUnit ?? row.hargaKomoditas)}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                  {row.quantityVolume}
+                  {row.quantityVolume ?? row.volumeOutput ?? row.jumlah ?? '-'}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                  {row.areaHa}
+                  {row.areaHa ?? row.luasHa ?? '-'}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                  {formatIDR(row.totalValue)}
+                  {formatIDR(row.totalValue ?? row.totalNilai)}
                 </td>
                 <td className="py-2.5 px-3 text-[11px] text-slate-500">
-                  {row.referenceSource}
+                  {row.referenceSource || row.source || 'Survei Lapangan Peneliti'}
                 </td>
               </tr>
             ))}
@@ -72,7 +79,7 @@ export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows }
   }
 
   if (category === 'regulating') {
-    const regRows = rows as RegulatingRow[];
+    const regRows = safeRows as (RegulatingRow & any)[];
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-xs">
@@ -87,25 +94,25 @@ export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows }
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {regRows.map((row) => (
-              <tr key={row.no} className="hover:bg-slate-50/70 transition-colors">
+            {regRows.map((row, idx) => (
+              <tr key={row.id || row.no || idx} className="hover:bg-slate-50/70 transition-colors">
                 <td className="py-2.5 px-3 text-center font-mono text-slate-400 font-semibold">
-                  {row.no}
+                  {row.no ?? (idx + 1)}
                 </td>
                 <td className="py-2.5 px-3 font-semibold text-slate-900">
-                  {row.functionAsset}
+                  {row.functionAsset || row.assetFunction || row.item || row.fungsi || '-'}
                 </td>
                 <td className="py-2.5 px-3 text-slate-700 font-mono">
-                  {row.parameterUnit}
+                  {row.parameterUnit || row.lengthParameter || row.param || '-'}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                  {formatIDR(row.unitPrice)}
+                  {formatIDR(row.unitPrice ?? row.unitCost ?? row.biayaUnit ?? row.hargaKarbon)}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                  {formatIDR(row.totalValue)}
+                  {formatIDR(row.totalValue ?? row.totalNilai)}
                 </td>
                 <td className="py-2.5 px-3 text-[11px] text-slate-500">
-                  {row.referenceSource}
+                  {row.referenceSource || row.source || 'Dinas PU & IPCC'}
                 </td>
               </tr>
             ))}
@@ -116,7 +123,7 @@ export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows }
   }
 
   if (category === 'supporting') {
-    const suppRows = rows as SupportingRow[];
+    const suppRows = safeRows as (SupportingRow & any)[];
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-xs">
@@ -131,25 +138,25 @@ export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows }
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {suppRows.map((row) => (
-              <tr key={row.no} className="hover:bg-slate-50/70 transition-colors">
+            {suppRows.map((row, idx) => (
+              <tr key={row.id || row.no || idx} className="hover:bg-slate-50/70 transition-colors">
                 <td className="py-2.5 px-3 text-center font-mono text-slate-400 font-semibold">
-                  {row.no}
+                  {row.no ?? (idx + 1)}
                 </td>
                 <td className="py-2.5 px-3 font-semibold text-slate-900">
-                  {row.habitatFunction}
+                  {row.habitatFunction || row.item || row.fungsi || '-'}
                 </td>
                 <td className="py-2.5 px-3 text-slate-700 font-mono">
-                  {row.parameter}
+                  {row.parameter || (row.ecosystemAreaHa ? `${row.ecosystemAreaHa} ha` : (row.luasHa ? `${row.luasHa} ha` : '-'))}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                  {formatIDR(row.unitPrice)}
+                  {formatIDR(row.unitPrice ?? row.recruitmentContribution ?? row.unitVal ?? row.nilaiKontribusiHa)}
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                  {formatIDR(row.totalValue)}
+                  {formatIDR(row.totalValue ?? row.totalNilai)}
                 </td>
                 <td className="py-2.5 px-3 text-[11px] text-slate-500">
-                  {row.referenceSource}
+                  {row.referenceSource || row.source || 'Studi Ekologi PKSPL IPB'}
                 </td>
               </tr>
             ))}
@@ -160,7 +167,7 @@ export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows }
   }
 
   // category === 'cultural'
-  const cultRows = rows as CulturalRow[];
+  const cultRows = safeRows as (CulturalRow & any)[];
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse text-xs">
@@ -175,25 +182,25 @@ export const ValuationTable: React.FC<ValuationTableProps> = ({ category, rows }
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 bg-white">
-          {cultRows.map((row) => (
-            <tr key={row.no} className="hover:bg-slate-50/70 transition-colors">
+          {cultRows.map((row, idx) => (
+            <tr key={row.id || row.no || idx} className="hover:bg-slate-50/70 transition-colors">
               <td className="py-2.5 px-3 text-center font-mono text-slate-400 font-semibold">
-                {row.no}
+                {row.no ?? (idx + 1)}
               </td>
               <td className="py-2.5 px-3 font-semibold text-slate-900">
-                {row.attraction}
+                {row.attraction || row.tourismProgram || row.item || row.program || '-'}
               </td>
               <td className="py-2.5 px-3 text-slate-700 font-mono">
-                {row.parameter}
+                {row.parameter || (row.respondentCount ? `${Number(row.respondentCount).toLocaleString('id-ID')} org/th` : (row.visit ? `${Number(row.visit).toLocaleString('id-ID')} org/th` : '-'))}
               </td>
               <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                {formatIDR(row.travelCostWtp)}
+                {formatIDR(row.travelCostWtp ?? row.costPerUnit ?? row.cost ?? row.biayaTrip ?? row.wtp)}
               </td>
               <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                {formatIDR(row.totalValue)}
+                {formatIDR(row.totalValue ?? row.totalNilai)}
               </td>
               <td className="py-2.5 px-3 text-[11px] text-slate-500">
-                {row.referenceSource}
+                {row.referenceSource || row.source || 'Kuesioner Pengunjung & Pengelola'}
               </td>
             </tr>
           ))}

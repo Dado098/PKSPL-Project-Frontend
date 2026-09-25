@@ -53,6 +53,21 @@ export const generateDynamicReviewTrend = (): ReviewTrendPoint[] => {
 
 export const MOCK_ATTENTION_PROJECTS: AttentionProject[] = [
   {
+    id: '4',
+    code: 'PRJ-004',
+    name: 'Restorasi Karbon Biru Mangrove Teluk Benoa',
+    lead: 'Dr. Ir. Retno Wulandari, M.Si.',
+    ecosystem: 'Ekosistem Mangrove & Estuari Pesisir',
+    location: 'Taman Hutan Raya Ngurah Rai & Teluk Benoa, Badung, Bali',
+    status: 'REVISI',
+    updatedAt: '2026-09-20 10:15',
+    relativeTime: 'Hari ini',
+    actionRequired: 'Review',
+    attentionReason: 'Pengajuan revisi data dari Peneliti',
+    statusDescription: 'Proyek sedang dalam proses evaluasi revisi data oleh Analyst.',
+    hasShp: true
+  },
+  {
     id: 'PKS-994KY1',
     code: 'PKS-994KY1',
     name: 'Revitalisasi Mangrove Teluk Benoa',

@@ -5,10 +5,10 @@ import { ALL_PROJECT_LAND_COVERS, getFallbackLandCoversForProject } from '../../
 export const BENOA_LAND_COVERS: LandCoverItem[] = [
   {
     id: 'poly-1',
-    code: 'TL-MG-01',
-    name: 'Mangrove Barat (Hutan Lindung Prapat Benoa)',
+    code: 'TL-MG-04A',
+    name: 'Mangrove Lebat (Tahura Ngurah Rai)',
     type: 'mangrove',
-    areaHa: 79.86,
+    areaHa: 45.20,
     center: [-8.745, 115.205],
     coordinates: [
       [-8.738, 115.198],
@@ -19,15 +19,15 @@ export const BENOA_LAND_COVERS: LandCoverItem[] = [
       [-8.745, 115.195]
     ],
     indexCode: 'IDX-001',
-    totalValue: 25799677785,
+    totalValue: 24871677785,
     status: 'verified'
   },
   {
     id: 'poly-2',
-    code: 'TL-MG-02',
-    name: 'Mangrove Timur (Estuari Suwung)',
+    code: 'TL-MG-04B',
+    name: 'Mangrove Sedang (Estuari Benoa)',
     type: 'mangrove',
-    areaHa: 62.40,
+    areaHa: 28.50,
     center: [-8.748, 115.228],
     coordinates: [
       [-8.740, 115.222],
@@ -37,15 +37,15 @@ export const BENOA_LAND_COVERS: LandCoverItem[] = [
       [-8.750, 115.220]
     ],
     indexCode: 'IDX-002',
-    totalValue: 19523593355,
+    totalValue: 24871677785,
     status: 'verified'
   },
   {
     id: 'poly-3',
-    code: 'TL-MG-03',
-    name: 'Zona Restorasi Pesisir Selatan Teluk Benoa',
+    code: 'TL-MG-04C',
+    name: 'Mangrove Jarang (Sempadan Pesisir)',
     type: 'mangrove',
-    areaHa: 45.20,
+    areaHa: 15.00,
     center: [-8.755, 115.215],
     coordinates: [
       [-8.750, 115.210],
@@ -55,7 +55,7 @@ export const BENOA_LAND_COVERS: LandCoverItem[] = [
       [-8.758, 115.208]
     ],
     indexCode: 'IDX-003',
-    totalValue: 13400000000,
+    totalValue: 24871677785,
     status: 'verified'
   }
 ];
@@ -67,15 +67,15 @@ export const MOCK_PROJECT_RESEARCH_BENOA: ProjectResearchFullData = {
   lead: 'Dr. Ir. Retno Wulandari, M.Si.',
   location: 'Kabupaten Badung & Kota Denpasar, Bali',
   ecosystem: 'Ekosistem Mangrove & Estuari Pesisir',
-  grandTev: 58723271140,
-  tevPerHa: 313257608,
+  grandTev: 74615033355,
+  tevPerHa: 841206689,
   spatial: {
     hasShp: true,
     crs: 'EPSG:4326 (WGS 84)',
     format: 'ESRI Shapefile (Polygon Geometry)',
     polygonCount: 3,
     layerCount: 4,
-    totalAreaHa: 187.46,
+    totalAreaHa: 88.70,
     boundingBox: '115.195° E - 115.238° E, -8.762° S - -8.735° S',
     shpFileName: 'SHP_TelukBenoa_Mangrove_2026_Rev3.zip',
     uploadDate: '12 September 2026'
@@ -83,47 +83,56 @@ export const MOCK_PROJECT_RESEARCH_BENOA: ProjectResearchFullData = {
   landCovers: BENOA_LAND_COVERS,
   masterSpecies: [
     {
-      id: 'msp-01',
-      localName: 'Bakau Minyak',
-      scientificName: 'Rhizophora apiculata',
-      category: 'flora',
-      densityStandard: '3.200 pohon/ha',
-      unit: 'batang/m³',
-      status: 'Terdaftar PKSPL'
-    },
-    {
-      id: 'msp-02',
-      localName: 'Api-api Putih',
-      scientificName: 'Avicennia marina',
-      category: 'flora',
-      densityStandard: '2.800 pohon/ha',
-      unit: 'batang/m³',
-      status: 'Terdaftar PKSPL'
-    },
-    {
-      id: 'msp-03',
+      id: 'msp-mg-01',
       localName: 'Cemara Laut',
       scientificName: 'Casuarina equisetifolia',
       category: 'flora',
-      densityStandard: '1.400 pohon/ha',
-      unit: 'batang/m³',
+      densityStandard: '33,18 m³/ha',
+      unit: 'm³/ha',
       status: 'Terdaftar PKSPL'
     },
     {
-      id: 'msp-04',
-      localName: 'Kepiting Bakau',
-      scientificName: 'Scylla serrata',
+      id: 'msp-mg-02',
+      localName: 'Sengon Laut',
+      scientificName: 'Falcataria moluccana',
+      category: 'flora',
+      densityStandard: '23,93 m³/ha',
+      unit: 'm³/ha',
+      status: 'Terdaftar PKSPL'
+    },
+    {
+      id: 'msp-mg-03',
+      localName: 'Jabon Merah',
+      scientificName: 'Neolamarckia macrophylla',
+      category: 'flora',
+      densityStandard: '18,50 m³/ha',
+      unit: 'm³/ha',
+      status: 'Terdaftar PKSPL'
+    },
+    {
+      id: 'msp-mg-04',
+      localName: 'Bakau Minyak',
+      scientificName: 'Rhizophora apiculata',
+      category: 'flora',
+      densityStandard: '45,20 m³/ha',
+      unit: 'm³/ha',
+      status: 'Terdaftar PKSPL'
+    },
+    {
+      id: 'msp-mg-05',
+      localName: 'Ikan Bandeng Tambak',
+      scientificName: 'Chanos chanos',
       category: 'fauna',
-      densityStandard: '450 kg/ha/tahun',
+      densityStandard: '48.000 kg/th',
       unit: 'kg/tahun',
       status: 'Terdaftar PKSPL'
     },
     {
-      id: 'msp-05',
-      localName: 'Ikan Bandeng Alami',
-      scientificName: 'Chanos chanos',
+      id: 'msp-mg-06',
+      localName: 'Kepiting Bakau',
+      scientificName: 'Scylla serrata',
       category: 'fauna',
-      densityStandard: '320 kg/ha/tahun',
+      densityStandard: '450 kg/ha/tahun',
       unit: 'kg/tahun',
       status: 'Terdaftar PKSPL'
     }
@@ -231,29 +240,29 @@ export const MOCK_PROJECT_RESEARCH_BENOA: ProjectResearchFullData = {
       serviceId: 'provisioning',
       serviceName: 'Provisioning Services (Jasa Penyediaan)',
       method: 'Market Price & Effect on Production',
-      subtotalNominal: 23504655450,
-      contributionPct: 40.03
+      subtotalNominal: 59760893745,
+      contributionPct: 80.1
     },
     {
       serviceId: 'regulating',
       serviceName: 'Regulating Services (Jasa Pengaturan)',
       method: 'Replacement Cost & Carbon Storage',
-      subtotalNominal: 18235120000,
-      contributionPct: 31.05
+      subtotalNominal: 7073597250,
+      contributionPct: 9.5
     },
     {
       serviceId: 'supporting',
       serviceName: 'Supporting Services (Jasa Pendukung)',
       method: 'Nursery Ground & Biodiversity Preservation',
-      subtotalNominal: 9450210690,
-      contributionPct: 16.09
+      subtotalNominal: 4564542360,
+      contributionPct: 6.1
     },
     {
       serviceId: 'cultural',
       serviceName: 'Cultural Services (Jasa Kultural / Wisata)',
       method: 'Travel Cost Method (TCM)',
-      subtotalNominal: 7533285000,
-      contributionPct: 12.83
+      subtotalNominal: 3216000000,
+      contributionPct: 4.3
     }
   ],
   historicalTimeline: [
@@ -262,9 +271,9 @@ export const MOCK_PROJECT_RESEARCH_BENOA: ProjectResearchFullData = {
       year: 2018,
       studyTitle: 'Kajian Daya Dukung Teluk Benoa Pra-Pembangunan Jalan Tol',
       institution: 'PKSPL IPB University',
-      areaHa: 210.50,
-      tev: 42150000000,
-      tevPerHa: 200237529,
+      areaHa: 102.00,
+      tev: 53722824015,
+      tevPerHa: 526694353,
       isCurrent: false
     },
     {
@@ -272,9 +281,9 @@ export const MOCK_PROJECT_RESEARCH_BENOA: ProjectResearchFullData = {
       year: 2022,
       studyTitle: 'Pemetaan Valuasi Pesisir Bali Selatan Pasca Revitalisasi Tahura',
       institution: 'Universitas Udayana & KLHK',
-      areaHa: 195.00,
-      tev: 49800000000,
-      tevPerHa: 255384615,
+      areaHa: 95.50,
+      tev: 63422778351,
+      tevPerHa: 664112862,
       isCurrent: false
     },
     {
@@ -282,9 +291,9 @@ export const MOCK_PROJECT_RESEARCH_BENOA: ProjectResearchFullData = {
       year: 2026,
       studyTitle: 'Revitalisasi Mangrove Teluk Benoa (Penelitian Ini)',
       institution: 'PKSPL IPB (PKS-994KY1)',
-      areaHa: 187.46,
-      tev: 58723271140,
-      tevPerHa: 313257608,
+      areaHa: 88.70,
+      tev: 74615033355,
+      tevPerHa: 841206689,
       isCurrent: true
     }
   ]
@@ -354,13 +363,14 @@ const getSpeciesForEcosystem = (ecosystem: string): MasterSpeciesItem[] => {
       { id: 'msp-urb-03', localName: 'Burung Kutilang', scientificName: 'Pycnonotus aurigaster', category: 'fauna', densityStandard: '45 ekor/ha', unit: 'populasi', status: 'Terdaftar PKSPL' },
     ];
   }
-  // Default Mangrove species
+  // Default Mangrove species (Matches the 24 spreadsheet variables calculation)
   return [
-    { id: 'msp-mg-01', localName: 'Bakau Minyak', scientificName: 'Rhizophora apiculata', category: 'flora', densityStandard: '3.200 pohon/ha', unit: 'batang/m³', status: 'Terdaftar PKSPL' },
-    { id: 'msp-mg-02', localName: 'Api-api Putih', scientificName: 'Avicennia marina', category: 'flora', densityStandard: '2.800 pohon/ha', unit: 'batang/m³', status: 'Terdaftar PKSPL' },
-    { id: 'msp-mg-03', localName: 'Pidada Merah', scientificName: 'Sonneratia caseolaris', category: 'flora', densityStandard: '1.950 pohon/ha', unit: 'batang/m³', status: 'Terdaftar PKSPL' },
-    { id: 'msp-mg-04', localName: 'Kepiting Bakau', scientificName: 'Scylla serrata', category: 'fauna', densityStandard: '450 kg/ha/tahun', unit: 'kg/tahun', status: 'Terdaftar PKSPL' },
-    { id: 'msp-mg-05', localName: 'Ikan Bandeng Alami', scientificName: 'Chanos chanos', category: 'fauna', densityStandard: '320 kg/ha/tahun', unit: 'kg/tahun', status: 'Terdaftar PKSPL' },
+    { id: 'msp-mg-01', localName: 'Cemara Laut', scientificName: 'Casuarina equisetifolia', category: 'flora', densityStandard: '33,18 m³/ha', unit: 'm³/ha', status: 'Terdaftar PKSPL' },
+    { id: 'msp-mg-02', localName: 'Sengon Laut', scientificName: 'Falcataria moluccana', category: 'flora', densityStandard: '23,93 m³/ha', unit: 'm³/ha', status: 'Terdaftar PKSPL' },
+    { id: 'msp-mg-03', localName: 'Jabon Merah', scientificName: 'Neolamarckia macrophylla', category: 'flora', densityStandard: '18,50 m³/ha', unit: 'm³/ha', status: 'Terdaftar PKSPL' },
+    { id: 'msp-mg-04', localName: 'Bakau Minyak', scientificName: 'Rhizophora apiculata', category: 'flora', densityStandard: '45,20 m³/ha', unit: 'm³/ha', status: 'Terdaftar PKSPL' },
+    { id: 'msp-mg-05', localName: 'Ikan Bandeng Tambak', scientificName: 'Chanos chanos', category: 'fauna', densityStandard: '48.000 kg/th', unit: 'kg/tahun', status: 'Terdaftar PKSPL' },
+    { id: 'msp-mg-06', localName: 'Kepiting Bakau', scientificName: 'Scylla serrata', category: 'fauna', densityStandard: '450 kg/ha/tahun', unit: 'kg/tahun', status: 'Terdaftar PKSPL' },
   ];
 };
 
@@ -432,10 +442,14 @@ export const getProjectResearchData = (projectId: string): ProjectResearchFullDa
       });
     } else {
       const v = p.totalValue || 0;
-      provTotal += Math.round(v * 0.28);
-      regTotal += Math.round(v * 0.45);
-      suppTotal += Math.round(v * 0.15);
-      cultTotal += Math.round(v * 0.12);
+      const pVal = Math.round(v * 0.8009);
+      const rVal = Math.round(v * 0.0948);
+      const sVal = Math.round(v * 0.0612);
+      const cVal = Math.max(0, v - pVal - rVal - sVal);
+      provTotal += pVal;
+      regTotal += rVal;
+      suppTotal += sVal;
+      cultTotal += cVal;
     }
   });
 

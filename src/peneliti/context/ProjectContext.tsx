@@ -412,20 +412,23 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       getFallbackLandCoversForProject(found?.code || projectId);
 
     if (stored && stored.length > 0) {
-      // Enrich stored polygons that have empty serviceDetails from mock registry
+      // Enrich stored polygons that have empty serviceDetails or stale values from mock registry
       return stored.map((lc) => {
-        if (lc.serviceDetails && lc.serviceDetails.length > 0) return lc;
         const mockMatch = mockLCs.find(
-          (m) => m.indexCode === lc.indexCode || m.name === lc.name || m.indexName === lc.indexName
+          (m) => m.id === lc.id || m.indexCode === lc.indexCode || m.code === lc.code || m.name === lc.name || m.indexName === lc.indexName
         );
-        if (mockMatch) {
+        const isStale = lc.totalValue === 35800000000 || lc.totalValue === 15350000000 || lc.totalValue === 7573271140 || lc.totalValue === 58723271140 || !lc.serviceDetails || lc.serviceDetails.length === 0;
+        if (mockMatch && (isStale || (mockMatch.totalValue && mockMatch.totalValue !== lc.totalValue))) {
           return {
             ...lc,
-            activeServices: mockMatch.activeServices,
-            serviceDetails: mockMatch.serviceDetails,
+            name: mockMatch.name || lc.name,
+            code: mockMatch.code || lc.code,
+            areaHa: mockMatch.areaHa || lc.areaHa,
+            activeServices: mockMatch.activeServices || lc.activeServices,
+            serviceDetails: mockMatch.serviceDetails || lc.serviceDetails,
             totalValue: mockMatch.totalValue,
-            coordinates: lc.coordinates.length > 0 ? lc.coordinates : mockMatch.coordinates,
-            center: (lc.center[0] !== 0 || lc.center[1] !== 0) ? lc.center : mockMatch.center,
+            coordinates: (lc.coordinates && lc.coordinates.length > 0) ? lc.coordinates : mockMatch.coordinates,
+            center: (lc.center && (lc.center[0] !== 0 || lc.center[1] !== 0)) ? lc.center : mockMatch.center,
           };
         }
         return lc;
@@ -491,18 +494,21 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     })();
   const landCovers: LandCoverPolygon[] = rawLandCovers.length > 0
     ? rawLandCovers.map((lc) => {
-        if (lc.serviceDetails && lc.serviceDetails.length > 0) return lc;
         const mockMatch = enrichedMockLCs.find(
-          (m) => m.indexCode === lc.indexCode || m.name === lc.name || m.indexName === lc.indexName
+          (m) => m.id === lc.id || m.indexCode === lc.indexCode || m.code === lc.code || m.name === lc.name || m.indexName === lc.indexName
         );
-        if (mockMatch) {
+        const isStale = lc.totalValue === 35800000000 || lc.totalValue === 15350000000 || lc.totalValue === 7573271140 || lc.totalValue === 58723271140 || !lc.serviceDetails || lc.serviceDetails.length === 0;
+        if (mockMatch && (isStale || (mockMatch.totalValue && mockMatch.totalValue !== lc.totalValue))) {
           return {
             ...lc,
-            activeServices: mockMatch.activeServices,
-            serviceDetails: mockMatch.serviceDetails,
+            name: mockMatch.name || lc.name,
+            code: mockMatch.code || lc.code,
+            areaHa: mockMatch.areaHa || lc.areaHa,
+            activeServices: mockMatch.activeServices || lc.activeServices,
+            serviceDetails: mockMatch.serviceDetails || lc.serviceDetails,
             totalValue: mockMatch.totalValue,
-            coordinates: lc.coordinates.length > 0 ? lc.coordinates : mockMatch.coordinates,
-            center: (lc.center[0] !== 0 || lc.center[1] !== 0) ? lc.center : mockMatch.center,
+            coordinates: (lc.coordinates && lc.coordinates.length > 0) ? lc.coordinates : mockMatch.coordinates,
+            center: (lc.center && (lc.center[0] !== 0 || lc.center[1] !== 0)) ? lc.center : mockMatch.center,
           };
         }
         return lc;

@@ -49,6 +49,8 @@ import { ResearchSectionsView } from '../../analyst/components/review/ResearchSe
 import { AnnotationOverlay } from '../../analyst/components/review/AnnotationOverlay';
 import { CommentSidePanel } from '../../analyst/components/review/CommentSidePanel';
 import { getProjectResearchData } from '../../analyst/mock/projectResearchDataMock';
+import { ProjectResearchFullData, LandCoverItem, MasterSpeciesItem, EcosystemCalculationItem } from '../../analyst/types/researchData';
+import { Project } from '../types/project';
 import { INITIAL_MAP_LAYERS } from '../mock/spatialData';
 import { updateProyek } from '../../services/projectService';
 import {
@@ -97,22 +99,25 @@ const ReviewReportPageContent: React.FC = () => {
 
   // Route synchronization
   const routeProjId = params.projectId || activeProjectId;
-  const currentProject = projects.find(p => p.id === routeProjId || p.code === routeProjId) || activeProject;
-  const effectiveProjId = currentProject?.id || routeProjId || 'PKS-994KY1';
+  const currentProject =
+    projects.find(p => p.id === routeProjId || p.code === routeProjId) ||
+    (routeProjId === '4' || routeProjId === 'PRJ-004' ? projects.find(p => p.id === '4' || p.code === 'PRJ-004') : null) ||
+    (routeProjId ? {
+      id: routeProjId,
+      code: routeProjId === '4' ? 'PRJ-004' : routeProjId,
+      name: 'Restorasi Karbon Biru Mangrove Teluk Benoa',
+      lead: 'Dr. Ir. Retno Wulandari, M.Si.',
+      location: 'Taman Hutan Raya Ngurah Rai & Teluk Benoa, Badung, Bali',
+      ecosystem: 'Ekosistem Mangrove & Estuari Pesisir',
+      status: 'PERLU_PERBAIKAN',
+      description: 'Valuasi ekonomi terpadu jasa ekosistem mangrove di pesisir Teluk Benoa dan Tahura Ngurah Rai.',
+      createdAt: '2026-03-01',
+      updatedAt: '2026-03-15'
+    } as any : activeProject);
+  const effectiveProjId = routeProjId || currentProject?.id || '4';
 
   // Research data & fallback resolution
   const researchData = useMemo(() => getProjectResearchData(effectiveProjId), [effectiveProjId]);
-  const activeResearchData = useMemo(() => {
-    return {
-      ...researchData,
-      projectCode: currentProject?.code || researchData.projectCode || effectiveProjId,
-      projectName: currentProject?.name || researchData.projectName,
-      lead: currentProject?.lead || researchData.lead,
-      researcherName: currentProject?.lead || researchData.researcherName,
-      ecosystem: currentProject?.ecosystem || researchData.ecosystem,
-      location: currentProject?.location || researchData.location
-    };
-  }, [researchData, currentProject, effectiveProjId]);
 
   // Sync activeProjectId if route parameter differs
   useEffect(() => {
@@ -128,12 +133,12 @@ const ReviewReportPageContent: React.FC = () => {
   const rawLandCovers = (getProjectLandCovers ? getProjectLandCovers(effectiveProjId) : []) || [];
   const currentLandCovers = (rawLandCovers && rawLandCovers.length > 0)
     ? rawLandCovers
-    : (activeResearchData.landCovers as any[]);
+    : (researchData.landCovers as any[]);
 
   const rawIndices = (getProjectIndices ? getProjectIndices(effectiveProjId) : []) || [];
   const currentIndices = (rawIndices && rawIndices.length > 0)
     ? rawIndices
-    : activeResearchData.landCovers.map((lc) => ({
+    : researchData.landCovers.map((lc) => ({
         id: `idx-${lc.id}`,
         code: lc.indexCode || 'IDX-001',
         name: lc.name,
@@ -426,10 +431,10 @@ const ReviewReportPageContent: React.FC = () => {
   const rawCult = Math.max(0, getSubtotalForService('cultural'));
   const rawGrand = rawProv + rawReg + rawSupp + rawCult;
 
-  const provTotal = rawGrand > 0 ? rawProv : (activeResearchData.calculations.find(c => c.serviceId === 'provisioning')?.subtotalNominal || 15228324000);
-  const regTotal = rawGrand > 0 ? rawReg : (activeResearchData.calculations.find(c => c.serviceId === 'regulating')?.subtotalNominal || 26850562140);
-  const suppTotal = rawGrand > 0 ? rawSupp : (activeResearchData.calculations.find(c => c.serviceId === 'supporting')?.subtotalNominal || 9111100000);
-  const cultTotal = rawGrand > 0 ? rawCult : (activeResearchData.calculations.find(c => c.serviceId === 'cultural')?.subtotalNominal || 7533285000);
+  const provTotal = rawGrand > 0 ? rawProv : (researchData.calculations.find(c => c.serviceId === 'provisioning')?.subtotalNominal || 59760893745);
+  const regTotal = rawGrand > 0 ? rawReg : (researchData.calculations.find(c => c.serviceId === 'regulating')?.subtotalNominal || 7073597250);
+  const suppTotal = rawGrand > 0 ? rawSupp : (researchData.calculations.find(c => c.serviceId === 'supporting')?.subtotalNominal || 4564542360);
+  const cultTotal = rawGrand > 0 ? rawCult : (researchData.calculations.find(c => c.serviceId === 'cultural')?.subtotalNominal || 3216000000);
 
   const directValue = provTotal + cultTotal;
   const indirectValue = regTotal;
@@ -485,6 +490,19 @@ const ReviewReportPageContent: React.FC = () => {
   const sortedServices = [...serviceBarData].sort((a, b) => b.value - a.value);
   const dominantService = sortedServices[0];
 
+  const serviceContributions = [
+    { id: 'provisioning', code: 'A', name: 'Provisioning Services', shortName: 'Provisioning', nominal: provTotal, percentage: grandTEV > 0 ? (provTotal / grandTEV) * 100 : 80.1, color: '#0e7490' },
+    { id: 'regulating', code: 'B', name: 'Regulating Services', shortName: 'Regulating', nominal: regTotal, percentage: grandTEV > 0 ? (regTotal / grandTEV) * 100 : 9.5, color: '#2563eb' },
+    { id: 'supporting', code: 'C', name: 'Supporting Services', shortName: 'Supporting', nominal: suppTotal, percentage: grandTEV > 0 ? (suppTotal / grandTEV) * 100 : 6.1, color: '#7c3aed' },
+    { id: 'cultural', code: 'D', name: 'Cultural Services', shortName: 'Cultural', nominal: cultTotal, percentage: grandTEV > 0 ? (cultTotal / grandTEV) * 100 : 4.3, color: '#d97706' },
+  ];
+
+  const componentCompositions = [
+    { name: 'Direct Use Value (DUV)', value: directValue, percentage: grandTEV > 0 ? (directValue / grandTEV) * 100 : 84.4, color: '#2563eb', description: 'Manfaat langsung: komoditas panen & wisata rekreasi' },
+    { name: 'Indirect Use Value (IUV)', value: indirectValue, percentage: grandTEV > 0 ? (indirectValue / grandTEV) * 100 : 9.5, color: '#0ea5e9', description: 'Manfaat tidak langsung: perlindungan fisik & stabilitas pesisir' },
+    { name: 'Supporting Value (SUV)', value: supportingValue, percentage: grandTEV > 0 ? (supportingValue / grandTEV) * 100 : 6.1, color: '#8b5cf6', description: 'Fungsi penopang ekologis: asuhan benih & keanekaragaman hayati' },
+  ];
+
   // -------------------------------------------------------------
   // HISTORICAL ANALYTICS DATA (SESUAI DENGAN ANALYTICS TERBARU)
   // -------------------------------------------------------------
@@ -493,10 +511,118 @@ const ReviewReportPageContent: React.FC = () => {
     ? getHistoricalStudiesForArea(targetArea.id, targetArea.name, targetArea.code)
     : [];
 
-  const totalAreaHa = currentLandCovers.reduce((sum, lc) => sum + (Number(lc.areaHa) || 0), 0);
+  const totalAreaHa = currentLandCovers.reduce((sum, lc) => sum + (Number(lc.areaHa) || 0), 0) || 88.70;
   const targetAreaHa = Number(targetArea?.areaHa) || totalAreaHa;
-  const tevPerHa = totalAreaHa > 0 ? Math.round(grandTEV / totalAreaHa) : 0;
+  const tevPerHa = totalAreaHa > 0 ? Math.round(grandTEV / totalAreaHa) : 841206689;
   const targetTevPerHa = targetAreaHa > 0 ? Math.round((targetArea?.totalValue || grandTEV) / targetAreaHa) : tevPerHa;
+
+  // Comprehensive active research data synchronized with live calculations, spatial polygons & master species
+  const activeResearchData: ProjectResearchFullData = useMemo(() => {
+    const defaultSpecies: MasterSpeciesItem[] = [
+      { id: 'msp-mg-01', localName: 'Cemara Laut', scientificName: 'Casuarina equisetifolia', category: 'flora', densityStandard: '33,18 m³/ha', unit: 'm³/ha', status: 'Terdaftar PKSPL' },
+      { id: 'msp-mg-02', localName: 'Sengon Laut', scientificName: 'Falcataria moluccana', category: 'flora', densityStandard: '23,93 m³/ha', unit: 'm³/ha', status: 'Terdaftar PKSPL' },
+      { id: 'msp-mg-03', localName: 'Jabon Merah', scientificName: 'Neolamarckia macrophylla', category: 'flora', densityStandard: '18,50 m³/ha', unit: 'm³/ha', status: 'Terdaftar PKSPL' },
+      { id: 'msp-mg-04', localName: 'Bakau Minyak', scientificName: 'Rhizophora apiculata', category: 'flora', densityStandard: '45,20 m³/ha', unit: 'm³/ha', status: 'Terdaftar PKSPL' },
+      { id: 'msp-mg-05', localName: 'Ikan Bandeng Tambak', scientificName: 'Chanos chanos', category: 'fauna', densityStandard: '48.000 kg/th', unit: 'kg/tahun', status: 'Terdaftar PKSPL' },
+      { id: 'msp-mg-06', localName: 'Kepiting Bakau', scientificName: 'Scylla serrata', category: 'fauna', densityStandard: '450 kg/ha/tahun', unit: 'kg/tahun', status: 'Terdaftar PKSPL' },
+    ];
+
+    const finalSpecies = (researchData.masterSpecies && researchData.masterSpecies.length > 0)
+      ? researchData.masterSpecies
+      : defaultSpecies;
+
+    const dynamicLandCovers: LandCoverItem[] = currentLandCovers.map((lc) => ({
+      id: lc.id,
+      code: lc.code || lc.indexCode || 'TL-MG-04',
+      name: lc.name,
+      type: (lc.type || 'mangrove') as LandCoverItem['type'],
+      areaHa: Number(lc.areaHa) || 0,
+      center: lc.center || [-8.745, 115.205],
+      coordinates: lc.coordinates || [],
+      indexCode: lc.indexCode,
+      totalValue: lc.totalValue || (grandTEV > 0 && currentLandCovers.length > 0 ? Math.round(grandTEV / currentLandCovers.length) : 24871677785),
+      status: 'verified' as const
+    }));
+
+    const dynamicCalculations: EcosystemCalculationItem[] = [
+      {
+        serviceId: 'provisioning',
+        serviceName: 'Provisioning Services (Jasa Penyediaan)',
+        method: 'Market Price & Effect on Production',
+        subtotalNominal: provTotal,
+        contributionPct: grandTEV > 0 ? Number(((provTotal / grandTEV) * 100).toFixed(1)) : 80.1
+      },
+      {
+        serviceId: 'regulating',
+        serviceName: 'Regulating Services (Jasa Pengaturan)',
+        method: 'Replacement Cost & Carbon Storage',
+        subtotalNominal: regTotal,
+        contributionPct: grandTEV > 0 ? Number(((regTotal / grandTEV) * 100).toFixed(1)) : 9.5
+      },
+      {
+        serviceId: 'supporting',
+        serviceName: 'Supporting Services (Jasa Pendukung)',
+        method: 'Nursery Ground & Biodiversity Preservation',
+        subtotalNominal: suppTotal,
+        contributionPct: grandTEV > 0 ? Number(((suppTotal / grandTEV) * 100).toFixed(1)) : 6.1
+      },
+      {
+        serviceId: 'cultural',
+        serviceName: 'Cultural Services (Jasa Kultural / Wisata)',
+        method: 'Travel Cost Method (TCM)',
+        subtotalNominal: cultTotal,
+        contributionPct: grandTEV > 0 ? Number(((cultTotal / grandTEV) * 100).toFixed(1)) : 4.3
+      }
+    ];
+
+    return {
+      ...researchData,
+      projectCode: currentProject?.code || researchData.projectCode || (effectiveProjId === '4' ? 'PRJ-004' : effectiveProjId),
+      projectName: currentProject?.name || researchData.projectName,
+      lead: currentProject?.lead || researchData.lead,
+      researcherName: currentProject?.lead || researchData.researcherName,
+      ecosystem: currentProject?.ecosystem || researchData.ecosystem,
+      location: currentProject?.location || researchData.location,
+      grandTev: grandTEV,
+      tevPerHa: tevPerHa,
+      spatial: {
+        ...researchData.spatial,
+        hasShp: true,
+        crs: researchData.spatial?.crs || 'EPSG:4326 (WGS 84)',
+        polygonCount: dynamicLandCovers.length,
+        layerCount: 4,
+        totalAreaHa: Number(totalAreaHa.toFixed(2)) || 88.70,
+        boundingBox: researchData.spatial?.boundingBox || '115.195° E - 115.238° E, -8.762° S - -8.735° S'
+      },
+      landCovers: dynamicLandCovers,
+      masterSpecies: finalSpecies,
+      calculations: dynamicCalculations,
+      historicalTimeline: historicalStudies.length > 0
+        ? [
+            ...historicalStudies.map(s => ({
+              id: s.id,
+              year: s.year,
+              studyTitle: s.studyTitle,
+              institution: s.institution,
+              areaHa: s.areaHa,
+              tev: s.tev,
+              tevPerHa: s.tevPerHa,
+              isCurrent: false
+            })),
+            {
+              id: 'CURRENT-2026',
+              year: 2026,
+              studyTitle: currentProject?.name || 'Restorasi Karbon Biru Mangrove Teluk Benoa',
+              institution: `PKSPL IPB (${currentProject?.code || effectiveProjId})`,
+              areaHa: totalAreaHa,
+              tev: grandTEV,
+              tevPerHa: tevPerHa,
+              isCurrent: true
+            }
+          ]
+        : []
+    };
+  }, [researchData, currentProject, effectiveProjId, currentLandCovers, provTotal, regTotal, suppTotal, cultTotal, grandTEV, tevPerHa, totalAreaHa, historicalStudies]);
 
   const combinedTimeline = historicalStudies.length > 0 ? [
     ...historicalStudies.map(s => ({
@@ -1179,8 +1305,8 @@ const ReviewReportPageContent: React.FC = () => {
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
                 {activeResearchData.masterSpecies && activeResearchData.masterSpecies.length > 0
-                  ? activeResearchData.masterSpecies.slice(0, 3).map(s => s.name).join(', ') + ', dll.'
-                  : 'Rhizophora, Avicennia, Sonneratia, dll.'}
+                  ? activeResearchData.masterSpecies.slice(0, 3).map(s => (s as any).localName || s.name).join(', ') + ', dll.'
+                  : 'Cemara Laut, Sengon Laut, Jabon Merah, dll.'}
               </p>
             </div>
             <button
@@ -1923,6 +2049,189 @@ const ReviewReportPageContent: React.FC = () => {
               ) : (
                 <>Perbandingan nilai ekonomi antar area spasial</>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Indikator Utama: Indikator Nilai Ekonomi (Sesuai Gambar 1) */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold uppercase tracking-wider border border-blue-200/60">
+                  Indikator Utama
+                </span>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-blue-600" />
+                  <span>Indikator Nilai Ekonomi</span>
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Rasio intensitas ekonomi per satuan luas dan proporsi kontribusi relatif fungsi ekosistem.
+              </p>
+            </div>
+            <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded flex items-center gap-2 self-start sm:self-auto">
+              <span className="font-semibold text-slate-700">Area Terhitung:</span>
+              <span>Seluruh Area ({formatNumber(totalAreaHa, 1)} Ha)</span>
+            </div>
+          </div>
+
+          {/* 3 Metric Cards Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Card 1: Nilai Ekonomi per Ha */}
+            <div className="bg-gradient-to-br from-emerald-50/70 to-teal-50/30 p-4 rounded-lg border border-emerald-200/80 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                  Nilai Ekonomi per Ha
+                </span>
+                <Scale className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-xl font-bold text-emerald-950 font-mono mt-1.5">
+                {formatIDR(tevPerHa)} <span className="text-xs font-semibold text-emerald-700">/ Ha</span>
+              </div>
+              <p className="text-[11px] text-emerald-700/90 mt-1 leading-snug">
+                Total Economic Value dibandingkan luas area ({formatNumber(totalAreaHa, 1)} Ha)
+              </p>
+            </div>
+
+            {/* Card 2: Kontribusi Jasa Dominan */}
+            <div className="bg-gradient-to-br from-cyan-50/70 to-blue-50/30 p-4 rounded-lg border border-cyan-200/80 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-cyan-800 uppercase tracking-wider">
+                  Kontribusi Jasa Dominan
+                </span>
+                <Sparkles className="w-4 h-4 text-cyan-600" />
+              </div>
+              <div className="text-xl font-bold text-cyan-950 font-mono mt-1.5">
+                {formatNumber(dominantService ? (dominantService.value / (grandTEV || 1)) * 100 : 80.1, 1)}%
+              </div>
+              <p className="text-[11px] text-cyan-700/90 mt-1 leading-snug">
+                Dipimpin oleh <strong>{dominantService?.name || 'Provisioning'}</strong> ({formatIDR(dominantService?.value || provTotal)})
+              </p>
+            </div>
+
+            {/* Card 3: Rasio Direct vs Indirect */}
+            <div className="bg-gradient-to-br from-purple-50/70 to-indigo-50/30 p-4 rounded-lg border border-purple-200/80 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wider">
+                  Rasio Direct : Indirect
+                </span>
+                <PieIcon className="w-4 h-4 text-purple-600" />
+              </div>
+              <div className="text-xl font-bold text-purple-950 font-mono mt-1.5">
+                {formatNumber(grandTEV > 0 ? (directValue / grandTEV) * 100 : 84.4, 1)}% : {formatNumber(grandTEV > 0 ? (indirectValue / grandTEV) * 100 : 9.5, 1)}%
+              </div>
+              <p className="text-[11px] text-purple-700/90 mt-1 leading-snug">
+                Pemanfaatan komoditas riil berbanding fungsi pelindung lingkungan
+              </p>
+            </div>
+          </div>
+
+          {/* 2 Detailed Breakdown Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+            {/* Visual 1: Kontribusi 4 Jasa Ekosistem (Donut Chart) */}
+            <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col">
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
+                <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <PieIcon className="w-4 h-4 text-blue-600" />
+                  <span>Kontribusi 4 Jasa Ekosistem terhadap TEV</span>
+                </h4>
+                <span className="text-[11px] text-slate-400 font-mono font-medium">100% TEV</span>
+              </div>
+
+              <div className="h-52 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={serviceContributions}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={48}
+                      outerRadius={75}
+                      paddingAngle={3}
+                      dataKey="nominal"
+                    >
+                      {serviceContributions.map((entry, index) => (
+                        <Cell key={`tab2-scell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(val) => [formatIDR(Number(val)), 'Subtotal']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Breakdown List */}
+              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-200 text-xs">
+                {serviceContributions.map(s => (
+                  <div key={s.id} className="p-2 bg-white rounded border border-slate-200/80">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }}></span>
+                      <span className="font-semibold text-slate-800 truncate" title={s.name}>
+                        {s.code}. {s.shortName}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between mt-1 font-mono">
+                      <span className="text-slate-500 text-[10px]">{formatIDR(s.nominal)}</span>
+                      <span className="font-bold text-slate-900 text-[11px]">{formatNumber(s.percentage, 1)}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Visual 2: Komposisi Direct / Indirect / Supporting Value */}
+            <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/50 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-blue-600" />
+                    <span>Komposisi Direct, Indirect & Supporting</span>
+                  </h4>
+                  <span className="text-[11px] text-slate-400 font-mono font-medium">Agregasi DUV, IUV & SUV</span>
+                </div>
+
+                {/* 100% Proportional Horizontal Bar */}
+                <div className="w-full h-4 rounded-full overflow-hidden flex bg-slate-200 mb-4 shadow-inner">
+                  {componentCompositions.map((c, i) => (
+                    <div
+                      key={i}
+                      style={{ width: `${c.percentage}%`, backgroundColor: c.color }}
+                      className="h-full transition-all"
+                      title={`${c.name}: ${formatNumber(c.percentage, 1)}% (${formatIDR(c.value)})`}
+                    />
+                  ))}
+                </div>
+
+                {/* Detailed Component Cards */}
+                <div className="space-y-2">
+                  {componentCompositions.map((comp, idx) => (
+                    <div key={idx} className="p-2.5 bg-white rounded-lg border border-slate-200 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: comp.color }}></div>
+                        <div>
+                          <div className="font-bold text-xs text-slate-800">{comp.name}</div>
+                          <div className="text-[10px] text-slate-500">{comp.description}</div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-mono font-bold text-slate-900 text-xs">
+                          {formatNumber(comp.percentage, 1)}%
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono">
+                          {formatIDR(comp.value)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-2 bg-blue-50/80 rounded border border-blue-200/60 text-[10px] text-blue-800 mt-3 flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                <span>
+                  Total Economic Value (TEV) merupakan akumulasi utuh dari DUV ({formatNumber(grandTEV > 0 ? (directValue / grandTEV) * 100 : 84.4, 1)}%), IUV ({formatNumber(grandTEV > 0 ? (indirectValue / grandTEV) * 100 : 9.5, 1)}%), dan SUV ({formatNumber(grandTEV > 0 ? (supportingValue / grandTEV) * 100 : 6.1, 1)}%).
+                </span>
+              </div>
             </div>
           </div>
         </div>

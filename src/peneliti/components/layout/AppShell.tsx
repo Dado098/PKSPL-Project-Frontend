@@ -4,13 +4,30 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { AutosaveIndicator } from './AutosaveIndicator';
 import { RevisionNotificationModal } from '../common/RevisionNotificationModal';
+import { UnifiedNotificationToast } from '../notifications/UnifiedNotificationToast';
+import { EmailPreviewModal } from '../notifications/EmailPreviewModal';
+import { DispatchedEmail } from '../../services/offlineEmailService';
 import { useProject } from '../../context/ProjectContext';
 import { AlertCircle, ArrowRight, X } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [selectedEmail, setSelectedEmail] = useState<DispatchedEmail | null>(null);
   const { activeProject, analystFeedback, resolveFeedback } = useProject();
   const navigate = useNavigate();
+
+  // Listen for request to open email preview from Topbar or elsewhere
+  React.useEffect(() => {
+    const handleOpenEmail = (e: any) => {
+      if (e.detail) {
+        setSelectedEmail(e.detail);
+      }
+    };
+    window.addEventListener('pkspl_open_email_preview', handleOpenEmail);
+    return () => {
+      window.removeEventListener('pkspl_open_email_preview', handleOpenEmail);
+    };
+  }, []);
 
   const isRevising = (activeProject?.status === 'PERLU_PERBAIKAN' || activeProject?.status === 'REVISI') && (analystFeedback || activeProject?.analystComment);
 
@@ -88,6 +105,12 @@ export const AppShell: React.FC = () => {
           <Outlet />
         </main>
 
+        {/* Real-time Pop-up Toast Notifikasi (Dalam Review, Revisi, Selesai, Pesan) */}
+        <UnifiedNotificationToast onOpenEmailPreview={(email) => setSelectedEmail(email)} />
+
+        {/* Modal Pratinjau Surat Email Notifikasi Offline */}
+        <EmailPreviewModal email={selectedEmail} onClose={() => setSelectedEmail(null)} />
+
         {/* Global Modal Pop-up Notifikasi Revisi */}
         <RevisionNotificationModal />
 
@@ -99,3 +122,4 @@ export const AppShell: React.FC = () => {
     </div>
   );
 };
+

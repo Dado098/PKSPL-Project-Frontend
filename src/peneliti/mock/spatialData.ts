@@ -4,10 +4,9 @@ export const INITIAL_LAND_COVERS: LandCoverPolygon[] = [
   {
     id: 'poly-1',
     code: 'TL-MG-01',
-    name: 'Mangrove Barat',
+    name: 'Mangrove Lebat (Tahura Ngurah Rai)',
     type: 'mangrove',
-    areaHa: 79.86,
-    // Real coordinates around Benoa Bay West mangrove strip
+    areaHa: 45.20,
     center: [-8.745, 115.205],
     coordinates: [
       [-8.738, 115.198],
@@ -19,12 +18,12 @@ export const INITIAL_LAND_COVERS: LandCoverPolygon[] = [
     ],
     indexId: 'idx-1',
     indexCode: 'IDX-001',
-    indexName: 'Mangrove Barat',
-    activeServices: ['provisioning', 'regulating', 'supporting'],
+    indexName: 'Mangrove Lebat',
+    activeServices: ['provisioning', 'regulating', 'supporting', 'cultural'],
     serviceDetails: [
       {
         serviceId: 'provisioning',
-        methodName: 'Market Price',
+        methodName: 'Market Price (Flora)',
         value: 19920297915,
         status: 'verified'
       },
@@ -36,19 +35,25 @@ export const INITIAL_LAND_COVERS: LandCoverPolygon[] = [
       },
       {
         serviceId: 'supporting',
-        methodName: 'Nursery Ground',
+        methodName: 'Habitat & Nursery Ground',
         value: 1521514120,
+        status: 'verified'
+      },
+      {
+        serviceId: 'cultural',
+        methodName: 'Travel Cost Method (TCM)',
+        value: 1072000000,
         status: 'verified'
       }
     ],
-    totalValue: 23799677785
+    totalValue: 24871677785
   },
   {
     id: 'poly-2',
     code: 'TL-MG-02',
-    name: 'Mangrove Timur',
+    name: 'Mangrove Sedang (Estuari Benoa)',
     type: 'mangrove',
-    areaHa: 62.40,
+    areaHa: 28.50,
     center: [-8.748, 115.228],
     coordinates: [
       [-8.740, 115.222],
@@ -57,118 +62,83 @@ export const INITIAL_LAND_COVERS: LandCoverPolygon[] = [
       [-8.758, 115.228],
       [-8.750, 115.220]
     ],
-    indexId: undefined,
-    indexCode: undefined,
-    indexName: undefined,
-    activeServices: ['provisioning', 'regulating'],
+    indexId: 'idx-2',
+    indexCode: 'IDX-002',
+    indexName: 'Mangrove Sedang',
+    activeServices: ['provisioning', 'regulating', 'supporting', 'cultural'],
     serviceDetails: [
       {
         serviceId: 'provisioning',
-        methodName: 'Market Price',
-        value: 14200000000,
+        methodName: 'Market Price (Flora)',
+        value: 19920297915,
         status: 'verified'
       },
       {
         serviceId: 'regulating',
-        methodName: 'Carbon Storage',
-        value: 1850000000,
-        status: 'verified'
-      }
-    ],
-    totalValue: 16050000000
-  },
-  {
-    id: 'poly-3',
-    code: 'TL-LM-01',
-    name: 'Lamun Utara',
-    type: 'lamun',
-    areaHa: 34.20,
-    center: [-8.732, 115.220],
-    coordinates: [
-      [-8.728, 115.212],
-      [-8.725, 115.225],
-      [-8.735, 115.228],
-      [-8.738, 115.215]
-    ],
-    indexId: 'idx-3',
-    indexCode: 'IDX-003',
-    indexName: 'Lamun Utara',
-    activeServices: ['regulating', 'supporting'],
-    serviceDetails: [
-      {
-        serviceId: 'regulating',
-        methodName: 'Carbon Storage',
-        value: 1200000000,
+        methodName: 'Replacement Cost',
+        value: 2357865750,
         status: 'verified'
       },
       {
         serviceId: 'supporting',
-        methodName: 'Habitat Function',
-        value: 750000000,
+        methodName: 'Habitat & Nursery Ground',
+        value: 1521514120,
         status: 'verified'
-      }
-    ],
-    totalValue: 1950000000
-  },
-  {
-    id: 'poly-4',
-    code: 'TL-TK-01',
-    name: 'Terumbu Karang Selatan',
-    type: 'terumbu_karang',
-    areaHa: 18.75,
-    center: [-8.762, 115.215],
-    coordinates: [
-      [-8.758, 115.210],
-      [-8.755, 115.222],
-      [-8.768, 115.225],
-      [-8.770, 115.212]
-    ],
-    indexId: undefined,
-    indexCode: undefined,
-    indexName: undefined,
-    activeServices: ['cultural', 'supporting'],
-    serviceDetails: [
+      },
       {
         serviceId: 'cultural',
         methodName: 'Travel Cost Method (TCM)',
-        value: 1127000000,
-        status: 'draft'
-      },
-      {
-        serviceId: 'supporting',
-        methodName: 'Biodiversity Support',
-        value: 860000000,
-        status: 'draft'
-      }
-    ],
-    totalValue: 1987000000
-  },
-  {
-    id: 'poly-5',
-    code: 'TL-PR-01',
-    name: 'Perairan Teluk',
-    type: 'perairan',
-    areaHa: 120.50,
-    center: [-8.742, 115.218],
-    coordinates: [
-      [-8.735, 115.210],
-      [-8.736, 115.225],
-      [-8.748, 115.228],
-      [-8.750, 115.215]
-    ],
-    indexId: 'idx-5',
-    indexCode: 'IDX-005',
-    indexName: 'Laguna Perairan Benoa',
-    activeServices: ['provisioning'],
-    serviceDetails: [
-      {
-        serviceId: 'provisioning',
-        methodName: 'Effect on Production',
-        value: 4100000000,
+        value: 1072000000,
         status: 'verified'
       }
     ],
-    totalValue: 4100000000
+    totalValue: 24871677785
+  },
+  {
+    id: 'poly-3',
+    code: 'TL-MG-03',
+    name: 'Mangrove Jarang (Sempadan Pesisir)',
+    type: 'mangrove',
+    areaHa: 15.00,
+    center: [-8.755, 115.215],
+    coordinates: [
+      [-8.750, 115.210],
+      [-8.748, 115.220],
+      [-8.758, 115.222],
+      [-8.762, 115.214],
+      [-8.758, 115.208]
+    ],
+    indexId: 'idx-3',
+    indexCode: 'IDX-003',
+    indexName: 'Mangrove Jarang',
+    activeServices: ['provisioning', 'regulating', 'supporting', 'cultural'],
+    serviceDetails: [
+      {
+        serviceId: 'provisioning',
+        methodName: 'Market Price (Flora)',
+        value: 19920297915,
+        status: 'verified'
+      },
+      {
+        serviceId: 'regulating',
+        methodName: 'Replacement Cost',
+        value: 2357865750,
+        status: 'verified'
+      },
+      {
+        serviceId: 'supporting',
+        methodName: 'Habitat & Nursery Ground',
+        value: 1521514120,
+        status: 'verified'
+      },
+      {
+        serviceId: 'cultural',
+        methodName: 'Travel Cost Method (TCM)',
+        value: 1072000000,
+        status: 'verified'
+      }
+    ],
+    totalValue: 24871677785
   }
 ];
 
@@ -176,61 +146,46 @@ export const INITIAL_INDEX_LIST: IndexItem[] = [
   {
     id: 'idx-1',
     code: 'IDX-001',
-    name: 'Mangrove Barat',
+    name: 'Mangrove Lebat (Tahura Ngurah Rai)',
     landCoverType: 'Mangrove',
-    landCoverName: 'Mangrove Barat',
+    landCoverName: 'Mangrove Lebat',
     landCoverId: 'poly-1',
-    areaHa: 79.86,
+    areaHa: 45.20,
     unit: 'ha',
-    description: 'Hamparan mangrove padat bagian barat teluk dengan kerapatan tinggi.',
-    status: 'Draft',
+    description: 'Tutupan mangrove primer kanopi rapat dengan tegakan Rhizophora dan Bruguiera.',
+    status: 'Verified',
     spatialStatus: 'connected',
     polygonId: 'poly-1',
-    createdAt: '2025-08-20'
+    createdAt: '2026-01-15'
   },
   {
     id: 'idx-2',
     code: 'IDX-002',
-    name: 'Mangrove Timur',
+    name: 'Mangrove Sedang (Estuari Benoa)',
     landCoverType: 'Mangrove',
-    landCoverName: 'Mangrove Timur',
+    landCoverName: 'Mangrove Sedang',
     landCoverId: 'poly-2',
-    areaHa: 62.40,
+    areaHa: 28.50,
     unit: 'ha',
-    description: 'Sabuk mangrove sisi timur berbatasan dengan kanal pelabuhan Benoa.',
-    status: 'Draft',
-    spatialStatus: 'unconnected',
-    createdAt: '2025-08-22'
+    description: 'Tutupan mangrove kerapatan sedang zona peralihan estuari dan laguna.',
+    status: 'Verified',
+    spatialStatus: 'connected',
+    createdAt: '2026-01-16'
   },
   {
     id: 'idx-3',
     code: 'IDX-003',
-    name: 'Lamun Utara',
-    landCoverType: 'Lamun',
-    landCoverName: 'Lamun Utara',
+    name: 'Mangrove Jarang (Sempadan Pesisir)',
+    landCoverType: 'Mangrove',
+    landCoverName: 'Mangrove Jarang',
     landCoverId: 'poly-3',
-    areaHa: 34.20,
+    areaHa: 15.00,
     unit: 'ha',
-    description: 'Padang lamun perairan dangkal subur tempat makan biota laut.',
-    status: 'Selesai',
+    description: 'Zona suksesi vegetasi perintis Avicennia marina sempadan tambak dan pasut.',
+    status: 'Verified',
     spatialStatus: 'connected',
     polygonId: 'poly-3',
-    createdAt: '2025-08-21'
-  },
-  {
-    id: 'idx-5',
-    code: 'IDX-005',
-    name: 'Laguna Perairan Benoa',
-    landCoverType: 'Perairan',
-    landCoverName: 'Perairan Teluk',
-    landCoverId: 'poly-5',
-    areaHa: 120.50,
-    unit: 'ha',
-    description: 'Badan air estuari yang menampung muara sungai aliran Badung.',
-    status: 'Selesai',
-    spatialStatus: 'connected',
-    polygonId: 'poly-5',
-    createdAt: '2025-08-19'
+    createdAt: '2026-01-17'
   }
 ];
 

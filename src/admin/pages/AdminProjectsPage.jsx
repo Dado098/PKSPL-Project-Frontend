@@ -3,6 +3,7 @@ import { ADMIN_PROJECTS_LIST } from '../mock/adminMock';
 import { getProyekList } from '../../services/projectService';
 import { formatIDR, formatNumber } from '../utils/formatter';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { ProjectModulesModal } from '../components/ProjectModulesModal';
 import { FolderKanban, Plus, Search, Eye, Filter, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,6 +13,8 @@ export const AdminProjectsPage = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [projectsList, setProjectsList] = useState(ADMIN_PROJECTS_LIST);
   const [loading, setLoading] = useState(false);
+  const [selectedProjectForModal, setSelectedProjectForModal] = useState(null);
+  const [isModulesModalOpen, setIsModulesModalOpen] = useState(false);
 
   // Fetch real projects from API with fallback to mock data
   useEffect(() => {
@@ -19,19 +22,28 @@ export const AdminProjectsPage = () => {
     const fetchProjects = async () => {
       setLoading(true);
       try {
-        const apiData = await getProyekList();
+        const apiData = await getProyekList({ per_page: 100 });
         if (isMounted && Array.isArray(apiData) && apiData.length > 0) {
-          const formatted = apiData.map((p) => ({
-            id: p.id_proyek || p.id,
-            code: p.kode_proyek || p.code || 'PKS-000',
-            name: p.nama_proyek || p.name || 'Proyek Valuasi',
-            location: p.alamat_lengkap || p.lokasi || p.location || '-',
-            ecosystem: p.ekosistem || p.ecosystem || 'Ekosistem Pesisir',
-            lead: p.user?.nama || p.lead || 'Peneliti Utama',
-            areaHa: Number(p.luas_total_ha || p.areaHa || 100),
-            totalTev: Number(p.total_tev || p.totalTev || 0),
-            status: p.status ? p.status.toUpperCase().replace(/\s+/g, '_') : 'DIKERJAKAN',
-          }));
+          const formatted = apiData.map((p) => {
+            const rawStatus = (p.status || '').toUpperCase().replace(/\s+/g, '_');
+            let adminStatus = rawStatus;
+            if (adminStatus === 'SIAP_REVIEW' || adminStatus === 'PROSES') adminStatus = 'MENUNGGU_ANALYST';
+            if (adminStatus === 'REVISI') adminStatus = 'PERLU_PERBAIKAN';
+            if (adminStatus === 'APPROVED') adminStatus = 'SELESAI';
+
+            return {
+              id: p.id_proyek || p.id,
+              code: p.kode_proyek || p.code || 'PKS-000',
+              name: p.nama_proyek || p.name || 'Proyek Valuasi',
+              location: p.location || p.alamat_lengkap || p.lokasi || '-',
+              ecosystem: p.ecosystem || p.ekosistem || 'Ekosistem Pesisir',
+              lead: p.lead || p.user?.nama || 'Peneliti Utama',
+              areaHa: Number(p.luas ?? p.areaHa ?? p.luas_total_ha ?? 100),
+              totalTev: Number(p.total_tev ?? p.totalTev ?? 0),
+              status: adminStatus || 'DIKERJAKAN',
+              rawProject: p,
+            };
+          });
           setProjectsList(formatted);
         }
       } catch (err) {
@@ -171,10 +183,13 @@ export const AdminProjectsPage = () => {
                     </td>
                     <td className="py-3 px-4 text-center">
                       <button
-                        onClick={() => navigate(`/peneliti/projects/${p.id}/maps`)}
-                        className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded border border-slate-200 text-[11px] font-semibold transition-colors inline-flex items-center gap-1 cursor-pointer"
+                        onClick={() => {
+                          setSelectedProjectForModal(p.rawProject || p);
+                          setIsModulesModalOpen(true);
+                        }}
+                        className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-200 text-[11px] font-semibold transition-colors inline-flex items-center gap-1 cursor-pointer shadow-2xs"
                       >
-                        <Eye className="w-3 h-3" />
+                        <Eye className="w-3.5 h-3.5" />
                         <span>Buka Modul</span>
                       </button>
                     </td>
@@ -190,6 +205,13 @@ export const AdminProjectsPage = () => {
           <span className="font-medium text-slate-600">Sistem Valuasi Ekonomi PKSPL</span>
         </div>
       </div>
+
+      {/* Interactive Project Modules Launcher Modal */}
+      <ProjectModulesModal
+        isOpen={isModulesModalOpen}
+        onClose={() => setIsModulesModalOpen(false)}
+        project={selectedProjectForModal}
+      />
     </div>
   );
 };

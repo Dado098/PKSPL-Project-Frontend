@@ -50,12 +50,12 @@ export const PRJ_004_LAND_COVERS: LandCoverPolygon[] = [
     indexName: 'Mangrove Lebat',
     activeServices: ['provisioning', 'regulating', 'supporting', 'cultural'],
     serviceDetails: [
-      { serviceId: 'provisioning', methodName: 'Market Price', value: 9850000000, status: 'verified' },
-      { serviceId: 'regulating', methodName: 'Blue Carbon & Abrasi', value: 16200000000, status: 'verified' },
-      { serviceId: 'supporting', methodName: 'Nursery Habitat', value: 5400000000, status: 'verified' },
-      { serviceId: 'cultural', methodName: 'Ekowisata Mangrove', value: 4350000000, status: 'verified' },
+      { serviceId: 'provisioning', methodName: 'Market Price (Flora)', value: 19920297915, status: 'verified' },
+      { serviceId: 'regulating', methodName: 'Replacement Cost', value: 2357865750, status: 'verified' },
+      { serviceId: 'supporting', methodName: 'Habitat & Nursery Ground', value: 1521514120, status: 'verified' },
+      { serviceId: 'cultural', methodName: 'Travel Cost Method (TCM)', value: 1072000000, status: 'verified' },
     ],
-    totalValue: 35800000000
+    totalValue: 24871677785
   },
   {
     id: 'poly-004-2',
@@ -75,12 +75,12 @@ export const PRJ_004_LAND_COVERS: LandCoverPolygon[] = [
     indexName: 'Mangrove Sedang',
     activeServices: ['provisioning', 'regulating', 'supporting', 'cultural'],
     serviceDetails: [
-      { serviceId: 'provisioning', methodName: 'Market Price', value: 3650000000, status: 'verified' },
-      { serviceId: 'regulating', methodName: 'Carbon Storage', value: 7100000000, status: 'verified' },
-      { serviceId: 'supporting', methodName: 'Biota Feeder', value: 2450000000, status: 'verified' },
-      { serviceId: 'cultural', methodName: 'Wisata Edukasi', value: 2150000000, status: 'verified' },
+      { serviceId: 'provisioning', methodName: 'Market Price (Flora)', value: 19920297915, status: 'verified' },
+      { serviceId: 'regulating', methodName: 'Replacement Cost', value: 2357865750, status: 'verified' },
+      { serviceId: 'supporting', methodName: 'Habitat & Nursery Ground', value: 1521514120, status: 'verified' },
+      { serviceId: 'cultural', methodName: 'Travel Cost Method (TCM)', value: 1072000000, status: 'verified' },
     ],
-    totalValue: 15350000000
+    totalValue: 24871677785
   },
   {
     id: 'poly-004-3',
@@ -100,12 +100,12 @@ export const PRJ_004_LAND_COVERS: LandCoverPolygon[] = [
     indexName: 'Mangrove Jarang',
     activeServices: ['provisioning', 'regulating', 'supporting', 'cultural'],
     serviceDetails: [
-      { serviceId: 'provisioning', methodName: 'Market Price', value: 1728324000, status: 'verified' },
-      { serviceId: 'regulating', methodName: 'Pelindung Pesisir', value: 3550562140, status: 'verified' },
-      { serviceId: 'supporting', methodName: 'Habitat Penyangga', value: 1261100000, status: 'verified' },
-      { serviceId: 'cultural', methodName: 'Penelitian Lapangan', value: 1033285000, status: 'verified' },
+      { serviceId: 'provisioning', methodName: 'Market Price (Flora)', value: 19920297915, status: 'verified' },
+      { serviceId: 'regulating', methodName: 'Replacement Cost', value: 2357865750, status: 'verified' },
+      { serviceId: 'supporting', methodName: 'Habitat & Nursery Ground', value: 1521514120, status: 'verified' },
+      { serviceId: 'cultural', methodName: 'Travel Cost Method (TCM)', value: 1072000000, status: 'verified' },
     ],
-    totalValue: 7573271140
+    totalValue: 24871677785
   }
 ];
 

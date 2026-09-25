@@ -18,6 +18,9 @@ import { MintaRevisiModal, TandaiSelesaiModal } from '../components/review/Revie
 import { CheckCircle2, Info } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateProyek } from '../../services/projectService';
+import { apiClient } from '../services/api';
+import { notificationCenterService } from '../../peneliti/services/notificationCenterService';
+import { offlineEmailService } from '../../peneliti/services/offlineEmailService';
 
 export const AnalystProjectReviewPage: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -127,6 +130,52 @@ export const AnalystProjectReviewPage: React.FC = () => {
 
   // Add Annotation with History Tracking
   const handleAddAnnotation = useCallback((newAnno: AnnotationItem) => {
+    // Jika proyek masih SIAP_REVIEW / DRAFT / MENUNGGU, otomatis ubah status ke DALAM_REVIEW saat analis mencoret
+    const norm = String(projectStatus || '').toUpperCase().replace(/[\s-]+/g, '_');
+    if (norm === 'SIAP_REVIEW' || norm === 'PROSES' || norm === 'SUBMITTED' || norm === 'DRAFT' || norm === 'MENUNGGU_REVIEW') {
+      const activeReviewer = user?.nama || user?.name || reviewerName || 'Dr. Benny Nababan';
+      const updatedReviewers = annotationService.addProjectReviewer(effectiveId, activeReviewer);
+      const combined = updatedReviewers.join(', ');
+      setProjectStatus('DALAM_REVIEW');
+      setReviewerName(combined);
+      setProjectMeta(prev => prev ? { ...prev, status: 'DALAM_REVIEW', reviewedBy: combined, reviewers: updatedReviewers } : null);
+
+      const projectMetaObj = {
+        projectCode: activeResearchData.projectCode || projectMeta?.code || effectiveId,
+        projectName: activeResearchData.projectName || projectMeta?.name || 'Kajian Valuasi Ekonomi Mangrove'
+      };
+
+      annotationService.updateProjectStatus(
+        effectiveId,
+        'DALAM_REVIEW',
+        `Analyst ${activeReviewer} sedang menelaah dan memberikan coretan/anotasi telaah pada proyek.`,
+        activeReviewer,
+        projectMetaObj
+      );
+      if (projectMeta?.code && projectMeta.code !== effectiveId) {
+        annotationService.updateProjectStatus(
+          projectMeta.code,
+          'DALAM_REVIEW',
+          `Analyst ${activeReviewer} sedang menelaah dan memberikan coretan/anotasi telaah pada proyek.`,
+          activeReviewer,
+          projectMetaObj
+        );
+      }
+
+      // Sinkronisasi status ke backend dan kirim email jika peneliti offline
+      const targetId = activeResearchData.projectCode || projectMeta?.code || effectiveId;
+      const isOnline = notificationCenterService.isResearcherOnline();
+      apiClient.post(`/proyek/${targetId}/review-status`, {
+        status: 'DALAM_REVIEW',
+        reviewer: activeReviewer,
+        notes: `Analyst ${activeReviewer} sedang menelaah dan memberikan coretan/anotasi telaah pada proyek.`,
+        is_offline: true,
+        force_email: true
+      }).catch(err => {
+        console.warn('Backend review-status dispatch failed:', err);
+      });
+    }
+
     setAnnotations(prev => {
       const next = [...prev, newAnno];
       annotationService.saveAnnotations(effectiveId, next);
@@ -139,7 +188,7 @@ export const AnalystProjectReviewPage: React.FC = () => {
 
       return next;
     });
-  }, [effectiveId, history, historyIndex]);
+  }, [effectiveId, history, historyIndex, projectStatus, user, reviewerName, activeResearchData, projectMeta]);
 
   // Delete single annotation (Eraser tool)
   const handleDeleteAnnotation = useCallback((id: string) => {
@@ -220,6 +269,40 @@ export const AnalystProjectReviewPage: React.FC = () => {
 
   const handleCreateComment = (content: string, section?: string, coords?: { x: number; y: number }) => {
     const authorName = user?.nama || user?.name || 'Analyst PKSPL';
+
+    // Jika proyek masih SIAP_REVIEW / DRAFT / MENUNGGU, otomatis ubah status ke DALAM_REVIEW saat analis memberi komentar
+    const norm = String(projectStatus || '').toUpperCase().replace(/[\s-]+/g, '_');
+    if (norm === 'SIAP_REVIEW' || norm === 'PROSES' || norm === 'SUBMITTED' || norm === 'DRAFT' || norm === 'MENUNGGU_REVIEW') {
+      const activeReviewer = authorName;
+      const updatedReviewers = annotationService.addProjectReviewer(effectiveId, activeReviewer);
+      const combined = updatedReviewers.join(', ');
+      setProjectStatus('DALAM_REVIEW');
+      setReviewerName(combined);
+      setProjectMeta(prev => prev ? { ...prev, status: 'DALAM_REVIEW', reviewedBy: combined, reviewers: updatedReviewers } : null);
+
+      const projectMetaObj = {
+        projectCode: activeResearchData.projectCode || projectMeta?.code || effectiveId,
+        projectName: activeResearchData.projectName || projectMeta?.name || 'Kajian Valuasi Ekonomi Mangrove'
+      };
+
+      annotationService.updateProjectStatus(
+        effectiveId,
+        'DALAM_REVIEW',
+        `Analyst ${activeReviewer} sedang memberikan catatan telaah review pada dokumen penelitian.`,
+        activeReviewer,
+        projectMetaObj
+      );
+      if (projectMeta?.code && projectMeta.code !== effectiveId) {
+        annotationService.updateProjectStatus(
+          projectMeta.code,
+          'DALAM_REVIEW',
+          `Analyst ${activeReviewer} sedang memberikan catatan telaah review pada dokumen penelitian.`,
+          activeReviewer,
+          projectMetaObj
+        );
+      }
+    }
+
     const newComment: ReviewComment = {
       id: `comm-${Date.now()}`,
       projectId: effectiveId,
@@ -319,14 +402,49 @@ export const AnalystProjectReviewPage: React.FC = () => {
     setReviewerName(combined);
     setProjectMeta(prev => prev ? { ...prev, status: 'DALAM_REVIEW', reviewedBy: combined, reviewers: updatedReviewers } : null);
 
+    const projectMetaObj = {
+      projectCode: activeResearchData.projectCode || projectMeta?.code || effectiveId,
+      projectName: activeResearchData.projectName || projectMeta?.name || 'Kajian Valuasi Ekonomi Mangrove'
+    };
+
     // Simpan ke annotationService untuk ID rute dan juga kode proyek
-    annotationService.updateProjectStatus(effectiveId, 'DALAM_REVIEW', undefined, activeReviewer);
+    annotationService.updateProjectStatus(
+      effectiveId,
+      'DALAM_REVIEW',
+      'Tim Quality Analyst sedang melakukan verifikasi data spasial, metode valuasi, dan kalkulasi TEV.',
+      activeReviewer,
+      projectMetaObj
+    );
     if (projectMeta?.code && projectMeta.code !== effectiveId) {
-      annotationService.updateProjectStatus(projectMeta.code, 'DALAM_REVIEW', undefined, activeReviewer);
+      annotationService.updateProjectStatus(
+        projectMeta.code,
+        'DALAM_REVIEW',
+        'Tim Quality Analyst sedang melakukan verifikasi data spasial, metode valuasi, dan kalkulasi TEV.',
+        activeReviewer,
+        projectMetaObj
+      );
     }
     if (projectMeta?.id && projectMeta.id !== effectiveId) {
-      annotationService.updateProjectStatus(projectMeta.id, 'DALAM_REVIEW', undefined, activeReviewer);
+      annotationService.updateProjectStatus(
+        projectMeta.id,
+        'DALAM_REVIEW',
+        'Tim Quality Analyst sedang melakukan verifikasi data spasial, metode valuasi, dan kalkulasi TEV.',
+        activeReviewer,
+        projectMetaObj
+      );
     }
+
+    // Sinkronisasi status ke backend dan kirim email notifikasi ke Peneliti jika offline
+    const effectiveCode = activeResearchData.projectCode || projectMeta?.code || effectiveId;
+    apiClient.post(`/proyek/${effectiveCode}/review-status`, {
+      status: 'DALAM_REVIEW',
+      reviewer: activeReviewer,
+      notes: 'Tim Quality Analyst sedang melakukan verifikasi data spasial, metode valuasi, dan kalkulasi TEV.',
+      is_offline: true,
+      force_email: true
+    }).catch(err => {
+      console.warn('Backend review-status dispatch failed:', err);
+    });
 
     showToast(`Status proyek diperbarui: DALAM REVIEW oleh ${activeReviewer}`);
   };
@@ -374,22 +492,127 @@ export const AnalystProjectReviewPage: React.FC = () => {
       });
     }
 
-    // Update backend database status if numeric ID
-    const numId = Number(projectMeta?.id || effectiveId);
-    if (!isNaN(numId) && numId > 0) {
-      try {
-        await updateProyek(numId, { status: 'Need Revision' });
-      } catch (err) {
-        console.warn('Backend updateProyek error:', err);
+    // Update backend database status & kirim email revisi ke Peneliti (Mailpit)
+    const effectiveCode = activeResearchData.projectCode || projectMeta?.code || effectiveId;
+    const isOnline = notificationCenterService.isResearcherOnline();
+
+    try {
+      await apiClient.post(`/proyek/${effectiveCode}/review-status`, {
+        status: 'REVISI',
+        reviewer: combined,
+        reason,
+        comments: attachedComments,
+        is_offline: true,
+        force_email: true
+      });
+    } catch (err) {
+      console.warn('Backend review-status dispatch failed:', err);
+      // Fallback update status proyek langsung
+      const numId = Number(projectMeta?.id || effectiveId);
+      if (!isNaN(numId) && numId > 0) {
+        try {
+          await updateProyek(numId, { status: 'Need Revision' });
+        } catch {
+          // ignore
+        }
       }
     }
 
     showToast(`Permintaan revisi berhasil dikirimkan ke Peneliti oleh ${activeReviewer}`);
   };
 
-  const handleConfirmComplete = () => {
+  const handleConfirmComplete = async () => {
     setProjectStatus('SELESAI');
-    annotationService.updateProjectStatus(effectiveId, 'SELESAI', undefined, reviewerName);
+    const effectiveCode = activeResearchData.projectCode || projectMeta?.code || effectiveId;
+    const effectiveName = activeResearchData.projectName || projectMeta?.name || 'Kajian Valuasi Ekonomi Mangrove';
+    const activeReviewer = reviewerName || 'Dr. Benny Nababan';
+    const projectMetaObj = {
+      projectCode: effectiveCode,
+      projectName: effectiveName
+    };
+
+    annotationService.updateProjectStatus(
+      effectiveId,
+      'SELESAI',
+      'Persetujuan final selesai. Seluruh data penelitian, analisis spasial, dan kalkulasi TEV telah divalidasi.',
+      activeReviewer,
+      projectMetaObj
+    );
+    if (projectMeta?.code && projectMeta.code !== effectiveId) {
+      annotationService.updateProjectStatus(
+        projectMeta.code,
+        'SELESAI',
+        'Persetujuan final selesai. Seluruh data penelitian, analisis spasial, dan kalkulasi TEV telah divalidasi.',
+        activeReviewer,
+        projectMetaObj
+      );
+    }
+
+    const isOnline = notificationCenterService.isResearcherOnline();
+    const isOffline = !isOnline;
+
+    // Catat notifikasi ke Pusat Notifikasi (Lonceng Peneliti)
+    const notifPayload = {
+      type: 'SELESAI' as const,
+      title: 'Validasi Selesai & Review Disetujui',
+      message: `Proyek ${effectiveCode} telah dinyatakan VALID dan SELESAI oleh ${activeReviewer}. Laporan akhir siap diunduh.`,
+      projectId: String(effectiveId),
+      projectCode: effectiveCode,
+      projectName: effectiveName,
+      reviewer: activeReviewer,
+      timestamp: 'Baru saja',
+      isRead: false,
+      actionUrl: `/peneliti/projects/${effectiveCode}/review`,
+      wasEmailedOffline: isOffline
+    };
+
+    notificationCenterService.addNotification(notifPayload);
+
+    // Kirim event pemicu pop-up di lonceng Peneliti (jika sedang online)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pkspl_bell_popup_trigger', { detail: notifPayload }));
+    }
+
+    // Jika Peneliti sedang offline, kirimkan notifikasi via email
+    if (isOffline) {
+      try {
+        offlineEmailService.dispatchEmailNotification({
+          type: 'SELESAI',
+          projectCode: effectiveCode,
+          projectName: effectiveName,
+          reviewer: activeReviewer,
+          notes: 'Persetujuan final selesai. Seluruh data penelitian, analisis spasial, dan kalkulasi TEV telah divalidasi.',
+          recipientEmail: projectMeta?.lead?.email || 'peneliti@gmail.com',
+          recipientName: activeResearchData.lead || 'Dr. Ir. Retno Wulandari, M.Si.'
+        });
+      } catch (e) {
+        console.warn('Dispatch offline email error:', e);
+      }
+    }
+
+    // Sinkronisasi status selesai ke backend (kirim email ke Mailpit jika offline)
+    try {
+      await apiClient.post(`/proyek/${effectiveCode}/review-status`, {
+        status: 'SELESAI',
+        reviewer: activeReviewer,
+        notes: 'Persetujuan final selesai. Seluruh data penelitian, analisis spasial, dan kalkulasi TEV telah divalidasi.',
+        is_offline: isOffline,
+        force_email: isOffline,
+        recipient_email: projectMeta?.lead?.email || 'peneliti@gmail.com'
+      });
+    } catch (err) {
+      console.warn('Backend review-status dispatch failed:', err);
+      // Fallback update status proyek langsung
+      const numId = Number(projectMeta?.id || effectiveId);
+      if (!isNaN(numId) && numId > 0) {
+        try {
+          await updateProyek(numId, { status: 'Selesai' });
+        } catch {
+          // ignore
+        }
+      }
+    }
+
     showToast('Persetujuan final selesai. Proyek dinyatakan VALID & SELESAI');
   };
 
@@ -418,7 +641,13 @@ export const AnalystProjectReviewPage: React.FC = () => {
       {/* 2. Sticky Review Toolbar (Pen, Highlight, Rect, Circle, Arrow, Text, Eraser) */}
       <ReviewToolbar
         activeTool={activeTool}
-        onSelectTool={setActiveTool}
+        onSelectTool={(tool) => {
+          setActiveTool(tool);
+          const norm = String(projectStatus || '').toUpperCase().replace(/[\s-]+/g, '_');
+          if (tool !== 'select' && (norm === 'SIAP_REVIEW' || norm === 'PROSES' || norm === 'SUBMITTED' || norm === 'DRAFT' || norm === 'MENUNGGU_REVIEW')) {
+            handleStartReview();
+          }
+        }}
         selectedColor={selectedColor}
         onSelectColor={setSelectedColor}
         strokeWidth={strokeWidth}
@@ -494,9 +723,10 @@ export const AnalystProjectReviewPage: React.FC = () => {
       <MintaRevisiModal
         isOpen={mintaRevisiOpen}
         onClose={() => setMintaRevisiOpen(false)}
-        projectCode={researchData.projectCode}
-        projectName={researchData.projectName}
+        projectCode={activeResearchData.projectCode || researchData.projectCode}
+        projectName={activeResearchData.projectName || researchData.projectName}
         comments={comments}
+        totalAnnotations={annotations.length}
         onSubmit={handleSubmitRevision}
       />
 
@@ -504,8 +734,8 @@ export const AnalystProjectReviewPage: React.FC = () => {
       <TandaiSelesaiModal
         isOpen={tandaiSelesaiOpen}
         onClose={() => setTandaiSelesaiOpen(false)}
-        projectCode={researchData.projectCode}
-        projectName={researchData.projectName}
+        projectCode={activeResearchData.projectCode || researchData.projectCode}
+        projectName={activeResearchData.projectName || researchData.projectName}
         openCommentsCount={openComments}
         onConfirm={handleConfirmComplete}
       />

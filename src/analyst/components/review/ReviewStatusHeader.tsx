@@ -54,6 +54,24 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
     }
     return ['Dr. Benny Nababan'];
   }, [reviewers, reviewerName]);
+
+  const normalizedStatus = React.useMemo(() => {
+    const s = String(status || '').toUpperCase().replace(/[\s-]+/g, '_');
+    if (s === 'PROSES' || s === 'SUBMITTED' || s === 'SIAP_REVIEW' || s === 'DRAFT' || s === 'MENUNGGU_REVIEW') {
+      return 'SIAP_REVIEW';
+    }
+    if (s === 'DALAM_REVIEW' || s === 'REVIEW' || s === 'IN_REVIEW' || s === 'MENUNGGU_ANALYST' || s === 'UNDER_REVIEW') {
+      return 'DALAM_REVIEW';
+    }
+    if (s === 'REVISI' || s === 'NEED_REVISION' || s === 'NEEDS_REVISION' || s === 'PERLU_PERBAIKAN') {
+      return 'REVISI';
+    }
+    if (s === 'SELESAI' || s === 'APPROVED' || s === 'COMPLETED' || s === 'VALID') {
+      return 'SELESAI';
+    }
+    return s as ProjectStatus;
+  }, [status]);
+
   return (
     <div className="space-y-4">
       {/* Top Back Link & Breadcrumbs */}
@@ -102,7 +120,7 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
                   <span className="text-slate-900 font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{lead}</span>
                 </div>
               )}
-              {status === 'DALAM_REVIEW' && (
+              {normalizedStatus === 'DALAM_REVIEW' && (
                 <div className="flex items-center gap-1.5 text-xs font-semibold bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full border border-purple-200 shadow-2xs">
                   <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                   <span className="text-purple-600 font-normal">
@@ -117,7 +135,7 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
                   </div>
                 </div>
               )}
-              {status === 'REVISI' && (
+              {normalizedStatus === 'REVISI' && (
                 <div className="flex items-center gap-1.5 text-xs font-semibold bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full border border-rose-200 shadow-2xs">
                   <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                   <span className="text-rose-600 font-normal">
@@ -140,21 +158,30 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
 
           {/* Action Buttons Group */}
           <div className="flex items-center gap-2.5 flex-wrap shrink-0">
-            {status === 'SIAP_REVIEW' && (
-              <button
-                onClick={onStartReview}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Mulai Review</span>
-              </button>
+            {normalizedStatus === 'SIAP_REVIEW' && (
+              <>
+                <button
+                  onClick={onStartReview}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Mulai Review</span>
+                </button>
+                <button
+                  onClick={onRequestRevision}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                >
+                  <ShieldAlert className="w-4 h-4 text-amber-600" />
+                  <span>Minta Revisi</span>
+                </button>
+              </>
             )}
 
-            {(status === 'DALAM_REVIEW' || status === 'REVISI') && (
+            {normalizedStatus !== 'SIAP_REVIEW' && normalizedStatus !== 'SELESAI' && (
               <>
                 <button
                   onClick={onRequestRevision}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-semibold shadow-2xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
                 >
                   <ShieldAlert className="w-4 h-4 text-amber-600" />
                   <span>Minta Revisi</span>
@@ -162,7 +189,7 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
 
                 <button
                   onClick={onMarkComplete}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                 >
                   <ShieldCheck className="w-4 h-4" />
                   <span>Tandai Selesai</span>
@@ -170,10 +197,20 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
               </>
             )}
 
-            {status === 'SELESAI' && (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-semibold">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Review Disetujui & Selesai</span>
+            {normalizedStatus === 'SELESAI' && (
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-semibold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Review Disetujui & Selesai</span>
+                </div>
+                <button
+                  onClick={onRequestRevision}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                  title="Minta perbaikan data tambahan"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Minta Revisi Ulang</span>
+                </button>
               </div>
             )}
           </div>
@@ -185,12 +222,12 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
             <div className="flex items-center gap-2">
               <span className="text-slate-400 font-medium">Status Saat Ini:</span>
               <StatusBadge status={status} size="sm" />
-              {status === 'DALAM_REVIEW' && (
+              {normalizedStatus === 'DALAM_REVIEW' && (
                 <span className="text-[11px] font-semibold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
                   {reviewerList.length > 1 ? `oleh Tim Reviewer (${reviewerList.join(', ')})` : `oleh ${reviewerList[0] || 'Dr. Benny Nababan'}`}
                 </span>
               )}
-              {status === 'REVISI' && (
+              {normalizedStatus === 'REVISI' && (
                 <span className="text-[11px] font-semibold text-rose-800 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
                   {reviewerList.length > 1 ? `oleh ${reviewerList.join(', ')}` : `oleh ${reviewerList[0] || 'Dr. Benny Nababan'}`}
                 </span>

@@ -402,7 +402,13 @@ export const annotationService = {
     }
   },
 
-  updateProjectStatus(projectId: string, status: ProjectStatus, notes?: string, reviewer?: string): void {
+  updateProjectStatus(
+    projectId: string,
+    status: ProjectStatus,
+    notes?: string,
+    reviewer?: string,
+    meta?: { projectCode?: string; projectName?: string }
+  ): void {
     try {
       localStorage.setItem(`pkspl_status_${projectId}`, status);
       if (notes !== undefined) {
@@ -422,17 +428,34 @@ export const annotationService = {
 
       // Dispatch event to synchronize in-session components across the app
       if (typeof window !== 'undefined') {
+        const detail = {
+          projectId,
+          projectCode: meta?.projectCode || projectId,
+          projectName: meta?.projectName,
+          status,
+          notes,
+          reviewer: combinedReviewer,
+          reviewers: reviewersList,
+          timestamp: Date.now()
+        };
+
         window.dispatchEvent(
           new CustomEvent('pkspl_project_status_changed', {
-            detail: {
-              projectId,
-              status,
-              notes,
-              reviewer: combinedReviewer,
-              reviewers: reviewersList
-            }
+            detail
           })
         );
+
+        // Cross-tab synchronization via localStorage & BroadcastChannel
+        try {
+          localStorage.setItem('pkspl_latest_status_change', JSON.stringify(detail));
+          if (typeof BroadcastChannel !== 'undefined') {
+            const bc = new BroadcastChannel('pkspl_status_channel');
+            bc.postMessage(detail);
+            bc.close();
+          }
+        } catch {
+          // ignore
+        }
       }
     } catch (e) {
       console.warn('Failed to save status to localStorage:', e);

@@ -182,7 +182,7 @@ export const ResearchMapView: React.FC<ResearchMapViewProps> = ({
             <h4 className="font-bold text-slate-900 leading-tight mb-1">{activePolygon.name}</h4>
             <div className="space-y-1 text-[11px] text-slate-600">
               <div>Luas: <strong className="text-slate-900">{activePolygon.areaHa} ha</strong></div>
-              <div>Estimasi Nilai Valuasi: <strong className="text-emerald-700 font-mono">Rp {activePolygon.totalValue.toLocaleString('id-ID')}</strong></div>
+              <div>Estimasi Nilai Valuasi: <strong className="text-emerald-700 font-mono">Rp {(Number(activePolygon.totalValue) || 0).toLocaleString('id-ID')}</strong></div>
             </div>
           </div>
         )}

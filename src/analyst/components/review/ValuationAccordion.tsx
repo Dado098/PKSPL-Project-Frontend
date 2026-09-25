@@ -14,7 +14,7 @@ export const ValuationAccordion: React.FC<ValuationAccordionProps> = ({
   isOpen,
   onToggle
 }) => {
-  const formatIDR = (val: number) => `Rp ${val.toLocaleString('id-ID')}`;
+  const formatIDR = (val?: number | null) => `Rp ${(Number(val) || 0).toLocaleString('id-ID')}`;
 
   // Theme styling berdasarkan kategori A, B, C, D
   const getThemeStyles = () => {

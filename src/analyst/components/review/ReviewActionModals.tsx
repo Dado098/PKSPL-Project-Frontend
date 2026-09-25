@@ -16,6 +16,7 @@ interface MintaRevisiModalProps {
   projectName: string;
   projectCode: string;
   comments: ReviewComment[];
+  totalAnnotations?: number;
   onSubmit: (reason: string, selectedCommentIds: string[]) => void;
 }
 
@@ -25,6 +26,7 @@ export const MintaRevisiModal: React.FC<MintaRevisiModalProps> = ({
   projectName,
   projectCode,
   comments,
+  totalAnnotations = 0,
   onSubmit
 }) => {
   const [reason, setReason] = useState('');
@@ -34,10 +36,16 @@ export const MintaRevisiModal: React.FC<MintaRevisiModalProps> = ({
 
   if (!isOpen) return null;
 
+  const defaultReasonIfEmpty = selectedIds.length > 0
+    ? `Terdapat ${selectedIds.length} catatan telaah yang memerlukan perbaikan dari pihak Peneliti sesuai catatan terlampir.`
+    : (totalAnnotations > 0 
+        ? `Terdapat ${totalAnnotations} anotasi/coretan visual pada dokumen kerja yang memerlukan penyesuaian dari Peneliti.`
+        : 'Parameter data penelitian dan metode valuasi memerlukan penyesuaian sesuai rekomendasi Quality Analyst.');
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reason.trim()) return;
-    onSubmit(reason.trim(), selectedIds);
+    const finalReason = reason.trim() || defaultReasonIfEmpty;
+    onSubmit(finalReason, selectedIds);
     setReason('');
     onClose();
   };
@@ -47,6 +55,12 @@ export const MintaRevisiModal: React.FC<MintaRevisiModalProps> = ({
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
+
+  const REVISION_TEMPLATES = [
+    'Parameter harga unit dan data survei pasar memerlukan verifikasi ulang sesuai kotak anotasi pada tabel.',
+    'Batas polygon sempadan tutupan lahan pada peta spasial GIS perlu disesuaikan dengan batas delineasi resmi.',
+    'Formula kalkulasi Total Economic Value (TEV) pada jasa regulasi dan penyediaan perlu disinkronkan kembali.'
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs select-none">
@@ -76,13 +90,39 @@ export const MintaRevisiModal: React.FC<MintaRevisiModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
+          {totalAnnotations > 0 && (
+            <div className="flex items-center gap-2 p-2.5 bg-blue-50/80 border border-blue-200 rounded-lg text-[11px] text-blue-800 font-medium">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+              <span>
+                Terdeteksi <strong>{totalAnnotations} anotasi/coretan visual</strong> pada dokumen kerja. Coretan ini otomatis tersimpan dan dapat dilihat langsung oleh Peneliti.
+              </span>
+            </div>
+          )}
+
           <div>
-            <label className="block font-bold text-slate-800 mb-1">
-              Alasan & Arahan Revisi: <span className="text-rose-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-bold text-slate-800">
+                Alasan & Arahan Revisi: <span className="text-rose-500">*</span>
+              </label>
+              <span className="text-[10px] text-slate-400">Pilih template cepat di bawah jika diperlukan</span>
+            </div>
+
+            {/* Template Chips */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {REVISION_TEMPLATES.map((tmpl, idx) => (
+                <button
+                  type="button"
+                  key={idx}
+                  onClick={() => setReason(tmpl)}
+                  className="text-[10px] px-2 py-1 bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-900 rounded-md border border-slate-200 transition-colors text-left"
+                >
+                  + {tmpl.slice(0, 48)}...
+                </button>
+              ))}
+            </div>
+
             <textarea
               rows={4}
-              required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Jelaskan secara spesifik poin-poin yang perlu diperbaiki oleh Peneliti (misal: verifikasi ulang harga unit kayu cemara laut, pengecekan luas polygon tutupan lahan, dsb)..."
@@ -123,7 +163,7 @@ export const MintaRevisiModal: React.FC<MintaRevisiModalProps> = ({
           )}
 
           <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-lg text-[11px] text-amber-900 leading-relaxed">
-            Status proyek akan otomatis berubah menjadi <strong className="font-bold text-amber-800">REVISI</strong> dan peneliti akan menerima notifikasi temuan telaah ini.
+            Status proyek akan otomatis berubah menjadi <strong className="font-bold text-amber-800">REVISI</strong> dan peneliti akan menerima notifikasi pop-up (online) atau email resmi (offline).
           </div>
 
           {/* Action Buttons */}
@@ -131,14 +171,13 @@ export const MintaRevisiModal: React.FC<MintaRevisiModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
-              disabled={!reason.trim()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Kirim Permintaan Revisi</span>

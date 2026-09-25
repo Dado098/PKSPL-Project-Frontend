@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ADMIN_SYSTEM_STATS,
@@ -11,6 +11,9 @@ import {
 } from '../mock/adminMock';
 import { formatIDR, formatNumber } from '../utils/formatter';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { ProjectModulesModal } from '../components/ProjectModulesModal';
+import { getLandingStatistics } from '../../services/statisticsService';
+import { getProyekList } from '../../services/projectService';
 import {
   Coins,
   FolderKanban,
@@ -33,7 +36,11 @@ import {
   ArrowRight,
   Sparkles,
   Database,
-  Calendar
+  Calendar,
+  GitCompare,
+  CheckSquare,
+  Check,
+  SlidersHorizontal
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -48,7 +55,9 @@ import {
   AreaChart,
   Area,
   CartesianGrid,
-  Legend
+  Legend,
+  ComposedChart,
+  Line
 } from 'recharts';
 
 export const AdminDashboardPage = () => {
@@ -58,17 +67,232 @@ export const AdminDashboardPage = () => {
   const [projectSearch, setProjectSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
+  // Dynamic API state with fallbacks to mock
+  const [stats, setStats] = useState(null);
+  const [projectsList, setProjectsList] = useState(ADMIN_PROJECTS_LIST);
+  const [loading, setLoading] = useState(false);
+  const [selectedProjectForModal, setSelectedProjectForModal] = useState(null);
+  const [isModulesModalOpen, setIsModulesModalOpen] = useState(false);
+
+  // Timeframe, Year, and Metric view modes for Trend Chart
+  const [trendTimeframe, setTrendTimeframe] = useState('monthly'); // 'monthly' | 'yearly'
+  const [selectedYear, setSelectedYear] = useState(2026);
+  const [trendMetricView, setTrendMetricView] = useState('all'); // 'all' | 'tev' | 'projects'
+
+  // Selected periods for comparison (Array of period identifiers)
+  const [selectedMonths, setSelectedMonths] = useState([
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+  ]);
+  const [selectedYears, setSelectedYears] = useState(['2021', '2022', '2023', '2024', '2025', '2026']);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboardData = async () => {
+      setLoading(true);
+      try {
+        const [statsRes, projectsRes] = await Promise.allSettled([
+          getLandingStatistics(),
+          getProyekList({ per_page: 50 })
+        ]);
+
+        if (isMounted && statsRes.status === 'fulfilled' && statsRes.value) {
+          setStats(statsRes.value);
+        }
+
+        if (isMounted && projectsRes.status === 'fulfilled' && Array.isArray(projectsRes.value) && projectsRes.value.length > 0) {
+          const formatted = projectsRes.value.map((p) => {
+            const rawStatus = (p.status || '').toUpperCase().replace(/\s+/g, '_');
+            let adminStatus = rawStatus;
+            if (adminStatus === 'SIAP_REVIEW' || adminStatus === 'PROSES') adminStatus = 'MENUNGGU_ANALYST';
+            if (adminStatus === 'REVISI') adminStatus = 'PERLU_PERBAIKAN';
+            if (adminStatus === 'APPROVED') adminStatus = 'SELESAI';
+
+            return {
+              id: p.id_proyek || p.id,
+              code: p.kode_proyek || p.code || 'PKS-000',
+              name: p.nama_proyek || p.name || 'Proyek Valuasi',
+              location: p.location || p.alamat_lengkap || p.lokasi || '-',
+              ecosystem: p.ecosystem || p.ekosistem || 'Ekosistem Pesisir',
+              lead: p.lead || p.user?.nama || 'Peneliti Utama',
+              areaHa: Number(p.luas ?? p.areaHa ?? p.luas_total_ha ?? 100),
+              totalTev: Number(p.total_tev ?? p.totalTev ?? 0),
+              status: adminStatus || 'DIKERJAKAN',
+              rawProject: p,
+            };
+          });
+          setProjectsList(formatted);
+        }
+      } catch (err) {
+        console.warn('Dashboard data fetch error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Filtered projects
-  const filteredProjects = ADMIN_PROJECTS_LIST.filter((p) => {
+  const filteredProjects = projectsList.filter((p) => {
     const matchesSearch =
-      p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
-      p.code.toLowerCase().includes(projectSearch.toLowerCase()) ||
-      p.lead.toLowerCase().includes(projectSearch.toLowerCase()) ||
-      p.location.toLowerCase().includes(projectSearch.toLowerCase());
+      (p.name || '').toLowerCase().includes(projectSearch.toLowerCase()) ||
+      (p.code || '').toLowerCase().includes(projectSearch.toLowerCase()) ||
+      (p.lead || '').toLowerCase().includes(projectSearch.toLowerCase()) ||
+      (p.location || '').toLowerCase().includes(projectSearch.toLowerCase());
 
     const matchesStatus = statusFilter === 'ALL' || p.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Dynamic metrics with fallback
+  const totalTevNominal = stats?.total_tev ?? ADMIN_SYSTEM_STATS.totalTevNominal;
+  const totalTevMiliar = stats?.total_tev_miliar ? Number(stats.total_tev_miliar).toFixed(2) : (totalTevNominal / 1e9).toFixed(2);
+  const totalProjects = stats?.total_projects ?? projectsList.length ?? ADMIN_SYSTEM_STATS.totalProjects;
+  const totalAreaHa = stats?.total_area_ha ?? ADMIN_SYSTEM_STATS.totalAreaHa;
+  const totalUsers = stats?.total_users ?? ADMIN_SYSTEM_STATS.totalUsers;
+  const usersPeneliti = stats?.users_by_role?.peneliti ?? ADMIN_SYSTEM_STATS.usersPeneliti;
+  const usersAnalyst = stats?.users_by_role?.analyst ?? ADMIN_SYSTEM_STATS.usersAnalyst;
+  const usersAdmin = stats?.users_by_role?.admin ?? ADMIN_SYSTEM_STATS.usersAdmin;
+
+  // Status breakdown from stats or fallback
+  const workflowData = stats?.status_workflow && stats.status_workflow.length > 0
+    ? stats.status_workflow
+    : PROJECT_STATUS_BREAKDOWN;
+
+  // Ecosystem valuation from stats or fallback
+  const ecosystemData = stats?.ecosystem_valuation && stats.ecosystem_valuation.length > 0
+    ? stats.ecosystem_valuation
+    : ECOSYSTEM_VALUATION_DISTRIBUTION;
+
+  // Count active / pending / completed
+  const activeCount = workflowData.find((w) => w.name === 'Dikerjakan')?.count ?? ADMIN_SYSTEM_STATS.projectsActive;
+  const pendingCount = workflowData.find((w) => w.name === 'Menunggu Review')?.count ?? ADMIN_SYSTEM_STATS.projectsPendingReview;
+  const revisionCount = workflowData.find((w) => w.name === 'Perlu Perbaikan')?.count ?? ADMIN_SYSTEM_STATS.projectsNeedsRevision;
+  const completedCount = workflowData.find((w) => w.name === 'Selesai')?.count ?? ADMIN_SYSTEM_STATS.projectsCompleted;
+
+  const avgTevPerProject = totalProjects > 0 ? totalTevNominal / totalProjects : 0;
+
+  // Dynamic Trend Datasets (Bulanan vs Tahunan)
+  const defaultMonthlyTrend = [
+    { label: 'Apr 2026', period: 'Apr', akumulasiTevMiliar: Number((totalTevNominal * 0.58 / 1e9).toFixed(2)), proyekBaru: 1, proyekSelesai: 0, luasHa: 3800.0 },
+    { label: 'Mei 2026', period: 'Mei', akumulasiTevMiliar: Number((totalTevNominal * 0.67 / 1e9).toFixed(2)), proyekBaru: 2, proyekSelesai: 1, luasHa: 4650.0 },
+    { label: 'Jun 2026', period: 'Jun', akumulasiTevMiliar: Number((totalTevNominal * 0.76 / 1e9).toFixed(2)), proyekBaru: 2, proyekSelesai: 1, luasHa: 5400.0 },
+    { label: 'Jul 2026', period: 'Jul', akumulasiTevMiliar: Number((totalTevNominal * 0.84 / 1e9).toFixed(2)), proyekBaru: 3, proyekSelesai: 1, luasHa: 6250.0 },
+    { label: 'Agu 2026', period: 'Agu', akumulasiTevMiliar: Number((totalTevNominal * 0.92 / 1e9).toFixed(2)), proyekBaru: 2, proyekSelesai: 2, luasHa: 7150.0 },
+    { label: 'Sep 2026', period: 'Sep', akumulasiTevMiliar: Number(totalTevMiliar), proyekBaru: 1, proyekSelesai: completedCount, luasHa: Number(totalAreaHa) },
+  ];
+
+  const defaultYearlyTrend = [
+    { label: 'Tahun 2021', period: '2021', akumulasiTevMiliar: 58.7, proyekBaru: 2, proyekSelesai: 2, luasHa: 1250.5 },
+    { label: 'Tahun 2022', period: '2022', akumulasiTevMiliar: 104.2, proyekBaru: 3, proyekSelesai: 2, luasHa: 2420.0 },
+    { label: 'Tahun 2023', period: '2023', akumulasiTevMiliar: 168.9, proyekBaru: 5, proyekSelesai: 4, luasHa: 3950.0 },
+    { label: 'Tahun 2024', period: '2024', akumulasiTevMiliar: 234.5, proyekBaru: 7, proyekSelesai: 6, luasHa: 5620.0 },
+    { label: 'Tahun 2025', period: '2025', akumulasiTevMiliar: 295.8, proyekBaru: 9, proyekSelesai: 8, luasHa: 7100.0 },
+    { label: 'Tahun 2026', period: '2026', akumulasiTevMiliar: Number(totalTevMiliar), proyekBaru: totalProjects, proyekSelesai: completedCount, luasHa: Number(totalAreaHa) },
+  ];
+
+  // Available years from API or default
+  const availableYears = stats?.years_available || [2026, 2025, 2024];
+
+  // Full dataset for current mode and selected year
+  const currentMonthlyList = stats?.monthly_trend_by_year?.[selectedYear] || defaultMonthlyTrend;
+
+  const fullBaseData = trendTimeframe === 'monthly'
+    ? currentMonthlyList
+    : (stats?.yearly_trend || defaultYearlyTrend);
+
+  // Active selected period keys
+  const activeSelectedKeys = trendTimeframe === 'monthly' ? selectedMonths : selectedYears;
+
+  // Filtered dataset for chart (only items currently selected for comparison)
+  const activeTrendData = fullBaseData.filter((item) =>
+    activeSelectedKeys.includes(item.period || String(item.year))
+  );
+
+  // Toggle comparison selection
+  const toggleComparisonItem = (key) => {
+    if (trendTimeframe === 'monthly') {
+      setSelectedMonths((prev) => {
+        if (prev.includes(key)) {
+          if (prev.length <= 1) return prev; // Keep at least one item
+          return prev.filter((k) => k !== key);
+        } else {
+          return [...prev, key];
+        }
+      });
+    } else {
+      setSelectedYears((prev) => {
+        if (prev.includes(key)) {
+          if (prev.length <= 1) return prev;
+          return prev.filter((k) => k !== key);
+        } else {
+          return [...prev, key];
+        }
+      });
+    }
+  };
+
+  // Quick selection helpers
+  const handleSelectAll = () => {
+    if (trendTimeframe === 'monthly') {
+      setSelectedMonths(fullBaseData.map((d) => d.period));
+    } else {
+      setSelectedYears(fullBaseData.map((d) => d.period || String(d.year)));
+    }
+  };
+
+  const handleSelectPair = () => {
+    if (fullBaseData.length >= 2) {
+      const pair = fullBaseData.slice(-2).map((d) => d.period || String(d.year));
+      if (trendTimeframe === 'monthly') setSelectedMonths(pair);
+      else setSelectedYears(pair);
+    }
+  };
+
+  const handleSelectLastThree = () => {
+    if (fullBaseData.length >= 3) {
+      const trio = fullBaseData.slice(-3).map((d) => d.period || String(d.year));
+      if (trendTimeframe === 'monthly') setSelectedMonths(trio);
+      else setSelectedYears(trio);
+    }
+  };
+
+  const handleYearChange = (year) => {
+    setSelectedYear(year);
+    const monthsForYear = stats?.monthly_trend_by_year?.[year] || defaultMonthlyTrend;
+    setSelectedMonths(monthsForYear.map((m) => m.period));
+  };
+
+  // Comparison metrics calculation (only shown when user is actually comparing a subset, not the full dataset)
+  let comparisonSummary = null;
+  const isComparingSubset = activeTrendData.length >= 2 && activeTrendData.length < fullBaseData.length;
+  if (isComparingSubset) {
+    const itemA = activeTrendData[0];
+    const itemB = activeTrendData[activeTrendData.length - 1];
+    const diffTev = Number((itemB.akumulasiTevMiliar - itemA.akumulasiTevMiliar).toFixed(2));
+    const pctTev = itemA.akumulasiTevMiliar > 0
+      ? Number(((diffTev / itemA.akumulasiTevMiliar) * 100).toFixed(1))
+      : 0;
+    const diffNew = itemB.proyekBaru - itemA.proyekBaru;
+    const diffDone = itemB.proyekSelesai - itemA.proyekSelesai;
+    const diffArea = Number(((itemB.luasHa || 0) - (itemA.luasHa || 0)).toFixed(1));
+
+    comparisonSummary = {
+      count: activeTrendData.length,
+      itemA,
+      itemB,
+      diffTev,
+      pctTev,
+      diffNew,
+      diffDone,
+      diffArea,
+      isExactPair: activeTrendData.length === 2,
+    };
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8 text-slate-800">
@@ -123,7 +347,7 @@ export const AdminDashboardPage = () => {
           </div>
           <div className="mt-2">
             <div className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-              Rp 142,85 <span className="text-sm font-semibold text-slate-500">Miliar</span>
+              Rp {totalTevMiliar} <span className="text-sm font-semibold text-slate-500">Miliar</span>
             </div>
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 mt-1">
               <TrendingUp className="w-3.5 h-3.5" />
@@ -131,8 +355,8 @@ export const AdminDashboardPage = () => {
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between">
-            <span>Dari 18 Proyek Pesisir</span>
-            <span className="font-semibold text-slate-700">Rata-rata: Rp 7,9 M/proyek</span>
+            <span>Dari {totalProjects} Proyek Pesisir</span>
+            <span className="font-semibold text-slate-700">Rata-rata: Rp {(avgTevPerProject / 1e9).toFixed(1)} M/proyek</span>
           </div>
         </div>
 
@@ -148,19 +372,19 @@ export const AdminDashboardPage = () => {
           </div>
           <div className="mt-2">
             <div className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-              {ADMIN_SYSTEM_STATS.totalProjects}{' '}
+              {totalProjects}{' '}
               <span className="text-sm font-semibold text-slate-500">Proyek Riset</span>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-slate-600 mt-1">
-              <span className="font-semibold text-blue-600">{ADMIN_SYSTEM_STATS.projectsActive} Aktif</span>
+              <span className="font-semibold text-blue-600">{activeCount} Aktif</span>
               <span>•</span>
-              <span className="font-semibold text-amber-600">{ADMIN_SYSTEM_STATS.projectsPendingReview} Review</span>
+              <span className="font-semibold text-amber-600">{pendingCount} Review</span>
               <span>•</span>
-              <span className="font-semibold text-emerald-600">{ADMIN_SYSTEM_STATS.projectsCompleted} Selesai</span>
+              <span className="font-semibold text-emerald-600">{completedCount} Selesai</span>
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between">
-            <span>Perlu Perbaikan: <strong className="text-rose-600">{ADMIN_SYSTEM_STATS.projectsNeedsRevision}</strong></span>
+            <span>Perlu Perbaikan: <strong className="text-rose-600">{revisionCount}</strong></span>
             <span
               onClick={() => navigate('/admin/projects')}
               className="font-semibold text-blue-600 hover:underline cursor-pointer flex items-center gap-0.5"
@@ -183,7 +407,7 @@ export const AdminDashboardPage = () => {
           </div>
           <div className="mt-2">
             <div className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-              {formatNumber(ADMIN_SYSTEM_STATS.totalAreaHa)}{' '}
+              {formatNumber(totalAreaHa)}{' '}
               <span className="text-sm font-semibold text-slate-500">Hektare</span>
             </div>
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 mt-1">
@@ -209,15 +433,15 @@ export const AdminDashboardPage = () => {
           </div>
           <div className="mt-2">
             <div className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-              {ADMIN_SYSTEM_STATS.totalUsers}{' '}
+              {totalUsers}{' '}
               <span className="text-sm font-semibold text-slate-500">Pengguna</span>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-slate-600 mt-1">
-              <span>{ADMIN_SYSTEM_STATS.usersPeneliti} Peneliti</span>
+              <span>{usersPeneliti} Peneliti</span>
               <span>•</span>
-              <span>{ADMIN_SYSTEM_STATS.usersAnalyst} Analyst</span>
+              <span>{usersAnalyst} Analyst</span>
               <span>•</span>
-              <span>{ADMIN_SYSTEM_STATS.usersAdmin} Admin</span>
+              <span>{usersAdmin} Admin</span>
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between">
@@ -253,9 +477,9 @@ export const AdminDashboardPage = () => {
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={ECOSYSTEM_VALUATION_DISTRIBUTION.map((d) => ({
+                data={ecosystemData.map((d) => ({
                   name: d.name,
-                  miliar: Number((d.value / 1e9).toFixed(1)),
+                  miliar: Number(((d.value || 0) / 1e9).toFixed(1)),
                   fullValue: d.value,
                   color: d.color,
                   areaHa: d.areaHa,
@@ -270,7 +494,7 @@ export const AdminDashboardPage = () => {
                 />
                 <Tooltip
                   formatter={(value, name, item) => [
-                    `${formatIDR(item.payload.fullValue)} (${item.payload.areaHa} Ha)`,
+                    `${formatIDR(item.payload.fullValue)} (${formatNumber(item.payload.areaHa)} Ha)`,
                     'Nilai Valuasi',
                   ]}
                   contentStyle={{
@@ -283,7 +507,7 @@ export const AdminDashboardPage = () => {
                   itemStyle={{ color: '#93C5FD' }}
                 />
                 <Bar dataKey="miliar" radius={[6, 6, 0, 0]}>
-                  {ECOSYSTEM_VALUATION_DISTRIBUTION.map((entry, index) => (
+                  {ecosystemData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Bar>
@@ -293,13 +517,13 @@ export const AdminDashboardPage = () => {
 
           {/* Mini legend & summary under chart */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-xs">
-            {ECOSYSTEM_VALUATION_DISTRIBUTION.map((eco) => (
+            {ecosystemData.map((eco) => (
               <div key={eco.name} className="p-2 rounded bg-slate-50 border border-slate-100">
                 <div className="flex items-center gap-1.5 text-slate-600 text-[11px] truncate">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: eco.color }} />
                   <span className="truncate">{eco.name}</span>
                 </div>
-                <div className="font-bold text-slate-900 mt-0.5">Rp {eco.valueFormatted}</div>
+                <div className="font-bold text-slate-900 mt-0.5">Rp {eco.valueFormatted || `${((eco.value || 0) / 1e9).toFixed(1)} M`}</div>
                 <div className="text-[10px] text-slate-400">{eco.percentage}% dari TEV</div>
               </div>
             ))}
@@ -313,7 +537,7 @@ export const AdminDashboardPage = () => {
               Status Alur Kerja Proyek
             </h2>
             <p className="text-xs text-slate-500">
-              Distribusi 18 proyek penelitian dalam pipeline sistem
+              Distribusi {totalProjects} proyek penelitian dalam pipeline sistem
             </p>
           </div>
 
@@ -321,7 +545,7 @@ export const AdminDashboardPage = () => {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={PROJECT_STATUS_BREAKDOWN}
+                  data={workflowData}
                   dataKey="count"
                   nameKey="name"
                   cx="50%"
@@ -330,7 +554,7 @@ export const AdminDashboardPage = () => {
                   outerRadius={80}
                   paddingAngle={3}
                 >
-                  {PROJECT_STATUS_BREAKDOWN.map((entry, idx) => (
+                  {workflowData.map((entry, idx) => (
                     <Cell key={`status-cell-${idx}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -349,14 +573,14 @@ export const AdminDashboardPage = () => {
 
             {/* Centered label inside donut */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-xl font-bold text-slate-900">18</span>
+              <span className="text-xl font-bold text-slate-900">{totalProjects}</span>
               <span className="text-[10px] font-medium text-slate-400 uppercase">Total Proyek</span>
             </div>
           </div>
 
           {/* Legend Table */}
           <div className="space-y-1.5 text-xs pt-2 border-t border-slate-100">
-            {PROJECT_STATUS_BREAKDOWN.map((item) => (
+            {workflowData.map((item) => (
               <div key={item.name} className="flex items-center justify-between text-slate-600">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
@@ -373,66 +597,496 @@ export const AdminDashboardPage = () => {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 4. HISTORICAL VALUATION & SUBMISSION TREND (AREA CHART)        */}
+      {/* 4. HISTORICAL VALUATION & RESEARCH DYNAMICS (COMPOSED CHART)   */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white p-5 md:p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+      <div className="bg-white p-5 md:p-6 rounded-xl border border-slate-200 shadow-2xs space-y-5">
+        {/* Row 1: Header with Title, Mode Toggles, and Realtime Total Badge */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-slate-100 gap-3">
           <div>
-            <h2 className="text-sm md:text-base font-bold text-slate-900">
-              Tren Pertumbuhan Valuasi & Aktivitas Penelitian (6 Bulan Terakhir)
-            </h2>
-            <p className="text-xs text-slate-500">
-              Perkembangan akumulasi nilai moneter TEV (Miliar Rp) serta laju proyek baru dan selesai
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
+              <h2 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+                <span>Tren Pertumbuhan Valuasi & Dinamika Riset</span>
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {trendTimeframe === 'monthly'
+                ? `Eksplorasi data bulanan ${selectedYear} dan komparasi antar periode penelitian.`
+                : 'Analisis tren multi-tahun perkembangan nilai valuasi (TEV) dan rekapitulasi proyek periode 2021 - 2026.'}
             </p>
           </div>
-          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded self-start sm:self-auto flex items-center gap-1">
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>Akumulasi: Rp 142.85 Miliar</span>
-          </span>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* View Metric Tabs */}
+            <div className="flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-xs">
+              <button
+                onClick={() => setTrendMetricView('all')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                  trendMetricView === 'all'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Kombinasi
+              </button>
+              <button
+                onClick={() => setTrendMetricView('tev')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                  trendMetricView === 'tev'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Valuasi TEV
+              </button>
+              <button
+                onClick={() => setTrendMetricView('projects')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                  trendMetricView === 'projects'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Aktivitas Proyek
+              </button>
+            </div>
+
+            {/* Timeframe Toggle: Bulanan vs Tahunan */}
+            <div className="flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-xs">
+              <button
+                onClick={() => setTrendTimeframe('monthly')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  trendTimeframe === 'monthly'
+                    ? 'bg-white text-blue-700 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                🗓️ Bulanan
+              </button>
+              <button
+                onClick={() => setTrendTimeframe('yearly')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  trendTimeframe === 'yearly'
+                    ? 'bg-white text-blue-700 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                📅 Tahunan
+              </button>
+            </div>
+
+            {/* Current Total Badge */}
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded flex items-center gap-1">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Akumulasi: Rp {totalTevMiliar} Miliar</span>
+            </span>
+          </div>
         </div>
 
-        <div className="h-56 w-full">
+        {/* Row 2: Filter Periode & Komparasi (Sederhana, Bersih, Bebas Scrollbar) */}
+        <div className="bg-slate-50/80 rounded-xl border border-slate-200/90 p-3 md:p-3.5 space-y-2.5">
+          {/* Baris Kontrol: Pemilih Tahun & Pilihan Cepat */}
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              {trendTimeframe === 'monthly' ? (
+                <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-[11px] font-semibold text-slate-500">Tahun:</span>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => handleYearChange(Number(e.target.value))}
+                    className="font-bold text-slate-900 bg-transparent cursor-pointer outline-none text-xs pr-1"
+                  >
+                    {availableYears.map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                  <GitCompare className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-xs font-bold text-slate-800">Tren Multi-Tahun</span>
+                </div>
+              )}
+
+              {/* Tombol Pilihan Cepat */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    activeTrendData.length === fullBaseData.length
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  Semua
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectPair}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                    activeTrendData.length === 2
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <GitCompare className="w-3 h-3" />
+                  <span>Bandingkan 2</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectLastThree}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    activeTrendData.length === 3
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  3 Terakhir
+                </button>
+              </div>
+            </div>
+
+            {/* Status Keterangan Pilihan */}
+            <div className="text-[11px] font-medium text-slate-500">
+              {activeTrendData.length === fullBaseData.length ? (
+                <span className="text-slate-500">
+                  {trendTimeframe === 'monthly' ? `Menampilkan 12 bulan penuh (${selectedYear})` : 'Menampilkan seluruh tahun (2021-2026)'}
+                </span>
+              ) : activeTrendData.length === 2 ? (
+                <span className="text-blue-600 font-semibold flex items-center gap-1">
+                  <GitCompare className="w-3.5 h-3.5" />
+                  Komparasi: {activeTrendData[0]?.period || activeTrendData[0]?.label} vs {activeTrendData[1]?.period || activeTrendData[1]?.label}
+                </span>
+              ) : (
+                <span className="text-blue-600 font-semibold">
+                  {activeTrendData.length} dari {fullBaseData.length} periode dipilih
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Baris Strip Pilihan Bulan / Tahun (RESPONSIF, BEBAS SCROLLBAR, RAPI & ENIK DILIHAT) */}
+          <div className={`grid gap-1.5 pt-2 border-t border-slate-200/60 ${
+            trendTimeframe === 'monthly' ? 'grid-cols-6 sm:grid-cols-12' : 'grid-cols-3 sm:grid-cols-6'
+          }`}>
+            {fullBaseData.map((d) => {
+              const key = d.period || String(d.year);
+              const isSelected = activeSelectedKeys.includes(key);
+              const shortName = d.period || String(d.year);
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleComparisonItem(key)}
+                  title={`${d.label || key} (${isSelected ? 'Terpilih (klik untuk sembunyikan)' : 'Klik untuk tampilkan / bandingkan'})`}
+                  className={`py-1.5 px-0.5 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer select-none ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow-2xs ring-1 ring-blue-500'
+                      : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {shortName}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Row 3: Dedicated Comparison Delta Callout (Appears when 2 or 3+ periods are selected) */}
+        {comparisonSummary && (
+          <div className={`p-4 rounded-xl border transition-all ${
+            comparisonSummary.isExactPair
+              ? 'bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-emerald-50/80 border-blue-200 shadow-2xs'
+              : 'bg-slate-50 border-slate-200 shadow-2xs'
+          }`}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold shadow-2xs">
+                  <GitCompare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>
+                      {comparisonSummary.isExactPair
+                        ? `Komparasi Langsung 2 Periode: ${comparisonSummary.itemA.label} vs ${comparisonSummary.itemB.label}`
+                        : `Komparasi Multi-Periode (${comparisonSummary.count} Periode Terpilih)`}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    {comparisonSummary.isExactPair
+                      ? `Perbandingan trajektori valuasi dan metrik riset antara ${comparisonSummary.itemA.label} dan ${comparisonSummary.itemB.label}.`
+                      : `Rentang pengamatan dari ${comparisonSummary.itemA.label} hingga ${comparisonSummary.itemB.label}.`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Delta Badges */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {/* TEV Delta */}
+                <div className="px-3 py-1.5 rounded-lg bg-white border border-blue-200 shadow-2xs flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500 font-medium">Selisih TEV:</span>
+                  <span className={`font-mono font-bold ${
+                    comparisonSummary.diffTev >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                  }`}>
+                    {comparisonSummary.diffTev >= 0 ? '+' : ''}Rp {comparisonSummary.diffTev} Miliar
+                    <span className="ml-1 text-[10px] font-semibold">
+                      ({comparisonSummary.diffTev >= 0 ? '+' : ''}{comparisonSummary.pctTev}%)
+                    </span>
+                  </span>
+                </div>
+
+                {/* Project New Delta */}
+                <div className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-2xs flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500 font-medium">Proyek Baru:</span>
+                  <span className="font-mono font-bold text-blue-600">
+                    {comparisonSummary.diffNew >= 0 ? `+${comparisonSummary.diffNew}` : comparisonSummary.diffNew} Proyek
+                  </span>
+                </div>
+
+                {/* Project Done Delta */}
+                <div className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-2xs flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500 font-medium">Proyek Selesai:</span>
+                  <span className="font-mono font-bold text-amber-600">
+                    {comparisonSummary.diffDone >= 0 ? `+${comparisonSummary.diffDone}` : comparisonSummary.diffDone} Proyek
+                  </span>
+                </div>
+
+                {/* Area Delta */}
+                {comparisonSummary.diffArea !== 0 && (
+                  <div className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-2xs flex items-center gap-2">
+                    <span className="text-[11px] text-slate-500 font-medium">Delta Luas:</span>
+                    <span className="font-mono font-bold text-indigo-600">
+                      {comparisonSummary.diffArea >= 0 ? `+${formatNumber(comparisonSummary.diffArea)}` : formatNumber(comparisonSummary.diffArea)} Ha
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Row 4: The Dynamic Responsive ComposedChart */}
+        <div className="h-64 sm:h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={MONTHLY_TREND_DATA} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+            <ComposedChart
+              data={activeTrendData}
+              margin={{ top: 12, right: trendMetricView !== 'tev' ? 20 : 10, left: 0, bottom: 4 }}
+            >
               <defs>
-                <linearGradient id="tevGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563EB" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#2563EB" stopOpacity={0.0} />
+                <linearGradient id="composedTevGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2563EB" stopOpacity={0.35} />
+                  <stop offset="60%" stopColor="#3B82F6" stopOpacity={0.12} />
+                  <stop offset="100%" stopColor="#60A5FA" stopOpacity={0.0} />
+                </linearGradient>
+                <linearGradient id="barNewGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10B981" />
+                  <stop offset="100%" stopColor="#059669" />
+                </linearGradient>
+                <linearGradient id="barDoneGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#F59E0B" />
+                  <stop offset="100%" stopColor="#D97706" />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748B' }} />
-              <YAxis
-                tick={{ fontSize: 11, fill: '#64748B' }}
-                tickFormatter={(val) => `${val} M`}
-                domain={[80, 160]}
+
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+
+              <XAxis
+                dataKey="period"
+                tick={{ fontSize: 11, fill: '#64748B', fontWeight: 500 }}
+                stroke="#CBD5E1"
+                tickLine={false}
               />
+
+              {/* Left Y Axis for TEV */}
+              {(trendMetricView === 'all' || trendMetricView === 'tev') && (
+                <YAxis
+                  yAxisId="left"
+                  tick={{ fontSize: 11, fill: '#2563EB', fontWeight: 600 }}
+                  stroke="#CBD5E1"
+                  tickFormatter={(val) => `${val} M`}
+                  domain={[0, 'auto']}
+                  tickLine={false}
+                  axisLine={false}
+                />
+              )}
+
+              {/* Right Y Axis for Projects Count */}
+              {(trendMetricView === 'all' || trendMetricView === 'projects') && (
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 11, fill: '#10B981', fontWeight: 600 }}
+                  stroke="#CBD5E1"
+                  tickFormatter={(val) => `${val} Prj`}
+                  domain={[0, 'auto']}
+                  tickLine={false}
+                  axisLine={false}
+                />
+              )}
+
+              {/* Rich Custom Tooltip */}
               <Tooltip
-                formatter={(val, name) => [
-                  name === 'akumulasiTevMiliar' ? `Rp ${val} Miliar` : val,
-                  name === 'akumulasiTevMiliar' ? 'Akumulasi TEV' : name === 'proyekBaru' ? 'Proyek Baru' : 'Proyek Selesai',
-                ]}
-                contentStyle={{
-                  backgroundColor: '#0F172A',
-                  color: '#fff',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  border: 'none',
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const item = payload[0].payload;
+                    return (
+                      <div className="bg-slate-900/95 backdrop-blur-md text-white border border-slate-700/80 rounded-xl p-3.5 shadow-2xl space-y-2 text-xs min-w-[220px]">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                          <span className="font-bold text-slate-100 flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                            <span>{item.label || label}</span>
+                          </span>
+                          <span className="text-[10px] text-blue-300 bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-800/60 font-semibold uppercase">
+                            {trendTimeframe === 'monthly' ? `Tahun ${selectedYear}` : 'Tahunan'}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400 flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                              <span>Akumulasi TEV:</span>
+                            </span>
+                            <span className="font-bold text-blue-300 font-mono">
+                              Rp {item.akumulasiTevMiliar} Miliar
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400 flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                              <span>Proyek Baru:</span>
+                            </span>
+                            <span className="font-bold text-emerald-400 font-mono">
+                              +{item.proyekBaru} Proyek
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400 flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                              <span>Proyek Selesai:</span>
+                            </span>
+                            <span className="font-bold text-amber-300 font-mono">
+                              {item.proyekSelesai} Proyek
+                            </span>
+                          </div>
+                          {item.luasHa && (
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
+                              <span className="text-slate-400">Luas Wilayah:</span>
+                              <span className="font-semibold text-slate-200 font-mono">
+                                {formatNumber(item.luasHa)} Ha
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
                 }}
               />
-              <Area
-                type="monotone"
-                dataKey="akumulasiTevMiliar"
-                stroke="#2563EB"
-                strokeWidth={2.5}
-                fillOpacity={1}
-                fill="url(#tevGradient)"
-                name="akumulasiTevMiliar"
-                dot={{ r: 4.5, fill: '#2563EB', stroke: '#FFFFFF', strokeWidth: 2 }}
-                activeDot={{ r: 6.5, fill: '#1D4ED8', stroke: '#FFFFFF', strokeWidth: 2 }}
-              />
-            </AreaChart>
+
+              {/* Bar Elements for Projects Activity */}
+              {(trendMetricView === 'all' || trendMetricView === 'projects') && (
+                <>
+                  <Bar
+                    yAxisId="right"
+                    dataKey="proyekBaru"
+                    name="Proyek Baru"
+                    fill="url(#barNewGrad)"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={activeTrendData.length <= 4 ? 40 : 24}
+                  />
+                  <Bar
+                    yAxisId="right"
+                    dataKey="proyekSelesai"
+                    name="Proyek Selesai"
+                    fill="url(#barDoneGrad)"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={activeTrendData.length <= 4 ? 40 : 24}
+                  />
+                </>
+              )}
+
+              {/* Area & Line for TEV Valuation */}
+              {(trendMetricView === 'all' || trendMetricView === 'tev') && (
+                <Area
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="akumulasiTevMiliar"
+                  name="Akumulasi TEV (Miliar Rp)"
+                  stroke="#2563EB"
+                  strokeWidth={3}
+                  fillOpacity={1}
+                  fill="url(#composedTevGrad)"
+                  dot={{ r: 5, fill: '#2563EB', stroke: '#FFFFFF', strokeWidth: 2 }}
+                  activeDot={{ r: 7.5, fill: '#1D4ED8', stroke: '#FFFFFF', strokeWidth: 2.5 }}
+                />
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
+        </div>
+
+        {/* Row 5: 4 Metric Cards for Selected Comparison Window */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-slate-100 text-xs">
+          <div className="p-3 rounded-lg bg-blue-50/70 border border-blue-100 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 text-blue-700 font-semibold text-[11px]">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+              <span>Akumulasi TEV Terpilih</span>
+            </div>
+            <div className="text-base font-black text-slate-900 mt-1">
+              Rp {activeTrendData[activeTrendData.length - 1]?.akumulasiTevMiliar ?? totalTevMiliar}{' '}
+              <span className="text-xs font-semibold text-slate-500">Miliar</span>
+            </div>
+            <div className="text-[10px] text-blue-600 font-medium mt-0.5">
+              {activeTrendData.length} Periode Aktif Diamati
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-100 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 text-emerald-700 font-semibold text-[11px]">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span>Proyek Baru Ditambah</span>
+            </div>
+            <div className="text-base font-black text-slate-900 mt-1">
+              {activeTrendData.reduce((acc, curr) => acc + (curr.proyekBaru || 0), 0)}{' '}
+              <span className="text-xs font-semibold text-slate-500">Proyek Riset</span>
+            </div>
+            <div className="text-[10px] text-emerald-600 font-medium mt-0.5">
+              Dalam Rentang Terpilih
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-amber-50/70 border border-amber-100 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 text-amber-700 font-semibold text-[11px]">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <span>Proyek Tervalidasi</span>
+            </div>
+            <div className="text-base font-black text-slate-900 mt-1">
+              {activeTrendData.reduce((acc, curr) => acc + (curr.proyekSelesai || 0), 0)}{' '}
+              <span className="text-xs font-semibold text-slate-500">Proyek Selesai</span>
+            </div>
+            <div className="text-[10px] text-amber-700 font-medium mt-0.5">
+              Review & Laporan Disetujui
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-indigo-50/70 border border-indigo-100 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 text-indigo-700 font-semibold text-[11px]">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+              <span>Cakupan Luas Spasial</span>
+            </div>
+            <div className="text-base font-black text-slate-900 mt-1">
+              {formatNumber(activeTrendData[activeTrendData.length - 1]?.luasHa ?? totalAreaHa)}{' '}
+              <span className="text-xs font-semibold text-slate-500">Ha</span>
+            </div>
+            <div className="text-[10px] text-indigo-600 font-medium mt-0.5">
+              Poligon GIS Kawasan Pesisir
+            </div>
+          </div>
         </div>
       </div>
 
@@ -457,7 +1111,7 @@ export const AdminDashboardPage = () => {
                 onClick={() => navigate('/admin/projects')}
                 className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 self-start sm:self-auto cursor-pointer"
               >
-                <span>Lihat Semua Proyek ({ADMIN_PROJECTS_LIST.length})</span>
+                <span>Lihat Semua Proyek ({projectsList.length})</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -477,7 +1131,7 @@ export const AdminDashboardPage = () => {
 
               {/* Status filter tabs */}
               <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
-                {['ALL', 'MENUNGGU_ANALYST', 'DIKERJAKAN', 'SELESAI'].map((st) => (
+                {['ALL', 'MENUNGGU_ANALYST', 'DIKERJAKAN', 'PERLU_PERBAIKAN', 'SELESAI'].map((st) => (
                   <button
                     key={st}
                     onClick={() => setStatusFilter(st)}
@@ -493,6 +1147,8 @@ export const AdminDashboardPage = () => {
                       ? 'Menunggu Review'
                       : st === 'DIKERJAKAN'
                       ? 'Dikerjakan'
+                      : st === 'PERLU_PERBAIKAN'
+                      ? 'Revisi'
                       : 'Selesai'}
                   </button>
                 ))}
@@ -542,12 +1198,15 @@ export const AdminDashboardPage = () => {
                       </td>
                       <td className="py-3 px-4 text-center">
                         <button
-                          onClick={() => navigate(`/peneliti/projects/${proj.id}/maps`)}
-                          title="Buka proyek di modul peneliti"
-                          className="px-2 py-1 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700 rounded border border-slate-200 text-[11px] font-semibold transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          onClick={() => {
+                            setSelectedProjectForModal(proj.rawProject || proj);
+                            setIsModulesModalOpen(true);
+                          }}
+                          title="Buka seluruh modul proyek ini"
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-200 text-[11px] font-semibold transition-colors inline-flex items-center gap-1 cursor-pointer shadow-2xs"
                         >
-                          <Eye className="w-3 h-3" />
-                          <span>Detail</span>
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Buka Modul</span>
                         </button>
                       </td>
                     </tr>
@@ -558,7 +1217,7 @@ export const AdminDashboardPage = () => {
           </div>
 
           <div className="p-3 bg-slate-50 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-            <span>Menampilkan {filteredProjects.length} dari {ADMIN_PROJECTS_LIST.length} proyek penelitian</span>
+            <span>Menampilkan {filteredProjects.length} dari {projectsList.length} proyek penelitian</span>
             <span className="font-medium text-slate-600">Terakhir diperbarui: Hari ini</span>
           </div>
         </div>
@@ -616,27 +1275,34 @@ export const AdminDashboardPage = () => {
                 onClick={() => navigate('/admin/users')}
                 className="text-[11px] font-semibold text-blue-600 hover:underline cursor-pointer"
               >
-                Kelola ({ADMIN_USERS_LIST.length})
+                Kelola ({totalUsers})
               </button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-100">
-                <div className="text-base font-bold text-blue-700">24</div>
+                <div className="text-base font-bold text-blue-700">{usersPeneliti}</div>
                 <div className="text-[10px] text-slate-500 font-medium">Peneliti</div>
               </div>
               <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-100">
-                <div className="text-base font-bold text-amber-700">10</div>
+                <div className="text-base font-bold text-amber-700">{usersAnalyst}</div>
                 <div className="text-[10px] text-slate-500 font-medium">Analyst</div>
               </div>
               <div className="p-2.5 rounded-lg bg-indigo-50/60 border border-indigo-100">
-                <div className="text-base font-bold text-indigo-700">4</div>
+                <div className="text-base font-bold text-indigo-700">{usersAdmin}</div>
                 <div className="text-[10px] text-slate-500 font-medium">Admin</div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Interactive Project Modules Launcher Modal */}
+      <ProjectModulesModal
+        isOpen={isModulesModalOpen}
+        onClose={() => setIsModulesModalOpen(false)}
+        project={selectedProjectForModal}
+      />
     </div>
   );
 };

@@ -16,30 +16,30 @@ import {
 export const MOCK_VALUATION_AREAS: AreaOption[] = [
   {
     id: 'poly-1',
-    code: 'TL-MG-01',
-    name: 'Mangrove Barat (Hutan Lindung Prapat Benoa)',
-    areaHa: 79.86,
+    code: 'TL-MG-04A',
+    name: 'Mangrove Lebat (Tahura Ngurah Rai)',
+    areaHa: 45.20,
     indexCode: 'IDX-001'
   },
   {
     id: 'poly-2',
-    code: 'TL-MG-02',
-    name: 'Mangrove Timur (Estuari Suwung)',
-    areaHa: 62.40,
+    code: 'TL-MG-04B',
+    name: 'Mangrove Sedang (Estuari Benoa)',
+    areaHa: 28.50,
     indexCode: 'IDX-002'
   },
   {
     id: 'poly-3',
-    code: 'TL-MG-03',
-    name: 'Zona Restorasi Pesisir Selatan Teluk Benoa',
-    areaHa: 45.20,
+    code: 'TL-MG-04C',
+    name: 'Mangrove Jarang (Sempadan Pesisir)',
+    areaHa: 15.00,
     indexCode: 'IDX-003'
   },
   {
     id: 'all',
     code: 'ALL-BENOA',
     name: 'Seluruh Kawasan Penelitian Teluk Benoa',
-    areaHa: 187.46,
+    areaHa: 88.70,
     indexCode: 'SEMUA-AREA'
   }
 ];
@@ -350,11 +350,16 @@ class ValuationService {
       const match = projectData.landCovers.find((lc: any) => lc.id === areaId || lc.code === areaId || lc.name === areaId) || projectData.landCovers[0];
       if (match) {
         const areaHa = Number(match.areaHa) || 50;
-        const total = Number(match.totalValue) || 10000000000;
-        const provVal = Math.round(total * 0.28);
-        const regVal = Math.round(total * 0.45);
-        const suppVal = Math.round(total * 0.15);
-        const cultVal = Math.max(0, total - provVal - regVal - suppVal);
+        const total = Number(match.totalValue) || 24871677785;
+        const provDetail = match.serviceDetails?.find((s: any) => s.serviceId === 'provisioning')?.value;
+        const regDetail = match.serviceDetails?.find((s: any) => s.serviceId === 'regulating')?.value;
+        const suppDetail = match.serviceDetails?.find((s: any) => s.serviceId === 'supporting')?.value;
+        const cultDetail = match.serviceDetails?.find((s: any) => s.serviceId === 'cultural')?.value;
+
+        const provVal = provDetail ?? Math.round(total * 0.8009);
+        const regVal = regDetail ?? Math.round(total * 0.0948);
+        const suppVal = suppDetail ?? Math.round(total * 0.0612);
+        const cultVal = cultDetail ?? Math.max(0, total - provVal - regVal - suppVal);
 
         const isCoral = (projectData.ecosystem || '').toLowerCase().includes('karang');
 
@@ -374,22 +379,30 @@ class ValuationService {
               rows: [
                 {
                   id: `${match.id}-prov-1`,
+                  no: 1,
                   commodity: isCoral ? 'Hasil Tangkapan Ikan Karang Konsumsi' : 'Hasil Tangkapan Kepiting & Ikan Estuari',
                   productivity: isCoral ? '380 kg/ha/tahun' : '520 kg/ha/tahun',
                   unit: 'kg/tahun',
+                  unitPrice: isCoral ? 85000 : 125000,
                   pricePerUnit: isCoral ? 85000 : 125000,
+                  quantityVolume: isCoral ? Math.round(380 * areaHa) : Math.round(520 * areaHa),
                   areaHa: areaHa,
                   totalValue: Math.round(provVal * 0.65),
+                  referenceSource: 'Survei Pasar & TPI Daerah 2026',
                   source: 'Survei Pasar & TPI Daerah 2026'
                 },
                 {
                   id: `${match.id}-prov-2`,
+                  no: 2,
                   commodity: isCoral ? 'Bibit Karang & Benih Biota Karang' : 'Biomassa Kayu Bakau & Bibit Silvofishery',
                   productivity: isCoral ? '150 koloni/ha' : '45 m³/ha',
                   unit: isCoral ? 'koloni' : 'm³/ha',
+                  unitPrice: isCoral ? 65000 : 2850000,
                   pricePerUnit: isCoral ? 65000 : 2850000,
+                  quantityVolume: isCoral ? Math.round(150 * areaHa) : Math.round(45 * areaHa),
                   areaHa: areaHa,
                   totalValue: Math.round(provVal * 0.35),
+                  referenceSource: 'Catatan Nelayan Lokal PKSPL',
                   source: 'Catatan Nelayan Lokal PKSPL'
                 }
               ]
@@ -404,18 +417,28 @@ class ValuationService {
               rows: [
                 {
                   id: `${match.id}-reg-1`,
+                  no: 1,
+                  functionAsset: isCoral ? 'Breakwater & Wave Attenuation (Peredam Ombak)' : 'Konstruksi Seawall Alternatif (Pencegah Erosi)',
                   assetFunction: isCoral ? 'Breakwater & Wave Attenuation (Peredam Ombak)' : 'Konstruksi Seawall Alternatif (Pencegah Erosi)',
+                  parameterUnit: '3.5 km garis pantai',
                   lengthParameter: '3.5 km garis pantai',
+                  unitPrice: Math.round(regVal * 0.6 / 3.5),
                   unitCost: Math.round(regVal * 0.6 / 3.5),
                   totalValue: Math.round(regVal * 0.6),
+                  referenceSource: 'Pedoman Standar PU SDA Pesisir',
                   source: 'Pedoman Standar PU SDA Pesisir'
                 },
                 {
                   id: `${match.id}-reg-2`,
+                  no: 2,
+                  functionAsset: isCoral ? 'Stabilisasi Garis Pantai & Perlindungan Abrasi' : 'Sekuestrasi Karbon Biru (Blue Carbon Storage)',
                   assetFunction: isCoral ? 'Stabilisasi Garis Pantai & Perlindungan Abrasi' : 'Sekuestrasi Karbon Biru (Blue Carbon Storage)',
+                  parameterUnit: `${areaHa} ha zona pelindung`,
                   lengthParameter: `${areaHa} ha zona pelindung`,
-                  unitCost: Math.round(regVal * 0.4 / areaHa),
+                  unitPrice: Math.round(regVal * 0.4 / Math.max(1, areaHa)),
+                  unitCost: Math.round(regVal * 0.4 / Math.max(1, areaHa)),
                   totalValue: Math.round(regVal * 0.4),
+                  referenceSource: 'IPCC Wetland Supplement & Bappenas',
                   source: 'IPCC Wetland Supplement & Bappenas'
                 }
               ]
@@ -430,18 +453,26 @@ class ValuationService {
               rows: [
                 {
                   id: `${match.id}-supp-1`,
+                  no: 1,
                   habitatFunction: 'Daerah Asuhan & Pemijahan (Nursery Ground)',
+                  parameter: `${areaHa} ha ekosistem`,
                   ecosystemAreaHa: areaHa,
-                  recruitmentContribution: Math.round(suppVal * 0.7 / areaHa),
+                  unitPrice: Math.round(suppVal * 0.7 / Math.max(1, areaHa)),
+                  recruitmentContribution: Math.round(suppVal * 0.7 / Math.max(1, areaHa)),
                   totalValue: Math.round(suppVal * 0.7),
+                  referenceSource: 'Studi Ekologi Pesisir PKSPL IPB',
                   source: 'Studi Ekologi Pesisir PKSPL IPB'
                 },
                 {
                   id: `${match.id}-supp-2`,
+                  no: 2,
                   habitatFunction: 'Keanekaragaman Hayati & Habitat Biota Langka',
+                  parameter: `${areaHa} ha zona penyangga`,
                   ecosystemAreaHa: areaHa,
-                  recruitmentContribution: Math.round(suppVal * 0.3 / areaHa),
+                  unitPrice: Math.round(suppVal * 0.3 / Math.max(1, areaHa)),
+                  recruitmentContribution: Math.round(suppVal * 0.3 / Math.max(1, areaHa)),
                   totalValue: Math.round(suppVal * 0.3),
+                  referenceSource: 'BKSDA & Tim Peneliti IPB',
                   source: 'BKSDA & Tim Peneliti IPB'
                 }
               ]
@@ -456,18 +487,28 @@ class ValuationService {
               rows: [
                 {
                   id: `${match.id}-cult-1`,
+                  no: 1,
+                  attraction: isCoral ? 'Wisata Selam & Snorkeling Bahari' : 'Ekowisata Boardwalk & Hutan Mangrove',
                   tourismProgram: isCoral ? 'Wisata Selam & Snorkeling Bahari' : 'Ekowisata Boardwalk & Hutan Mangrove',
+                  parameter: '35.000 org/th',
                   respondentCount: 35000,
+                  travelCostWtp: Math.round(cultVal * 0.75 / 35000),
                   costPerUnit: Math.round(cultVal * 0.75 / 35000),
                   totalValue: Math.round(cultVal * 0.75),
+                  referenceSource: 'Survei Wisatawan Mancanegara & Domestik',
                   source: 'Survei Wisatawan Mancanegara & Domestik'
                 },
                 {
                   id: `${match.id}-cult-2`,
+                  no: 2,
+                  attraction: 'Wisata Edukasi Lingkungan & Penelitian Lapangan',
                   tourismProgram: 'Wisata Edukasi Lingkungan & Penelitian Lapangan',
+                  parameter: '8.500 org/th',
                   respondentCount: 8500,
+                  travelCostWtp: Math.round(cultVal * 0.25 / 8500),
                   costPerUnit: Math.round(cultVal * 0.25 / 8500),
                   totalValue: Math.round(cultVal * 0.25),
+                  referenceSource: 'Tiket Masuk & Registrasi Pengunjung',
                   source: 'Tiket Masuk & Registrasi Pengunjung'
                 }
               ]
