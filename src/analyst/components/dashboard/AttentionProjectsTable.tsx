@@ -127,6 +127,16 @@ export const AttentionProjectsTable: React.FC<AttentionProjectsTableProps> = ({ 
                   {/* Status */}
                   <td className="py-3.5 px-4">
                     <StatusBadge status={proj.status} size="sm" />
+                    {proj.status === 'DALAM_REVIEW' && (
+                      <div className="text-[10px] text-purple-700 font-semibold mt-1 truncate max-w-[150px]" title={proj.reviewedBy || 'Dr. Benny Nababan'}>
+                        Oleh: {proj.reviewedBy || 'Dr. Benny Nababan'}
+                      </div>
+                    )}
+                    {proj.status === 'REVISI' && (
+                      <div className="text-[10px] text-rose-700 font-semibold mt-1 truncate max-w-[150px]" title={proj.reviewedBy || 'Dr. Benny Nababan'}>
+                        Revisi: {proj.reviewedBy || 'Dr. Benny Nababan'}
+                      </div>
+                    )}
                   </td>
 
                   {/* Terakhir Diperbarui */}

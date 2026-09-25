@@ -90,6 +90,7 @@ export const MOCK_ATTENTION_PROJECTS: AttentionProject[] = [
     ecosystem: 'Terumbu Karang & Kawasan Konservasi',
     location: 'Kawasan Konservasi Perairan Nusa Penida, Klungkung, Bali',
     status: 'DALAM_REVIEW',
+    reviewedBy: 'Dr. Benny Nababan',
     updatedAt: '2026-09-14 16:45',
     relativeTime: 'Kemarin, 16:45',
     actionRequired: 'Review',

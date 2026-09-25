@@ -83,15 +83,15 @@ export const ReviewToolbar: React.FC<ReviewToolbarProps> = ({
   };
 
   const tools = [
-    { id: 'select' as ToolMode, label: 'Pilih / Jelajah', shortLabel: 'Pilih', icon: MousePointer },
-    { id: 'comment' as ToolMode, label: 'Beri Pin Komentar', shortLabel: 'Pin', icon: MessageSquarePlus },
+    { id: 'select' as ToolMode, label: 'Pilih & Geser Elemen (Move)', shortLabel: 'Pilih', icon: MousePointer },
+    { id: 'comment' as ToolMode, label: 'Beri Pin Komentar Telaah', shortLabel: 'Pin', icon: MessageSquarePlus },
     { id: 'pen' as ToolMode, label: 'Pen / Coret Bebas', shortLabel: 'Pen', icon: PenTool },
     { id: 'highlight' as ToolMode, label: 'Highlight Stabilo', shortLabel: 'Stabilo', icon: Highlighter },
-    { id: 'rectangle' as ToolMode, label: 'Kotak / Frame', shortLabel: 'Kotak', icon: Square },
-    { id: 'circle' as ToolMode, label: 'Lingkaran / Zona', shortLabel: 'Lingkar', icon: CircleIcon },
+    { id: 'rectangle' as ToolMode, label: 'Kotak / Frame (Bisa Digeser)', shortLabel: 'Kotak', icon: Square },
+    { id: 'circle' as ToolMode, label: 'Lingkaran / Zona (Bisa Digeser)', shortLabel: 'Lingkar', icon: CircleIcon },
     { id: 'arrow' as ToolMode, label: 'Panah Petunjuk', shortLabel: 'Panah', icon: ArrowUpRight },
-    { id: 'text' as ToolMode, label: 'Teks Catatan', shortLabel: 'Teks', icon: Type },
-    { id: 'eraser' as ToolMode, label: 'Penghapus Elemen', shortLabel: 'Hapus', icon: Eraser },
+    { id: 'text' as ToolMode, label: 'Teks Catatan (Bisa Digeser)', shortLabel: 'Teks', icon: Type },
+    { id: 'eraser' as ToolMode, label: 'Penghapus Elemen Anotasi', shortLabel: 'Hapus', icon: Eraser },
   ];
 
   // Dynamic position classes

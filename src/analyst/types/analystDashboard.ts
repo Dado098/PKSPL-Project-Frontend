@@ -38,6 +38,9 @@ export interface AttentionProject {
   ecosystem: string;
   location?: string;
   status: ProjectStatus;
+  reviewedBy?: string;
+  reviewers?: string[];
+  reviewedAt?: string;
   updatedAt: string;
   relativeTime: string;
   actionRequired: 'Review' | 'Lihat';

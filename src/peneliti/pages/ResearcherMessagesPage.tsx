@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { ResearcherConversationListPanel } from '../components/chat/ResearcherConversationListPanel';
 import { ResearcherChatWindowPanel } from '../components/chat/ResearcherChatWindowPanel';
@@ -6,6 +7,7 @@ import { ResearcherEmptyChatState } from '../components/chat/ResearcherEmptyChat
 import { AlertCircle, X } from 'lucide-react';
 
 export const ResearcherMessagesPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const {
     conversations,
     directoryUsers,
@@ -25,6 +27,22 @@ export const ResearcherMessagesPage: React.FC = () => {
     deleteMessage,
     clearError,
   } = useChat();
+
+  // Auto-buka percakapan saat diarahkan dari pop up notifikasi (?user=xxx)
+  useEffect(() => {
+    const targetUserId = searchParams.get('user');
+    if (!targetUserId || conversations.length === 0) return;
+
+    const found = conversations.find(
+      (c) => String(c.userId) === String(targetUserId) || String(c.otherUser?.id) === String(targetUserId)
+    );
+
+    if (found) {
+      selectConversation(found.id);
+    } else {
+      createNewConversation(targetUserId);
+    }
+  }, [searchParams, conversations, selectConversation, createNewConversation]);
 
   return (
     <div className="h-[calc(100vh-4rem)] w-full flex flex-col overflow-hidden bg-white">

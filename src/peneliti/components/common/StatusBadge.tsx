@@ -31,14 +31,21 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
       break;
     case 'MENUNGGU_ANALYST':
     case 'MENUNGGU_REVIEW':
-      bg = 'bg-purple-50 text-purple-700 border-purple-200';
-      dot = 'bg-purple-500';
+      bg = 'bg-blue-50 text-blue-700 border-blue-200';
+      dot = 'bg-blue-500';
       label = 'Menunggu Analyst';
       break;
+    case 'DALAM_REVIEW':
+      bg = 'bg-purple-50 text-purple-700 border-purple-200';
+      dot = 'bg-purple-500';
+      label = 'Dalam Review';
+      break;
     case 'PERLU_PERBAIKAN':
+    case 'REVISI':
+    case 'NEED_REVISION':
       bg = 'bg-rose-50 text-rose-700 border-rose-200';
       dot = 'bg-rose-500 animate-pulse';
-      label = 'Perlu Perbaikan';
+      label = 'Revisi';
       break;
     case 'SELESAI':
       bg = 'bg-emerald-50 text-emerald-700 border-emerald-200';

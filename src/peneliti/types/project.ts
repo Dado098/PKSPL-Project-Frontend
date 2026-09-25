@@ -2,8 +2,10 @@ export type ProjectStatus =
   | 'DRAFT' 
   | 'DIKERJAKAN' 
   | 'SIAP_REVIEW' 
+  | 'DALAM_REVIEW' 
   | 'MENUNGGU_ANALYST' 
   | 'PERLU_PERBAIKAN' 
+  | 'REVISI' 
   | 'SELESAI';
 
 export interface Project {
@@ -19,6 +21,9 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;
+  reviewedBy?: string;
+  reviewers?: string[];
+  reviewedAt?: string;
   analystComment?: string;
   hasShp?: boolean;
 }

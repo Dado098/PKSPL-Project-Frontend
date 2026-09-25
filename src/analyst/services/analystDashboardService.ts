@@ -1,6 +1,7 @@
 import { apiClient } from './api';
 import { AnalystDashboardData, AnalystUser, AttentionProject, ProjectStatusDistribution } from '../types/analystDashboard';
 import { ProjectStatus } from '../types/project';
+import { annotationService } from './annotationService';
 import {
   DEFAULT_ANALYST_USER,
   getMockAnalystDashboardData,
@@ -52,6 +53,50 @@ class AnalystDashboardService {
     }
 
     const code = item.code || item.kode_proyek || (item.id_proyek ? `PRJ-${String(item.id_proyek).padStart(3, '0')}` : `PRJ-${item.id}`);
+    const idKey = String(item.id_proyek || item.id || code);
+
+    // Cek jika status di-override oleh localStorage via annotationService
+    const localStatus = annotationService.getProjectStatus(code, normalizedStatus);
+    if (localStatus && localStatus !== 'SIAP_REVIEW') {
+      normalizedStatus = localStatus;
+    } else if (idKey) {
+      const statusById = annotationService.getProjectStatus(idKey, normalizedStatus);
+      if (statusById && statusById !== 'SIAP_REVIEW') {
+        normalizedStatus = statusById;
+      }
+    }
+
+    // Ambil reviewer: dari item backend, atau dari localStorage annotationService, atau fallback 'Dr. Benny Nababan'
+    let rawReviewers: string[] = [];
+    if (Array.isArray(item.reviewers) && item.reviewers.length > 0) {
+      rawReviewers.push(...item.reviewers);
+    }
+    const backendReviewedBy = item.reviewedBy || item.reviewed_by || item.reviewer?.nama || item.reviewer?.name;
+    if (backendReviewedBy) {
+      rawReviewers.push(...String(backendReviewedBy).split(',').map(s => s.trim()).filter(Boolean));
+    }
+
+    const localReviewersCode = annotationService.getProjectReviewers(code);
+    if (localReviewersCode.length > 0) rawReviewers.push(...localReviewersCode);
+    if (idKey && idKey !== code) {
+      const localReviewersId = annotationService.getProjectReviewers(idKey);
+      if (localReviewersId.length > 0) rawReviewers.push(...localReviewersId);
+    }
+
+    // Deduplikasi reviewers
+    const uniqueReviewers: string[] = [];
+    for (const r of rawReviewers) {
+      if (!uniqueReviewers.some(u => u.toLowerCase() === r.toLowerCase())) {
+        uniqueReviewers.push(r);
+      }
+    }
+
+    if (uniqueReviewers.length === 0 && (normalizedStatus === 'DALAM_REVIEW' || normalizedStatus === 'REVISI')) {
+      uniqueReviewers.push('Dr. Benny Nababan');
+    }
+
+    const reviewedBy = uniqueReviewers.length > 0 ? uniqueReviewers.join(', ') : undefined;
+
     const name = item.name || item.nama_proyek || 'Proyek Penelitian Valuasi';
     const lead = item.lead || item.peneliti || item.user?.nama || item.user?.name || 'Bima Saputra';
     
@@ -74,13 +119,15 @@ class AnalystDashboardService {
       ecosystem: item.ecosystem || item.ekosistem || 'Ekosistem Pesisir & Laut',
       location,
       status: normalizedStatus,
+      reviewedBy,
+      reviewers: uniqueReviewers,
       updatedAt: item.updatedAt || (item.updated_at ? String(item.updated_at).replace('T', ' ').substring(0, 16) : '2026-09-23 08:00'),
       relativeTime: item.relativeTime || 'Baru saja diperbarui',
       actionRequired: (normalizedStatus === 'SIAP_REVIEW' || normalizedStatus === 'DALAM_REVIEW') ? 'Review' : 'Lihat',
       attentionReason: item.attentionReason || (
         normalizedStatus === 'SIAP_REVIEW' ? 'Pengajuan baru dari Peneliti, menunggu review awal' :
-        normalizedStatus === 'DALAM_REVIEW' ? 'Sedang dalam proses telaah dan validasi formulasi' :
-        normalizedStatus === 'REVISI' ? 'Menunggu perbaikan dokumen dari Peneliti' :
+        normalizedStatus === 'DALAM_REVIEW' ? (uniqueReviewers.length > 1 ? `Sedang ditelaah oleh Tim Reviewer (${reviewedBy})` : `Sedang ditelaah oleh ${reviewedBy || 'Dr. Benny Nababan'}`) :
+        normalizedStatus === 'REVISI' ? (uniqueReviewers.length > 1 ? `Catatan revisi dari ${reviewedBy}` : 'Menunggu perbaikan dokumen dari Peneliti') :
         normalizedStatus === 'SELESAI' ? 'Telaah telah disetujui dan selesai diverifikasi' :
         'Draft proyek penelitian'
       ),

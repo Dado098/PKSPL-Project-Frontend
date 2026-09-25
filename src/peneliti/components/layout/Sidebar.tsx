@@ -18,7 +18,8 @@ import {
   ShieldAlert,
   Sliders,
   Home,
-  MessageSquare
+  MessageSquare,
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -28,12 +29,23 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { activeProject, activeProjectId, simulateAnalystRejection } = useProject();
-  const { user } = useAuth() || {};
+  const { user, logout } = useAuth() || {};
   const isAdmin = user?.role?.nama_role === 'Super Admin' || user?.role?.nama_role === 'Admin' || user?.role === 'admin';
   const { totalUnreadCount } = useChat();
   const location = useLocation();
   const params = useParams<{ projectId?: string }>();
   const projId = params.projectId || activeProjectId || 'PKS-994KY1';
+
+  const handleLogout = async () => {
+    localStorage.removeItem('pkspl_token');
+    if (logout) {
+      await logout();
+    } else {
+      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
+    }
+    window.location.href = '/login';
+  };
 
   // Navigation workflow items (9 Steps)
   const allWorkflowItems = [
@@ -267,20 +279,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
 
         {/* Settings / Info */}
         {!collapsed && (
-          <>
-            <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 cursor-pointer rounded hover:bg-slate-800/60">
-              <Sliders className="w-4 h-4" />
-              <span>Pengaturan Workflow</span>
-            </div>
-            
-            <NavLink
-              to="/"
-              className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-blue-400 cursor-pointer rounded hover:bg-slate-800/60 transition-colors mt-1"
-            >
-              <Home className="w-4 h-4" />
-              <span>Kembali ke Halaman Awal</span>
-            </NavLink>
-          </>
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 cursor-pointer rounded hover:bg-slate-800/60">
+            <Sliders className="w-4 h-4" />
+            <span>Pengaturan Workflow</span>
+          </div>
+        )}
+
+        {/* Tombol Keluar */}
+        {!collapsed ? (
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded transition-colors mt-1 text-left cursor-pointer"
+            title="Keluar dari akun sistem"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span>Keluar</span>
+          </button>
+        ) : (
+          <button
+            onClick={handleLogout}
+            title="Keluar / Logout"
+            className="w-full flex items-center justify-center p-2 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         )}
       </div>
     </aside>

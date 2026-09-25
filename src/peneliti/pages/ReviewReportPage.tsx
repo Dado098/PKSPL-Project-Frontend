@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
 import { useSpreadsheet } from '../context/SpreadsheetContext';
@@ -35,8 +35,22 @@ import {
   Info,
   TrendingUp,
   Scale,
-  History
+  History,
+  ShieldCheck,
+  ShieldAlert,
+  CheckSquare,
+  Square,
+  MessageSquare
 } from 'lucide-react';
+import { annotationService, ProjectRevisionDetails } from '../../analyst/services/annotationService';
+import { AnnotationItem, ReviewComment } from '../../analyst/types/annotation';
+import { ResearchMapView } from '../../analyst/components/review/ResearchMapView';
+import { ResearchSectionsView } from '../../analyst/components/review/ResearchSectionsView';
+import { AnnotationOverlay } from '../../analyst/components/review/AnnotationOverlay';
+import { CommentSidePanel } from '../../analyst/components/review/CommentSidePanel';
+import { getProjectResearchData } from '../../analyst/mock/projectResearchDataMock';
+import { INITIAL_MAP_LAYERS } from '../mock/spatialData';
+import { updateProyek } from '../../services/projectService';
 import {
   ResponsiveContainer,
   BarChart,
@@ -86,6 +100,20 @@ const ReviewReportPageContent: React.FC = () => {
   const currentProject = projects.find(p => p.id === routeProjId || p.code === routeProjId) || activeProject;
   const effectiveProjId = currentProject?.id || routeProjId || 'PKS-994KY1';
 
+  // Research data & fallback resolution
+  const researchData = useMemo(() => getProjectResearchData(effectiveProjId), [effectiveProjId]);
+  const activeResearchData = useMemo(() => {
+    return {
+      ...researchData,
+      projectCode: currentProject?.code || researchData.projectCode || effectiveProjId,
+      projectName: currentProject?.name || researchData.projectName,
+      lead: currentProject?.lead || researchData.lead,
+      researcherName: currentProject?.lead || researchData.researcherName,
+      ecosystem: currentProject?.ecosystem || researchData.ecosystem,
+      location: currentProject?.location || researchData.location
+    };
+  }, [researchData, currentProject, effectiveProjId]);
+
   // Sync activeProjectId if route parameter differs
   useEffect(() => {
     if (params.projectId && params.projectId !== activeProjectId) {
@@ -96,15 +124,132 @@ const ReviewReportPageContent: React.FC = () => {
     }
   }, [params.projectId, activeProjectId, projects, setActiveProjectId]);
 
-  // Project's dynamic spatial items
-  const currentLandCovers = (getProjectLandCovers ? getProjectLandCovers(effectiveProjId) : []) || [];
-  const currentIndices = (getProjectIndices ? getProjectIndices(effectiveProjId) : []) || [];
-  const currentLayers = (getProjectLayers ? getProjectLayers(effectiveProjId) : []) || [];
+  // Project's dynamic spatial items with seamless fallback to research data
+  const rawLandCovers = (getProjectLandCovers ? getProjectLandCovers(effectiveProjId) : []) || [];
+  const currentLandCovers = (rawLandCovers && rawLandCovers.length > 0)
+    ? rawLandCovers
+    : (activeResearchData.landCovers as any[]);
+
+  const rawIndices = (getProjectIndices ? getProjectIndices(effectiveProjId) : []) || [];
+  const currentIndices = (rawIndices && rawIndices.length > 0)
+    ? rawIndices
+    : activeResearchData.landCovers.map((lc) => ({
+        id: `idx-${lc.id}`,
+        code: lc.indexCode || 'IDX-001',
+        name: lc.name,
+        landCoverName: lc.name,
+        landCoverType: lc.type,
+        areaHa: lc.areaHa,
+        unit: 'ha',
+        spatialStatus: 'connected' as const,
+        status: 'Verified'
+      }));
+
+  const rawLayers = (getProjectLayers ? getProjectLayers(effectiveProjId) : []) || [];
+  const currentLayers = (rawLayers && rawLayers.length > 0) ? rawLayers : INITIAL_MAP_LAYERS;
+
+  // Annotations & Comments from Quality Analyst
+  const [annotations, setAnnotations] = useState<AnnotationItem[]>(() => {
+    return annotationService.getAnnotations(effectiveProjId);
+  });
+  const [comments, setComments] = useState<ReviewComment[]>(() => {
+    return annotationService.getComments(effectiveProjId);
+  });
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [isCommentPanelOpen, setIsCommentPanelOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'review' | 'spreadsheet'>('review');
+
+  useEffect(() => {
+    const annos = annotationService.getAnnotations(effectiveProjId);
+    setAnnotations(annos);
+    const comms = annotationService.getComments(effectiveProjId);
+    setComments(comms);
+  }, [effectiveProjId, currentProject?.code]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      setAnnotations(annotationService.getAnnotations(effectiveProjId));
+      setComments(annotationService.getComments(effectiveProjId));
+      setRevisionDetails(annotationService.getRevisionDetails(effectiveProjId));
+    };
+    window.addEventListener('pkspl_project_status_changed', handleSync);
+    window.addEventListener('pkspl_revision_notification', handleSync);
+    return () => {
+      window.removeEventListener('pkspl_project_status_changed', handleSync);
+      window.removeEventListener('pkspl_revision_notification', handleSync);
+    };
+  }, [effectiveProjId]);
 
   // State management
   const [selectedAreaId, setSelectedAreaId] = useState<string>(currentLandCovers[0]?.id || 'poly-1');
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Dynamic revision state
+  const [revisionDetails, setRevisionDetails] = useState<ProjectRevisionDetails | null>(() => {
+    return annotationService.getRevisionDetails(effectiveProjId);
+  });
+  const [checkedPoints, setCheckedPoints] = useState<Record<string, boolean>>({});
+  const [isResubmitModalOpen, setIsResubmitModalOpen] = useState(false);
+  const [resubmitNotes, setResubmitNotes] = useState('');
+  const [isSubmittingResubmit, setIsSubmittingResubmit] = useState(false);
+
+  useEffect(() => {
+    const details = annotationService.getRevisionDetails(effectiveProjId);
+    setRevisionDetails(details);
+  }, [effectiveProjId, currentProject?.status]);
+
+  const toggleCheckPoint = (id: string) => {
+    setCheckedPoints(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleResubmitToAnalyst = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentProject) return;
+    setIsSubmittingResubmit(true);
+
+    try {
+      const notes = resubmitNotes.trim() || 'Perbaikan data penelitian telah selesai dilakukan oleh Peneliti dan diajukan kembali ke Quality Analyst.';
+      
+      updateProjectStatus(currentProject.id, 'MENUNGGU_ANALYST', notes, currentProject.reviewedBy);
+      if (currentProject.code && currentProject.code !== currentProject.id) {
+        updateProjectStatus(currentProject.code, 'MENUNGGU_ANALYST', notes, currentProject.reviewedBy);
+      }
+      annotationService.resolveRevision(effectiveProjId, notes);
+
+      const numId = Number(currentProject.id);
+      if (!isNaN(numId) && numId > 0) {
+        try {
+          await updateProyek(numId, { status: 'Submitted' });
+        } catch {
+          // ignore
+        }
+      }
+
+      setIsResubmitModalOpen(false);
+      setResubmitNotes('');
+    } finally {
+      setIsSubmittingResubmit(false);
+    }
+  };
+
+  const getSectionLink = (sectionName?: string): string => {
+    const sec = (sectionName || '').toLowerCase();
+    if (sec.includes('map') || sec.includes('spasial') || sec.includes('polygon')) {
+      return `/peneliti/projects/${effectiveProjId}/maps`;
+    }
+    if (sec.includes('index') || sec.includes('tutupan')) {
+      return `/peneliti/projects/${effectiveProjId}/index`;
+    }
+    if (sec.includes('hitung') || sec.includes('calculation')) {
+      return `/peneliti/projects/${effectiveProjId}/calculation`;
+    }
+    return `/peneliti/projects/${effectiveProjId}/valuation-data`;
+  };
+
+  const displayComments = revisionDetails?.comments && revisionDetails.comments.length > 0
+    ? revisionDetails.comments
+    : (annotationService.getComments(effectiveProjId) || []).filter(c => c.status === 'open');
 
   // Sync selectedAreaId when currentLandCovers change
   useEffect(() => {
@@ -158,11 +303,17 @@ const ReviewReportPageContent: React.FC = () => {
     }, 0);
   };
 
-  // Dynamic Totals per Ecosystem Service across all landcovers
-  const provTotal = Math.max(0, getSubtotalForService('provisioning'));
-  const regTotal = Math.max(0, getSubtotalForService('regulating'));
-  const suppTotal = Math.max(0, getSubtotalForService('supporting'));
-  const cultTotal = Math.max(0, getSubtotalForService('cultural'));
+  // Dynamic Totals per Ecosystem Service across all landcovers with research fallback
+  const rawProv = Math.max(0, getSubtotalForService('provisioning'));
+  const rawReg = Math.max(0, getSubtotalForService('regulating'));
+  const rawSupp = Math.max(0, getSubtotalForService('supporting'));
+  const rawCult = Math.max(0, getSubtotalForService('cultural'));
+  const rawGrand = rawProv + rawReg + rawSupp + rawCult;
+
+  const provTotal = rawGrand > 0 ? rawProv : (activeResearchData.calculations.find(c => c.serviceId === 'provisioning')?.subtotalNominal || 15228324000);
+  const regTotal = rawGrand > 0 ? rawReg : (activeResearchData.calculations.find(c => c.serviceId === 'regulating')?.subtotalNominal || 26850562140);
+  const suppTotal = rawGrand > 0 ? rawSupp : (activeResearchData.calculations.find(c => c.serviceId === 'supporting')?.subtotalNominal || 9111100000);
+  const cultTotal = rawGrand > 0 ? rawCult : (activeResearchData.calculations.find(c => c.serviceId === 'cultural')?.subtotalNominal || 7533285000);
 
   const directValue = provTotal + cultTotal;
   const indirectValue = regTotal;
@@ -172,7 +323,7 @@ const ReviewReportPageContent: React.FC = () => {
   // Validation readiness
   const isReadyForReview = Boolean(currentProject && currentIndices.length > 0 && (allProjectRows.length > 0 || grandTEV > 0) && grandTEV > 0);
   const isSubmitted = currentProject?.status === 'MENUNGGU_ANALYST';
-  const isNeedsRevision = currentProject?.status === 'PERLU_PERBAIKAN';
+  const isNeedsRevision = currentProject?.status === 'PERLU_PERBAIKAN' || currentProject?.status === 'REVISI';
   const isCompleted = currentProject?.status === 'SELESAI';
 
   // Analytics Chart Data
@@ -329,14 +480,34 @@ const ReviewReportPageContent: React.FC = () => {
             Periksa kembali seluruh data dan hasil penelitian sebelum diajukan kepada Analyst.
           </p>
 
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className="text-xs font-mono font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
               {currentProject?.code}
             </span>
             <span className="text-xs font-bold text-slate-800">{currentProject?.name}</span>
             <span className="text-slate-300">•</span>
-            <StatusBadge status={isNeedsRevision ? 'PERLU_PERBAIKAN' : isSubmitted ? 'MENUNGGU_ANALYST' : isReadyForReview ? 'DRAFT' : 'DRAFT'} />
-            {isReadyForReview && !isSubmitted && !isNeedsRevision && (
+            <StatusBadge status={currentProject?.status || (isNeedsRevision ? 'REVISI' : isSubmitted ? 'MENUNGGU_ANALYST' : isReadyForReview ? 'DRAFT' : 'DRAFT')} />
+            {currentProject?.status === 'DALAM_REVIEW' && (
+              <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                <span>
+                  {(currentProject.reviewedBy && currentProject.reviewedBy.includes(','))
+                    ? `Tim Reviewer: ${currentProject.reviewedBy}`
+                    : `Direview oleh: ${currentProject.reviewedBy || 'Dr. Benny Nababan'}`}
+                </span>
+              </span>
+            )}
+            {isNeedsRevision && (
+              <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded flex items-center gap-1">
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                <span>
+                  {((currentProject?.reviewedBy || revisionDetails?.reviewer || '').includes(','))
+                    ? `Tim Revisi: ${currentProject?.reviewedBy || revisionDetails?.reviewer}`
+                    : `Direvisi oleh: ${currentProject?.reviewedBy || revisionDetails?.reviewer || 'Dr. Benny Nababan'}`}
+                </span>
+              </span>
+            )}
+            {isReadyForReview && !isSubmitted && !isNeedsRevision && currentProject?.status !== 'DALAM_REVIEW' && (
               <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
                 ✓ Siap Review
               </span>
@@ -366,38 +537,154 @@ const ReviewReportPageContent: React.FC = () => {
         </div>
       </div>
 
-      {/* Analyst Feedback Banner if Returned */}
+      {/* Dynamic Analyst Revision & Feedback Panel */}
       {isNeedsRevision && (
-        <div className="p-4 bg-rose-50 border-l-4 border-rose-600 rounded-r-lg shadow-2xs space-y-2 animate-in fade-in">
+        <div className="bg-white rounded-xl border border-rose-200 shadow-sm overflow-hidden animate-in fade-in space-y-0">
+          {/* Header Banner */}
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-50 via-rose-100/60 to-amber-50 border-b border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <ShieldAlert className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-rose-800 uppercase tracking-wide">
+                    Evaluasi Mutu: Catatan Revisi dari Quality Analyst
+                  </span>
+                  <span className="text-[10px] font-bold bg-rose-600 text-white px-2 py-0.5 rounded-full uppercase">
+                    Perlu Tindak Lanjut
+                  </span>
+                </div>
+                <div className="text-xs text-rose-900 mt-0.5 flex flex-wrap items-center gap-2">
+                  <span>
+                    {((currentProject?.reviewedBy || revisionDetails?.reviewer || '').includes(','))
+                      ? <>Tim Penelaah & Revisi: <strong className="font-semibold">{currentProject?.reviewedBy || revisionDetails?.reviewer}</strong></>
+                      : <>Ditelaah oleh: <strong className="font-semibold">{currentProject?.reviewedBy || revisionDetails?.reviewer || 'Dr. Benny Nababan'}</strong></>}
+                  </span>
+                  <span className="text-rose-300">•</span>
+                  <span className="text-slate-500">{revisionDetails?.timestamp || 'Baru saja'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate(`/peneliti/projects/${effectiveProjId}/messages`)}
+                className="px-3 py-1.5 bg-white text-slate-700 hover:text-blue-600 border border-slate-300 hover:border-blue-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                title="Buka Pusat Komunikasi & Chat dengan Reviewer"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                <span>Chat Reviewer</span>
+              </button>
+              <button
+                onClick={() => setIsResubmitModalOpen(true)}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Ajukan Ulang ke Analyst</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-4">
+            {/* Alasan & Arahan Utama */}
+            <div className="space-y-1.5">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                Arahan & Catatan Utama Analis:
+              </span>
+              <div className="p-3.5 bg-rose-50/70 border border-rose-200/90 rounded-xl text-rose-950 text-xs leading-relaxed font-medium">
+                "{revisionDetails?.reason || currentProject?.analystComment || 'Parameter data penelitian perlu disesuaikan dengan standar batas atas HET Regional dan luas tutupan polygon.'}"
+              </div>
+            </div>
+
+            {/* Poin-Poin Temuan Komentar Spesifik */}
+            {displayComments.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                  Rincian Poin yang Memerlukan Perbaikan ({displayComments.length}):
+                </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {displayComments.map((comm) => {
+                    const isDone = Boolean(checkedPoints[comm.id]);
+                    const targetLink = getSectionLink(comm.section);
+                    return (
+                      <div
+                        key={comm.id}
+                        className={`p-3.5 rounded-xl border transition-all text-xs space-y-2.5 ${
+                          isDone
+                            ? 'bg-emerald-50/50 border-emerald-200 opacity-80'
+                            : 'bg-white border-slate-200 hover:border-rose-300 shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-bold text-rose-700 text-[11px] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                            {comm.section || '05. DATA VALUASI'}
+                          </span>
+                          <button
+                            onClick={() => toggleCheckPoint(comm.id)}
+                            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 font-medium cursor-pointer"
+                          >
+                            {isDone ? (
+                              <>
+                                <CheckSquare className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="text-emerald-700 font-semibold">Telah Diperbaiki</span>
+                              </>
+                            ) : (
+                              <>
+                                <Square className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Tandai Selesai</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        <p className={`text-slate-700 leading-relaxed text-xs ${isDone ? 'line-through text-slate-400' : ''}`}>
+                          {comm.content}
+                        </p>
+
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400">
+                            {comm.author || 'Analyst'} • {comm.timestamp || 'Telaah'}
+                          </span>
+                          {targetLink && (
+                            <button
+                              onClick={() => navigate(targetLink)}
+                              className="text-xs font-semibold text-rose-700 hover:text-rose-900 inline-flex items-center gap-1 cursor-pointer hover:underline"
+                            >
+                              <span>Perbaiki di Halaman Terkait</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Analyst Dalam Review Notice Banner */}
+      {currentProject?.status === 'DALAM_REVIEW' && (
+        <div className="p-4 bg-purple-50 border-l-4 border-purple-600 rounded-r-lg shadow-2xs space-y-2 animate-in fade-in">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold text-rose-900 text-sm">
-              <AlertTriangle className="w-5 h-5 text-rose-600" />
-              <span>⚠ Proyek Memerlukan Perbaikan dari Analyst</span>
+            <div className="flex items-center gap-2 font-bold text-purple-950 text-sm">
+              <ShieldCheck className="w-5 h-5 text-purple-600" />
+              <span>Proyek Sedang Ditelaah oleh Quality Analyst</span>
             </div>
             <button
-              onClick={resolveFeedback}
-              className="text-xs bg-white text-rose-700 border border-rose-300 hover:bg-rose-100 font-semibold px-2.5 py-1 rounded cursor-pointer transition-colors"
+              onClick={() => navigate(`/peneliti/projects/${effectiveProjId}/messages`)}
+              className="text-xs bg-white text-purple-700 border border-purple-300 hover:bg-purple-100 font-semibold px-2.5 py-1 rounded cursor-pointer transition-colors flex items-center gap-1.5"
             >
-              Tandai Telah Diperbaiki
+              <span>Hubungi Reviewer</span>
+              <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="text-xs text-rose-800 leading-relaxed bg-white/80 p-3 rounded border border-rose-200">
-            <div className="font-semibold text-rose-900">
-              Temuan Analyst: Provisioning Services → Market Price → Flora → Cemara Laut
-            </div>
-            <p className="mt-0.5 text-rose-700">
-              Komentar: "Harga unit kayu Cemara Laut (Casuarina equisetifolia) perlu disesuaikan dengan standar batas atas HET Regional Bali tahun 2026."
-            </p>
-          </div>
-          <div className="text-right">
-            <button
-              onClick={() => navigate(`/peneliti/projects/${effectiveProjId}/valuation-data?area=${selectedAreaId}&service=provisioning`)}
-              className="text-xs font-bold text-rose-700 hover:text-rose-900 underline inline-flex items-center gap-1 cursor-pointer"
-            >
-              <span>[ Lihat Data Sumber & Perbaiki ]</span>
-              <ExternalLink className="w-3 h-3" />
-            </button>
-          </div>
+          <p className="text-xs text-purple-800 leading-relaxed bg-white/80 p-3 rounded border border-purple-200">
+            Penelitian ini sedang dalam proses telaah dan validasi mutu oleh <strong className="text-purple-950">{currentProject.reviewedBy || 'Dr. Benny Nababan'}</strong>. Anda dapat memantau proses telaah atau berdiskusi langsung melalui menu Pesan.
+          </p>
         </div>
       )}
 
@@ -435,8 +722,143 @@ const ReviewReportPageContent: React.FC = () => {
         </div>
       )}
 
-      {/* 2. SECTION INFORMASI PROYEK (Read-Only) */}
-      <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+      {/* Tab Switcher: "Dokumen Telaah & Anotasi Analyst" vs "Tabulasi Spreadsheet Lengkap" */}
+      <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setActiveTab('review')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'review'
+                ? 'bg-white text-rose-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4 text-rose-600" />
+            <span>Lembar Telaah & Anotasi Analyst</span>
+            {annotations.length > 0 && (
+              <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded-full text-[10px] font-bold">
+                {annotations.length} Coretan
+              </span>
+            )}
+            {comments.length > 0 && (
+              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold">
+                {comments.length} Komentar
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('spreadsheet')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'spreadsheet'
+                ? 'bg-white text-blue-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <TableProperties className="w-4 h-4 text-blue-600" />
+            <span>Tabulasi Spreadsheet Lengkap</span>
+            <span className="text-[10px] text-slate-400 font-normal">
+              (11 Bagian Proyek)
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          {activeTab === 'review' && (
+            <button
+              type="button"
+              onClick={() => setIsCommentPanelOpen(prev => !prev)}
+              className="px-3.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
+              <span>{isCommentPanelOpen ? 'Tutup Panel Komentar' : `Buka Panel Komentar (${comments.length})`}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* TAB 1: LEMBAR TELAAH & ANOTASI ANALYST (Visual Canvas with SVG Overlay - Read Only) */}
+      {activeTab === 'review' && (
+        <div className="space-y-6">
+          {/* Synchronized Review Info Banner */}
+          <div className="p-4 bg-gradient-to-r from-rose-50 via-purple-50 to-blue-50 border border-rose-200 rounded-xl shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div className="text-xs">
+                <div className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
+                  <span>Lembar Telaah Quality Analyst (Sinkronisasi Visual)</span>
+                  <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full font-bold text-[10px]">
+                    Read-Only (Tinjauan Peneliti)
+                  </span>
+                </div>
+                <p className="text-slate-600 mt-1 leading-relaxed">
+                  Coretan kotak, lingkaran, panah, stabilo, teks catatan telaah, dan pin komentar dari Quality Analyst disinkronkan secara visual di bawah.
+                  Peneliti dapat meninjau seluruh poin revisi dan membalas komentar, sedangkan <strong>perubahan posisi atau penghapusan coretan hanya dapat dilakukan oleh Quality Analyst</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCommentPanelOpen(true)}
+                className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5 text-purple-600" />
+                <span>Lihat Catatan Telaah ({comments.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Review Workspace Canvas: Content + SVG Annotation Layer Overlay (Identik dengan Analyst) */}
+          <div className="relative space-y-6">
+            {/* SVG Annotation Layer Over Content - READ ONLY */}
+            <AnnotationOverlay
+              readOnly={true}
+              activeTool="pointer"
+              selectedColor="#ef4444"
+              strokeWidth={3}
+              annotations={annotations}
+              comments={comments}
+              onAddAnnotation={() => {}}
+              onUpdateAnnotation={() => {}}
+              onDeleteAnnotation={() => {}}
+              onOpenCommentPin={() => {}}
+              onSelectComment={(c) => {
+                setSelectedCommentId(c.id);
+                setIsCommentPanelOpen(true);
+              }}
+            />
+
+            {/* MAP LOKASI PENELITIAN AT THE VERY TOP (Sesuai Syarat Utama) */}
+            <section aria-label="Peta Lokasi Penelitian">
+              <ResearchMapView
+                spatial={activeResearchData.spatial}
+                landCovers={activeResearchData.landCovers}
+                locationText={activeResearchData.location}
+              />
+            </section>
+
+            {/* 8 Research Sections View (READ ONLY) */}
+            <ResearchSectionsView
+              data={activeResearchData}
+              onOpenSectionComment={(_sectionName) => {
+                setIsCommentPanelOpen(true);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: TABULASI SPREADSHEET LENGKAP (11 Bagian Proyek) */}
+      {activeTab === 'spreadsheet' && (
+        <div className="space-y-6">
+          {/* 2. SECTION INFORMASI PROYEK (Read-Only) */}
+          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
@@ -470,10 +892,20 @@ const ReviewReportPageContent: React.FC = () => {
           </div>
           <div>
             <span className="text-slate-400 font-bold uppercase text-[10px]">Status Berkas</span>
-            <div className="mt-1">
-              <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-semibold text-[11px]">
-                {currentProject?.status === 'MENUNGGU_ANALYST' ? 'Menunggu Review Analyst' : 'Siap Review'}
-              </span>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <StatusBadge status={currentProject?.status || 'DRAFT'} />
+              {currentProject?.status === 'DALAM_REVIEW' && (
+                <div className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                  <span>Direview oleh: {currentProject.reviewedBy || 'Dr. Benny Nababan'}</span>
+                </div>
+              )}
+              {(currentProject?.status === 'REVISI' || currentProject?.status === 'PERLU_PERBAIKAN') && (
+                <div className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 flex items-center gap-1">
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  <span>Direvisi oleh: {currentProject.reviewedBy || 'Dr. Benny Nababan'}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="md:col-span-2 lg:col-span-3 pt-2 border-t border-slate-100">
@@ -1653,6 +2085,8 @@ const ReviewReportPageContent: React.FC = () => {
           </div>
         )}
       </section>
+        </div>
+      )}
 
       {/* Confirmation Modal: Kirim ke Analyst */}
       {isConfirmModalOpen && (
@@ -1727,6 +2161,113 @@ const ReviewReportPageContent: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Ajukan Ulang ke Analyst (Resubmit after Revision) */}
+      {isResubmitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs select-none animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-600 via-rose-700 to-amber-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
+                  <Send className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm leading-tight">
+                    Ajukan Ulang Hasil Perbaikan ke Quality Analyst
+                  </h3>
+                  <p className="text-[11px] text-white/80 font-mono mt-0.5">
+                    {currentProject?.code} — {currentProject?.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsResubmitModalOpen(false)}
+                className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleResubmitToAnalyst} className="p-5 space-y-4 text-xs">
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                  {currentProject?.reviewedBy?.charAt(0) || 'B'}
+                </div>
+                <div className="text-[11px] text-purple-900 leading-tight">
+                  Berkas akan diajukan ulang kepada penelaah: <strong className="font-bold">{currentProject?.reviewedBy || 'Dr. Benny Nababan'}</strong> (Quality Analyst).
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Catatan Tindak Lanjut / Penjelasan Perbaikan:
+                </label>
+                <textarea
+                  rows={4}
+                  value={resubmitNotes}
+                  onChange={(e) => setResubmitNotes(e.target.value)}
+                  placeholder="Jelaskan penyesuaian yang telah dilakukan (contoh: Seluruh harga unit kayu Cemara Laut telah disesuaikan dengan HET Regional Bali 2026 dan batas tutupan mangrove telah diperbarui)..."
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white resize-none"
+                  autoFocus
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Catatan ini akan dikirimkan kepada Quality Analyst sebagai ringkasan tindakan perbaikan.
+                </span>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                Status proyek akan otomatis berubah menjadi <strong className="font-bold text-blue-700">Menunggu Analyst</strong> untuk proses validasi ulang.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsResubmitModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-100 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingResubmit}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSubmittingResubmit ? 'Mengirimkan...' : 'Kirim Hasil Perbaikan'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Slide-Over Comment Side Panel (Read-Only deletion, allows replies) */}
+      <CommentSidePanel
+        isOpen={isCommentPanelOpen}
+        onClose={() => setIsCommentPanelOpen(false)}
+        comments={comments}
+        selectedCommentId={selectedCommentId || undefined}
+        onToggleResolve={() => {}}
+        onDeleteComment={() => {}}
+        onAddReply={(commentId, replyText) => {
+          const authorName = user?.nama || user?.name || 'Peneliti PKSPL';
+          const reply = {
+            id: `rep-${Date.now()}`,
+            author: authorName,
+            authorRole: 'Peneliti',
+            timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+            content: replyText
+          };
+          annotationService.addReply(effectiveProjId, commentId, reply);
+          if (currentProject?.code && currentProject.code !== effectiveProjId) {
+            annotationService.addReply(currentProject.code, commentId, reply);
+          }
+          setComments(annotationService.getComments(effectiveProjId));
+        }}
+        onSelectCommentItem={(c) => setSelectedCommentId(c.id)}
+        readOnly={true}
+      />
     </div>
   );
 };

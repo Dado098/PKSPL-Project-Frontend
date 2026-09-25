@@ -78,6 +78,16 @@ export const Topbar: React.FC<TopbarProps> = () => {
               ))}
             </select>
             <StatusBadge status={selectedProj.status} size="sm" />
+            {selectedProj.status === 'DALAM_REVIEW' && (
+              <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 shrink-0 max-w-[220px]" title={selectedProj.reviewedBy || 'Dr. Benny Nababan'}>
+                <span className="truncate">oleh {selectedProj.reviewedBy || 'Dr. Benny Nababan'}</span>
+              </span>
+            )}
+            {(selectedProj.status === 'REVISI' || selectedProj.status === 'PERLU_PERBAIKAN') && (
+              <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 shrink-0 max-w-[220px]" title={selectedProj.reviewedBy || 'Dr. Benny Nababan'}>
+                <span className="truncate">oleh {selectedProj.reviewedBy || 'Dr. Benny Nababan'}</span>
+              </span>
+            )}
           </div>
         )}
       </div>

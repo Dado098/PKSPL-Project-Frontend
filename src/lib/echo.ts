@@ -11,6 +11,7 @@ declare global {
 window.Pusher = Pusher;
 
 let echoInstance: Echo | null = null;
+let currentEchoToken: string | null = null;
 
 export const getEcho = (): Echo | null => {
   const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || localStorage.getItem('pkspl_token');
@@ -23,19 +24,32 @@ export const getEcho = (): Echo | null => {
         // Ignore disconnect errors
       }
       echoInstance = null;
+      currentEchoToken = null;
+      window.Echo = null;
     }
     return null;
   }
 
-  // If already initialized with valid token, return existing instance
-  if (echoInstance) {
+  // Jika instance sudah ada DAN token masih sama persis, gunakan instance aktif
+  if (echoInstance && currentEchoToken === token) {
     return echoInstance;
+  }
+
+  // Jika token berganti (misal ganti akun login antar role), reset instance lama
+  if (echoInstance) {
+    try {
+      echoInstance.disconnect();
+    } catch (e) {
+      // Ignore
+    }
+    echoInstance = null;
+    window.Echo = null;
   }
 
   try {
     const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
     const authEndpoint = `${apiBaseUrl.replace(/\/+$/, '')}/broadcasting/auth`;
-    const host = import.meta.env.VITE_REVERB_HOST || window.location.hostname;
+    const host = import.meta.env.VITE_REVERB_HOST || (typeof window !== 'undefined' ? window.location.hostname : 'localhost');
     const port = Number(import.meta.env.VITE_REVERB_PORT || 8085);
     const scheme = import.meta.env.VITE_REVERB_SCHEME || 'http';
 
@@ -56,7 +70,9 @@ export const getEcho = (): Echo | null => {
       },
     });
 
+    currentEchoToken = token;
     window.Echo = echoInstance;
+
     return echoInstance;
   } catch (error) {
     console.warn('[Echo] Gagal menginisialisasi WebSocket client:', error);
@@ -72,8 +88,14 @@ export const disconnectEcho = (): void => {
       // Ignore
     }
     echoInstance = null;
+    currentEchoToken = null;
     window.Echo = null;
   }
+};
+
+export const reconnectEcho = (): Echo | null => {
+  disconnectEcho();
+  return getEcho();
 };
 
 export default getEcho;

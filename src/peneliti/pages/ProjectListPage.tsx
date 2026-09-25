@@ -15,7 +15,9 @@ import {
   X,
   Clock,
   ArrowRight,
-  Trash2
+  Trash2,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -116,8 +118,13 @@ export const ProjectListPage: React.FC = () => {
       p.description.toLowerCase().includes(searchTerm.toLowerCase());
 
     if (statusFilter === 'ALL') return matchSearch;
+    if (statusFilter === 'REVISI' || statusFilter === 'PERLU_PERBAIKAN') {
+      return matchSearch && (p.status === 'REVISI' || p.status === 'PERLU_PERBAIKAN');
+    }
     return matchSearch && p.status === statusFilter;
   });
+
+  const revisionProjects = projects.filter(p => p.status === 'REVISI' || p.status === 'PERLU_PERBAIKAN');
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
@@ -141,6 +148,35 @@ export const ProjectListPage: React.FC = () => {
           <span>+ Proyek Baru</span>
         </button>
       </div>
+
+      {/* Revision Notice Alert Banner */}
+      {revisionProjects.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 shadow-inner">
+              <ShieldAlert className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="font-bold text-rose-900 text-sm">
+                Terdapat {revisionProjects.length} Proyek Memerlukan Perbaikan (Revisi) dari Quality Analyst
+              </div>
+              <div className="text-rose-700 text-[11px] mt-0.5">
+                Proyek "{revisionProjects[0].name}" ({revisionProjects[0].code}) sedang menunggu tindak lanjut revisi Anda. Silakan periksa catatan telaah pada halaman Review & Laporan.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setActiveProjectId(revisionProjects[0].id);
+              navigate(`/peneliti/projects/${revisionProjects[0].id}/review`);
+            }}
+            className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0 shadow-xs cursor-pointer self-start sm:self-auto"
+          >
+            <span>Buka Lembar Revisi</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Toolbar: Search & Filter */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -169,7 +205,8 @@ export const ProjectListPage: React.FC = () => {
             <option value="DIKERJAKAN">Dikerjakan</option>
             <option value="SIAP_REVIEW">Siap Review</option>
             <option value="MENUNGGU_ANALYST">Menunggu Analyst</option>
-            <option value="PERLU_PERBAIKAN">Perlu Perbaikan</option>
+            <option value="DALAM_REVIEW">Dalam Review</option>
+            <option value="REVISI">Revisi</option>
             <option value="SELESAI">Selesai</option>
           </select>
         </div>
@@ -232,6 +269,41 @@ export const ProjectListPage: React.FC = () => {
 
                     <td className="py-3 px-4">
                       <StatusBadge status={proj.status} />
+                      {proj.status === 'DALAM_REVIEW' && (
+                        <div className="text-[11px] text-purple-700 font-semibold mt-1 flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                          <span className="truncate max-w-[220px]" title={proj.reviewedBy || 'Dr. Benny Nababan'}>
+                            {(proj.reviewedBy && proj.reviewedBy.includes(',')) ? `Tim Reviewer: ${proj.reviewedBy}` : `Direview oleh: ${proj.reviewedBy || 'Dr. Benny Nababan'}`}
+                          </span>
+                        </div>
+                      )}
+                      {(proj.status === 'REVISI' || proj.status === 'PERLU_PERBAIKAN') && (
+                        <div className="mt-1 space-y-0.5">
+                          <div className="text-[11px] text-rose-700 font-semibold flex items-center gap-1">
+                            <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            <span className="truncate max-w-[220px]" title={proj.reviewedBy || 'Dr. Benny Nababan'}>
+                              {(proj.reviewedBy && proj.reviewedBy.includes(',')) ? `Tim Revisi: ${proj.reviewedBy}` : `Direvisi oleh: ${proj.reviewedBy || 'Dr. Benny Nababan'}`}
+                            </span>
+                          </div>
+                          {proj.analystComment && (
+                            <div className="text-[10px] text-rose-600/90 italic truncate max-w-[200px]" title={proj.analystComment}>
+                              "{proj.analystComment}"
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveProjectId(proj.id);
+                              navigate(`/peneliti/projects/${proj.id}/review`);
+                            }}
+                            className="text-[10px] text-rose-700 hover:text-rose-900 font-bold underline flex items-center gap-1 cursor-pointer pt-0.5"
+                          >
+                            <span>[ Buka Catatan Revisi ]</span>
+                            <ArrowRight className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">

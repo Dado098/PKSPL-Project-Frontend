@@ -14,7 +14,9 @@ import {
   RefreshCw,
   AlertCircle,
   CheckCircle2,
-  FolderOpen
+  FolderOpen,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { analystDashboardService } from '../services/analystDashboardService';
@@ -391,6 +393,66 @@ export const ProjectReviewPlaceholderPage: React.FC = () => {
                       {proj.lead}
                     </span>
                   </div>
+
+                  {/* Reviewer jika Status DALAM_REVIEW */}
+                  {proj.status === 'DALAM_REVIEW' && (() => {
+                    const revList = (proj.reviewers && proj.reviewers.length > 0)
+                      ? proj.reviewers
+                      : (proj.reviewedBy ? proj.reviewedBy.split(',').map(s => s.trim()).filter(Boolean) : ['Dr. Benny Nababan']);
+                    const isMulti = revList.length > 1;
+
+                    return (
+                      <div className="flex flex-col gap-1 text-purple-700 bg-purple-50/90 p-2 rounded-lg border border-purple-200 font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                          <span className="text-purple-700 text-[11px] font-semibold shrink-0">
+                            {isMulti ? `Tim Reviewer (${revList.length} Analis):` : 'Direview oleh:'}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 pl-5">
+                          {revList.map((r, i) => (
+                            <span
+                              key={i}
+                              className="font-bold text-purple-950 bg-purple-100/90 px-2 py-0.5 rounded text-[11px] border border-purple-200 truncate max-w-full"
+                              title={r}
+                            >
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Reviewer jika Status REVISI */}
+                  {proj.status === 'REVISI' && (() => {
+                    const revList = (proj.reviewers && proj.reviewers.length > 0)
+                      ? proj.reviewers
+                      : (proj.reviewedBy ? proj.reviewedBy.split(',').map(s => s.trim()).filter(Boolean) : ['Dr. Benny Nababan']);
+                    const isMulti = revList.length > 1;
+
+                    return (
+                      <div className="flex flex-col gap-1 text-rose-700 bg-rose-50/90 p-2 rounded-lg border border-rose-200 font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          <span className="text-rose-700 text-[11px] font-semibold shrink-0">
+                            {isMulti ? `Pemberi Revisi (${revList.length} Analis):` : 'Direvisi oleh:'}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 pl-5">
+                          {revList.map((r, i) => (
+                            <span
+                              key={i}
+                              className="font-bold text-rose-950 bg-rose-100/90 px-2 py-0.5 rounded text-[11px] border border-rose-200 truncate max-w-full"
+                              title={r}
+                            >
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Ekosistem */}
                   <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { AutosaveIndicator } from './AutosaveIndicator';
+import { RevisionNotificationModal } from '../common/RevisionNotificationModal';
 import { useProject } from '../../context/ProjectContext';
 import { AlertCircle, ArrowRight, X } from 'lucide-react';
 
@@ -11,7 +12,7 @@ export const AppShell: React.FC = () => {
   const { activeProject, analystFeedback, resolveFeedback } = useProject();
   const navigate = useNavigate();
 
-  const isRevising = activeProject?.status === 'PERLU_PERBAIKAN' && analystFeedback;
+  const isRevising = (activeProject?.status === 'PERLU_PERBAIKAN' || activeProject?.status === 'REVISI') && (analystFeedback || activeProject?.analystComment);
 
   const handleJumpToFeedback = () => {
     if (!analystFeedback) return;
@@ -40,27 +41,41 @@ export const AppShell: React.FC = () => {
               </span>
               <div>
                 <span className="text-xs font-bold text-rose-800 uppercase tracking-wide mr-2">
-                  Status: Perlu Perbaikan
+                  Status: Revisi
                 </span>
                 <span className="text-xs text-rose-700">
-                  Temuan Analyst: <strong>{analystFeedback.serviceName} → {analystFeedback.methodName} → {analystFeedback.itemName}</strong>.
-                  {' '}"{analystFeedback.comment}"
+                  {analystFeedback ? (
+                    <>
+                      Temuan Analyst: <strong>{analystFeedback.serviceName} → {analystFeedback.methodName} → {analystFeedback.itemName}</strong>.
+                      {' '}"{analystFeedback.comment}"
+                    </>
+                  ) : (
+                    <>
+                      Arahan Analyst: "{activeProject?.analystComment || 'Data penelitian memerlukan perbaikan sebelum dapat disetujui.'}"
+                    </>
+                  )}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={handleJumpToFeedback}
-                className="px-2.5 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded flex items-center gap-1 transition-colors shadow-xs"
+                onClick={() => {
+                  if (analystFeedback) {
+                    handleJumpToFeedback();
+                  } else {
+                    navigate(`/peneliti/projects/${activeProject?.id}/review`);
+                  }
+                }}
+                className="px-2.5 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
               >
-                <span>Lihat Data</span>
+                <span>Lihat Catatan</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={resolveFeedback}
                 title="Selesaikan temuan (Kembalikan status Siap Review)"
-                className="p-1 text-rose-400 hover:text-rose-700 rounded"
+                className="p-1 text-rose-400 hover:text-rose-700 rounded cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -72,6 +87,9 @@ export const AppShell: React.FC = () => {
         <main className="flex-1 overflow-y-auto bg-slate-50">
           <Outlet />
         </main>
+
+        {/* Global Modal Pop-up Notifikasi Revisi */}
+        <RevisionNotificationModal />
 
         {/* Global Bottom Status Bar */}
         <footer className="bg-white border-t border-slate-200 px-4 py-2 flex items-center justify-end shrink-0 z-20 shadow-[0_-2px_4px_rgba(0,0,0,0.02)]">

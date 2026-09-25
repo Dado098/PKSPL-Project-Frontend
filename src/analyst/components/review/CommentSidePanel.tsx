@@ -17,10 +17,11 @@ interface CommentSidePanelProps {
   onClose: () => void;
   comments: ReviewComment[];
   selectedCommentId?: string;
-  onToggleResolve: (commentId: string) => void;
-  onDeleteComment: (commentId: string) => void;
-  onAddReply: (commentId: string, replyText: string) => void;
-  onSelectCommentItem: (comment: ReviewComment) => void;
+  onToggleResolve?: (commentId: string) => void;
+  onDeleteComment?: (commentId: string) => void;
+  onAddReply?: (commentId: string, replyText: string) => void;
+  onSelectCommentItem?: (comment: ReviewComment) => void;
+  readOnly?: boolean;
 }
 
 export const CommentSidePanel: React.FC<CommentSidePanelProps> = ({
@@ -28,10 +29,11 @@ export const CommentSidePanel: React.FC<CommentSidePanelProps> = ({
   onClose,
   comments,
   selectedCommentId,
-  onToggleResolve,
-  onDeleteComment,
-  onAddReply,
-  onSelectCommentItem
+  onToggleResolve = () => {},
+  onDeleteComment = () => {},
+  onAddReply = () => {},
+  onSelectCommentItem = () => {},
+  readOnly = false
 }) => {
   const [filter, setFilter] = useState<'all' | 'open' | 'resolved'>('all');
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
@@ -183,16 +185,18 @@ export const CommentSidePanel: React.FC<CommentSidePanelProps> = ({
                       <span>{isResolved ? 'Buka Kembali' : 'Tandai Selesai'}</span>
                     </button>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteComment(comment.id);
-                      }}
-                      className="text-rose-500 hover:text-rose-700 p-1 rounded hover:bg-rose-50"
-                      title="Hapus Komentar"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteComment(comment.id);
+                        }}
+                        className="text-rose-500 hover:text-rose-700 p-1 rounded hover:bg-rose-50"
+                        title="Hapus Komentar"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 

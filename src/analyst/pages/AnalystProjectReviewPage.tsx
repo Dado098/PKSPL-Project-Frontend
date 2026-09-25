@@ -16,10 +16,13 @@ import { CommentSidePanel } from '../components/review/CommentSidePanel';
 import { CommentComposerModal } from '../components/review/CommentComposerModal';
 import { MintaRevisiModal, TandaiSelesaiModal } from '../components/review/ReviewActionModals';
 import { CheckCircle2, Info } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { updateProyek } from '../../services/projectService';
 
 export const AnalystProjectReviewPage: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const effectiveId = projectId || 'PRJ-001';
   const initialMeta = getMockProjectById(effectiveId);
@@ -31,6 +34,15 @@ export const AnalystProjectReviewPage: React.FC = () => {
   // Status Review State
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>(() =>
     annotationService.getProjectStatus(effectiveId, initialMeta?.status || 'SIAP_REVIEW')
+  );
+
+  // Reviewer State
+  const [reviewerName, setReviewerName] = useState<string>(() =>
+    annotationService.getProjectReviewer(effectiveId) ||
+    initialMeta?.reviewedBy ||
+    user?.nama ||
+    user?.name ||
+    'Dr. Benny Nababan'
   );
 
   // Annotation Tooling State
@@ -73,6 +85,10 @@ export const AnalystProjectReviewPage: React.FC = () => {
           setProjectMeta(meta);
           const savedStatus = annotationService.getProjectStatus(effectiveId, meta.status);
           setProjectStatus(savedStatus);
+          const savedReviewer = annotationService.getProjectReviewer(effectiveId) || meta.reviewedBy;
+          if (savedReviewer) {
+            setReviewerName(savedReviewer);
+          }
         }
       })
       .catch((err) => {
@@ -141,6 +157,21 @@ export const AnalystProjectReviewPage: React.FC = () => {
     showToast('Anotasi berhasil dihapus');
   }, [effectiveId, history, historyIndex]);
 
+  // Update annotation (Move / Drag / Edit Text)
+  const handleUpdateAnnotation = useCallback((updatedAnno: AnnotationItem) => {
+    setAnnotations(prev => {
+      const next = prev.map(a => a.id === updatedAnno.id ? updatedAnno : a);
+      annotationService.saveAnnotations(effectiveId, next);
+
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push(next);
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+
+      return next;
+    });
+  }, [effectiveId, history, historyIndex]);
+
   // Undo / Redo / Clear
   const handleUndo = () => {
     if (historyIndex > 0) {
@@ -188,13 +219,14 @@ export const AnalystProjectReviewPage: React.FC = () => {
   };
 
   const handleCreateComment = (content: string, section?: string, coords?: { x: number; y: number }) => {
+    const authorName = user?.nama || user?.name || 'Analyst PKSPL';
     const newComment: ReviewComment = {
       id: `comm-${Date.now()}`,
       projectId: effectiveId,
       section: section || 'Umum',
       x: coords?.x,
       y: coords?.y,
-      author: 'Analyst PKSPL',
+      author: authorName,
       authorRole: 'Quality Analyst',
       timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
       content,
@@ -205,6 +237,19 @@ export const AnalystProjectReviewPage: React.FC = () => {
     const next = [newComment, ...comments];
     setComments(next);
     annotationService.saveComments(effectiveId, next);
+
+    // Akumulasikan analis yang memberi catatan sebagai reviewer proyek
+    const updatedReviewers = annotationService.addProjectReviewer(effectiveId, authorName);
+    if (projectMeta?.code && projectMeta.code !== effectiveId) {
+      annotationService.addProjectReviewer(projectMeta.code, authorName);
+    }
+    if (projectMeta?.id && String(projectMeta.id) !== effectiveId) {
+      annotationService.addProjectReviewer(String(projectMeta.id), authorName);
+    }
+    const combined = updatedReviewers.join(', ');
+    setReviewerName(combined);
+    setProjectMeta(prev => prev ? { ...prev, reviewedBy: combined, reviewers: updatedReviewers } : null);
+
     setIsCommentPanelOpen(true);
     setSelectedCommentId(newComment.id);
     showToast('Catatan review berhasil ditambahkan');
@@ -229,11 +274,12 @@ export const AnalystProjectReviewPage: React.FC = () => {
   };
 
   const handleAddReply = (commentId: string, replyText: string) => {
+    const authorName = user?.nama || user?.name || 'Analyst PKSPL';
     const next = comments.map(c => {
       if (c.id === commentId) {
         const newReply = {
           id: `rep-${Date.now()}`,
-          author: 'Analyst PKSPL',
+          author: authorName,
           authorRole: 'Quality Analyst',
           content: replyText,
           timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
@@ -244,25 +290,106 @@ export const AnalystProjectReviewPage: React.FC = () => {
     });
     setComments(next);
     annotationService.saveComments(effectiveId, next);
+
+    // Akumulasikan juga analis yang membalas
+    const updatedReviewers = annotationService.addProjectReviewer(effectiveId, authorName);
+    if (projectMeta?.code && projectMeta.code !== effectiveId) {
+      annotationService.addProjectReviewer(projectMeta.code, authorName);
+    }
+    if (projectMeta?.id && String(projectMeta.id) !== effectiveId) {
+      annotationService.addProjectReviewer(String(projectMeta.id), authorName);
+    }
+    const combined = updatedReviewers.join(', ');
+    setReviewerName(combined);
+    setProjectMeta(prev => prev ? { ...prev, reviewedBy: combined, reviewers: updatedReviewers } : null);
+
     showToast('Balasan catatan terkirim');
   };
 
   // Review Status Actions
   const handleStartReview = () => {
+    const activeReviewer = user?.nama
+      || user?.name
+      || 'Dr. Benny Nababan';
+
+    const updatedReviewers = annotationService.addProjectReviewer(effectiveId, activeReviewer);
+    const combined = updatedReviewers.join(', ');
+
     setProjectStatus('DALAM_REVIEW');
-    annotationService.updateProjectStatus(effectiveId, 'DALAM_REVIEW');
-    showToast('Status proyek diperbarui: DALAM REVIEW');
+    setReviewerName(combined);
+    setProjectMeta(prev => prev ? { ...prev, status: 'DALAM_REVIEW', reviewedBy: combined, reviewers: updatedReviewers } : null);
+
+    // Simpan ke annotationService untuk ID rute dan juga kode proyek
+    annotationService.updateProjectStatus(effectiveId, 'DALAM_REVIEW', undefined, activeReviewer);
+    if (projectMeta?.code && projectMeta.code !== effectiveId) {
+      annotationService.updateProjectStatus(projectMeta.code, 'DALAM_REVIEW', undefined, activeReviewer);
+    }
+    if (projectMeta?.id && projectMeta.id !== effectiveId) {
+      annotationService.updateProjectStatus(projectMeta.id, 'DALAM_REVIEW', undefined, activeReviewer);
+    }
+
+    showToast(`Status proyek diperbarui: DALAM REVIEW oleh ${activeReviewer}`);
   };
 
-  const handleSubmitRevision = (reason: string, selectedCommentIds: string[]) => {
+  const handleSubmitRevision = async (reason: string, selectedCommentIds: string[]) => {
+    const activeReviewer = user?.nama
+      || user?.name
+      || 'Dr. Benny Nababan';
+
+    const updatedReviewers = annotationService.addProjectReviewer(effectiveId, activeReviewer);
+    const combined = updatedReviewers.join(', ');
+
     setProjectStatus('REVISI');
-    annotationService.updateProjectStatus(effectiveId, 'REVISI', reason);
-    showToast('Permintaan revisi berhasil dikirimkan ke Peneliti');
+    setReviewerName(combined);
+    setProjectMeta(prev => prev ? { ...prev, status: 'REVISI', reviewedBy: combined, reviewers: updatedReviewers } : null);
+
+    const attachedComments = comments.filter(c => selectedCommentIds.includes(c.id));
+
+    const revisionPayload = {
+      projectId: effectiveId,
+      projectCode: activeResearchData.projectCode || projectMeta?.code || effectiveId,
+      projectName: activeResearchData.projectName || projectMeta?.name || 'Kajian Valuasi Ekonomi',
+      status: 'REVISI' as const,
+      reviewer: combined,
+      reviewers: updatedReviewers,
+      reason,
+      timestamp: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      comments: attachedComments,
+      unreadNotification: true
+    };
+
+    annotationService.saveRevisionDetails(effectiveId, revisionPayload);
+
+    if (projectMeta?.code && projectMeta.code !== effectiveId) {
+      annotationService.saveRevisionDetails(projectMeta.code, {
+        ...revisionPayload,
+        projectId: projectMeta.code
+      });
+    }
+
+    if (projectMeta?.id && projectMeta.id !== effectiveId) {
+      annotationService.saveRevisionDetails(String(projectMeta.id), {
+        ...revisionPayload,
+        projectId: String(projectMeta.id)
+      });
+    }
+
+    // Update backend database status if numeric ID
+    const numId = Number(projectMeta?.id || effectiveId);
+    if (!isNaN(numId) && numId > 0) {
+      try {
+        await updateProyek(numId, { status: 'Need Revision' });
+      } catch (err) {
+        console.warn('Backend updateProyek error:', err);
+      }
+    }
+
+    showToast(`Permintaan revisi berhasil dikirimkan ke Peneliti oleh ${activeReviewer}`);
   };
 
   const handleConfirmComplete = () => {
     setProjectStatus('SELESAI');
-    annotationService.updateProjectStatus(effectiveId, 'SELESAI');
+    annotationService.updateProjectStatus(effectiveId, 'SELESAI', undefined, reviewerName);
     showToast('Persetujuan final selesai. Proyek dinyatakan VALID & SELESAI');
   };
 
@@ -276,6 +403,8 @@ export const AnalystProjectReviewPage: React.FC = () => {
         projectCode={activeResearchData.projectCode}
         projectName={activeResearchData.projectName}
         lead={activeResearchData.lead}
+        reviewerName={reviewerName}
+        reviewers={projectMeta?.reviewers || annotationService.getProjectReviewers(effectiveId, reviewerName)}
         status={projectStatus}
         totalComments={comments.length}
         openComments={openComments}
@@ -315,6 +444,7 @@ export const AnalystProjectReviewPage: React.FC = () => {
           annotations={annotations}
           comments={comments}
           onAddAnnotation={handleAddAnnotation}
+          onUpdateAnnotation={handleUpdateAnnotation}
           onDeleteAnnotation={handleDeleteAnnotation}
           onOpenCommentPin={handleOpenCommentPin}
           onSelectComment={(c) => {

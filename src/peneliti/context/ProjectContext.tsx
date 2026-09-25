@@ -17,10 +17,20 @@ import {
   generateMockPolygonsForProject,
   generateMockIndicesForProject
 } from '../mock/spatialData';
+import {
+  ALL_PROJECT_LAND_COVERS,
+  ALL_PROJECT_INDICES,
+  ALL_PROJECT_LAYERS,
+  getFallbackLandCoversForProject,
+  getFallbackIndicesForProject,
+  getFallbackLayersForProject
+} from '../mock/projectMockRegistry';
 import { INITIAL_ANALYST_FEEDBACK } from '../mock/analystReviewMock';
 import { loadFromStorage, saveToStorage } from '../utils/storage';
 import { createProyek, deleteProyek, getProyekList } from '../../services/projectService';
 import { createIndexApi, createLandCoverApi, deleteLandCoverApi, getIndexesApi, updateIndexApi, updateLandCoverApi } from '../../services/indexService';
+import { annotationService } from '../../analyst/services/annotationService';
+import { ReviewComment } from '../../analyst/types/annotation';
 
 import { AreaServiceConfig, EcosystemServiceId } from '../types/valuation';
 
@@ -38,7 +48,7 @@ interface ProjectContextType {
   setActiveProjectId: (id: string) => void;
   createProject: (name: string, description: string) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
-  updateProjectStatus: (id: string, status: ProjectStatus) => void;
+  updateProjectStatus: (id: string, status: ProjectStatus, notes?: string, reviewer?: string) => void;
   addShpLayer: (name: string, featureCount: number, crs: string, targetProjId?: string) => void;
   setProjectHasShp: (projectId: string, hasShp: boolean) => void;
   getProjectLandCovers: (projectId: string) => LandCoverPolygon[];
@@ -97,48 +107,96 @@ export const DEFAULT_AREA_CONFIG: AreaServiceConfig = {
 };
 
 const INITIAL_PROJECT_LAND_COVERS: Record<string, LandCoverPolygon[]> = {
-  'PKS-994KY1': INITIAL_LAND_COVERS,
-  'PKS-KKPRIV': [],
-  'PKS-UW8J6F': NUSA_PENIDA_LAND_COVERS,
+  ...ALL_PROJECT_LAND_COVERS,
 };
 
 const INITIAL_PROJECT_INDICES: Record<string, IndexItem[]> = {
-  'PKS-994KY1': INITIAL_INDEX_LIST,
-  'PKS-KKPRIV': [],
-  'PKS-UW8J6F': NUSA_PENIDA_INDEX_LIST,
+  ...ALL_PROJECT_INDICES,
 };
 
 const INITIAL_PROJECT_LAYERS: Record<string, MapLayer[]> = {
-  'PKS-994KY1': INITIAL_MAP_LAYERS,
-  'PKS-KKPRIV': [],
-  'PKS-UW8J6F': NUSA_PENIDA_MAP_LAYERS,
+  ...ALL_PROJECT_LAYERS,
 };
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 const toProjectStatus = (status: string | undefined): ProjectStatus => {
-  const normalized = (status || '').toLowerCase();
-  if (normalized === 'proses') return 'DIKERJAKAN';
-  if (normalized === 'submitted') return 'MENUNGGU_ANALYST';
-  if (normalized === 'need revision') return 'PERLU_PERBAIKAN';
+  const normalized = (status || '').toLowerCase().trim();
+  if (normalized === 'proses' || normalized === 'dikerjakan') return 'DIKERJAKAN';
+  if (normalized === 'submitted' || normalized === 'siap_review') return 'MENUNGGU_ANALYST';
+  if (normalized === 'dalam_review' || normalized === 'review' || normalized === 'in_review') return 'DALAM_REVIEW';
+  if (normalized === 'need revision' || normalized === 'revisi' || normalized === 'perlu_perbaikan') return 'REVISI';
   if (normalized === 'selesai' || normalized === 'approved' || normalized === 'published') return 'SELESAI';
   return 'DRAFT';
 };
 
-const fromApiProject = (project: any, fallbackLead = 'Peneliti Utama'): Project => ({
-  id: String(project.id_proyek ?? project.id ?? project.kode_proyek),
-  code: project.kode_proyek || String(project.id_proyek ?? ''),
-  name: project.nama_proyek || '',
-  description: project.deskripsi || '',
-  status: toProjectStatus(project.status),
-  lead: project.user?.nama || fallbackLead,
-  location: project.alamat_lengkap || project.kabupaten_kota?.nama || project.provinsi?.nama || '-',
-  ecosystem: project.ekosistem || 'Ekosistem Pesisir',
-  year: Number(project.tahun || new Date().getFullYear()),
-  createdAt: project.created_at || '',
-  updatedAt: project.updated_at || '',
-  hasShp: Boolean(project.shapefile_files && Object.keys(project.shapefile_files).length),
-});
+const fromApiProject = (project: any, fallbackLead = 'Peneliti Utama'): Project => {
+  const code = project.kode_proyek || (project.id_proyek ? `PRJ-${String(project.id_proyek).padStart(3, '0')}` : String(project.id ?? ''));
+  const idKey = String(project.id_proyek ?? project.id ?? code);
+
+  let status = toProjectStatus(project.status || project.raw_status);
+
+  // Reviewer and notes resolution
+  let rawReviewers: string[] = [];
+  if (Array.isArray(project.reviewers) && project.reviewers.length > 0) {
+    rawReviewers.push(...project.reviewers);
+  }
+  const backendReviewedBy = project.reviewed_by || project.reviewedBy || project.reviewer?.nama || project.reviewer?.name;
+  if (backendReviewedBy) {
+    rawReviewers.push(...String(backendReviewedBy).split(',').map(s => s.trim()).filter(Boolean));
+  }
+  const localReviewersCode = annotationService.getProjectReviewers(code);
+  if (localReviewersCode.length > 0) rawReviewers.push(...localReviewersCode);
+  if (idKey && idKey !== code) {
+    const localReviewersId = annotationService.getProjectReviewers(idKey);
+    if (localReviewersId.length > 0) rawReviewers.push(...localReviewersId);
+  }
+
+  const uniqueReviewers: string[] = [];
+  for (const r of rawReviewers) {
+    if (!uniqueReviewers.some(u => u.toLowerCase() === r.toLowerCase())) {
+      uniqueReviewers.push(r);
+    }
+  }
+
+  if (uniqueReviewers.length === 0 && (status === 'DALAM_REVIEW' || status === 'REVISI' || status === 'PERLU_PERBAIKAN')) {
+    uniqueReviewers.push('Dr. Benny Nababan');
+  }
+
+  let reviewedBy = uniqueReviewers.length > 0 ? uniqueReviewers.join(', ') : undefined;
+  let analystComment = project.analyst_comment || project.catatan_revisi || project.notes;
+
+  try {
+    const localStatus = localStorage.getItem(`pkspl_status_${code}`) || localStorage.getItem(`pkspl_status_${idKey}`);
+    if (localStatus) {
+      status = toProjectStatus(localStatus);
+    }
+    const localNotes = localStorage.getItem(`pkspl_status_notes_${code}`) || localStorage.getItem(`pkspl_status_notes_${idKey}`);
+    if (localNotes) {
+      analystComment = localNotes;
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+
+  return {
+    id: idKey,
+    code,
+    name: project.nama_proyek || project.name || '',
+    description: project.deskripsi || project.description || '',
+    status,
+    reviewedBy,
+    reviewers: uniqueReviewers,
+    analystComment,
+    lead: project.user?.nama || project.lead || fallbackLead,
+    location: project.location || project.alamat_lengkap || project.kabupaten_kota?.nama || project.provinsi?.nama || '-',
+    ecosystem: project.ecosystem || project.ekosistem || 'Ekosistem Pesisir',
+    year: Number(project.tahun || project.year || new Date().getFullYear()),
+    createdAt: project.created_at || '',
+    updatedAt: project.updated_at || project.updatedAt || '',
+    hasShp: Boolean(project.shapefile_files && Object.keys(project.shapefile_files).length),
+  };
+};
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
@@ -229,28 +287,65 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let mounted = true;
     getIndexesApi({ id_proyek: projectId, per_page: 100 }).then((apiIndexes) => {
       if (!mounted || !Array.isArray(apiIndexes)) return;
+
+      // Get mock registry data to enrich API-fetched polygons with serviceDetails/totalValue
+      const found = projects.find(p => p.id === activeProjectId || p.id === String(projectId));
+      const projectCode = found?.code || '';
+      const mockLandCovers: LandCoverPolygon[] =
+        ALL_PROJECT_LAND_COVERS[activeProjectId] ||
+        ALL_PROJECT_LAND_COVERS[projectCode] ||
+        getFallbackLandCoversForProject(projectCode || activeProjectId);
+
       const mappedIndexes: IndexItem[] = apiIndexes.map((index: any) => {
         const landCover = index.jenis_tutupan_lahan?.[0];
+        const mockIdx = (ALL_PROJECT_INDICES[activeProjectId] || ALL_PROJECT_INDICES[projectCode] || []).find(
+          (mi) => mi.code === index.kode_index || mi.name === index.nama_index
+        );
         return {
           id: String(index.id_index), code: index.kode_index, name: index.nama_index,
           landCoverType: landCover?.kategori || 'Lainnya', landCoverName: landCover?.nama_tutupan_lahan || index.nama_index,
+          landCoverId: mockIdx?.landCoverId,
+          polygonId: mockIdx?.polygonId,
           areaHa: Number(index.luas) || 0, unit: index.satuan_luas || 'ha', description: index.deskripsi || '',
-          status: 'Draft', spatialStatus: 'unconnected', createdAt: index.created_at, updatedAt: index.updated_at,
+          status: mockIdx?.status || 'Draft', spatialStatus: mockIdx?.spatialStatus || 'unconnected',
+          createdAt: index.created_at, updatedAt: index.updated_at,
         };
       });
       const mappedLandCovers: LandCoverPolygon[] = apiIndexes.flatMap((index: any) =>
-        (index.jenis_tutupan_lahan || []).map((landCover: any) => ({
-          id: String(landCover.id_jenis_tutupan_lahan), code: `${index.kode_index}-${landCover.id_jenis_tutupan_lahan}`,
-          name: landCover.nama_tutupan_lahan,
-          type: (landCover.kategori || 'lainnya').toLowerCase().replaceAll(' ', '_') as LandCoverPolygon['type'],
-          areaHa: Number(landCover.luas) || 0, coordinates: [], center: [0, 0], indexId: String(index.id_index),
-          indexCode: index.kode_index, indexName: index.nama_index, activeServices: [], serviceDetails: [], totalValue: 0,
-        }))
+        (index.jenis_tutupan_lahan || []).map((landCover: any) => {
+          // Match mock polygon to inherit rich data (serviceDetails, totalValue, etc.)
+          const mockPoly = mockLandCovers.find(
+            (m) => m.indexCode === index.kode_index ||
+                   m.name === landCover.nama_tutupan_lahan ||
+                   m.indexName === index.nama_index
+          );
+          return {
+            id: String(landCover.id_jenis_tutupan_lahan),
+            code: `${index.kode_index}-${landCover.id_jenis_tutupan_lahan}`,
+            name: landCover.nama_tutupan_lahan,
+            type: (landCover.kategori || 'lainnya').toLowerCase().replaceAll(' ', '_') as LandCoverPolygon['type'],
+            areaHa: Number(landCover.luas) || (mockPoly?.areaHa ?? 0),
+            coordinates: mockPoly?.coordinates ?? [],
+            center: mockPoly?.center ?? [0, 0],
+            indexId: String(index.id_index),
+            indexCode: index.kode_index,
+            indexName: index.nama_index,
+            // Inherit rich valuation data from mock registry
+            activeServices: mockPoly?.activeServices ?? [],
+            serviceDetails: mockPoly?.serviceDetails ?? [],
+            totalValue: mockPoly?.totalValue ?? 0,
+          };
+        })
       );
       setProjectIndices((prev) => ({ ...prev, [activeProjectId]: mappedIndexes }));
       setProjectLandCovers((prev) => ({
         ...prev,
-        [activeProjectId]: [...mappedLandCovers, ...(prev[activeProjectId] || []).filter((landCover) => landCover.coordinates.length > 0)],
+        [activeProjectId]: [
+          ...mappedLandCovers,
+          ...(prev[activeProjectId] || []).filter(
+            (lc) => lc.coordinates.length > 0 && !mappedLandCovers.find((m) => m.indexCode === lc.indexCode)
+          ),
+        ],
       }));
     }).catch(() => undefined);
     return () => { mounted = false; };
@@ -292,20 +387,124 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const getProjectLandCovers = (projectId: string): LandCoverPolygon[] => {
-    return projectLandCovers[projectId] || [];
+    const stored = (() => {
+      if (projectLandCovers[projectId] && projectLandCovers[projectId].length > 0) {
+        return projectLandCovers[projectId];
+      }
+      const found = projects.find(p => p.id === projectId || p.code === projectId);
+      if (found) {
+        if (found.code && projectLandCovers[found.code] && projectLandCovers[found.code].length > 0) {
+          return projectLandCovers[found.code];
+        }
+        if (found.id && projectLandCovers[found.id] && projectLandCovers[found.id].length > 0) {
+          return projectLandCovers[found.id];
+        }
+      }
+      return null;
+    })();
+
+    // Determine mock registry data for this project
+    const found = projects.find(p => p.id === projectId || p.code === projectId);
+    const mockLCs: LandCoverPolygon[] =
+      ALL_PROJECT_LAND_COVERS[projectId] ||
+      (found?.code ? ALL_PROJECT_LAND_COVERS[found.code] : undefined) ||
+      (found?.id ? ALL_PROJECT_LAND_COVERS[found.id] : undefined) ||
+      getFallbackLandCoversForProject(found?.code || projectId);
+
+    if (stored && stored.length > 0) {
+      // Enrich stored polygons that have empty serviceDetails from mock registry
+      return stored.map((lc) => {
+        if (lc.serviceDetails && lc.serviceDetails.length > 0) return lc;
+        const mockMatch = mockLCs.find(
+          (m) => m.indexCode === lc.indexCode || m.name === lc.name || m.indexName === lc.indexName
+        );
+        if (mockMatch) {
+          return {
+            ...lc,
+            activeServices: mockMatch.activeServices,
+            serviceDetails: mockMatch.serviceDetails,
+            totalValue: mockMatch.totalValue,
+            coordinates: lc.coordinates.length > 0 ? lc.coordinates : mockMatch.coordinates,
+            center: (lc.center[0] !== 0 || lc.center[1] !== 0) ? lc.center : mockMatch.center,
+          };
+        }
+        return lc;
+      });
+    }
+
+    // No stored data — return mock registry data directly
+    return mockLCs;
   };
 
+
   const getProjectIndices = (projectId: string): IndexItem[] => {
-    return projectIndices[projectId] || [];
+    if (projectIndices[projectId] && projectIndices[projectId].length > 0) {
+      return projectIndices[projectId];
+    }
+    const found = projects.find(p => p.id === projectId || p.code === projectId);
+    if (found) {
+      if (found.code && projectIndices[found.code] && projectIndices[found.code].length > 0) {
+        return projectIndices[found.code];
+      }
+      if (found.id && projectIndices[found.id] && projectIndices[found.id].length > 0) {
+        return projectIndices[found.id];
+      }
+    }
+    if (projectId === 'PRJ-001' || projectId === '1' || projectId === 'PKS-994KY1' || (found && (found.code === 'PRJ-001' || found.id === '1' || found.code === 'PKS-994KY1'))) {
+      return INITIAL_INDEX_LIST;
+    }
+    return [];
   };
 
   const getProjectLayers = (projectId: string): MapLayer[] => {
-    return projectLayers[projectId] || [];
+    if (projectLayers[projectId] && projectLayers[projectId].length > 0) {
+      return projectLayers[projectId];
+    }
+    const found = projects.find(p => p.id === projectId || p.code === projectId);
+    if (found) {
+      if (found.code && projectLayers[found.code] && projectLayers[found.code].length > 0) {
+        return projectLayers[found.code];
+      }
+      if (found.id && projectLayers[found.id] && projectLayers[found.id].length > 0) {
+        return projectLayers[found.id];
+      }
+    }
+    if (projectId === 'PRJ-001' || projectId === '1' || projectId === 'PKS-994KY1' || (found && (found.code === 'PRJ-001' || found.id === '1' || found.code === 'PKS-994KY1'))) {
+      return INITIAL_MAP_LAYERS;
+    }
+    return [];
   };
 
-  const landCovers = projectLandCovers[activeProjectId] || [];
+  // Enrich stored land covers with mock registry serviceDetails/totalValue if missing (handles stale localStorage)
+  const rawLandCovers = projectLandCovers[activeProjectId] || [];
+  const enrichedMockLCs: LandCoverPolygon[] =
+    ALL_PROJECT_LAND_COVERS[activeProjectId] ||
+    (() => {
+      const proj = projects.find(p => p.id === activeProjectId);
+      return proj?.code ? (ALL_PROJECT_LAND_COVERS[proj.code] || []) : [];
+    })();
+  const landCovers: LandCoverPolygon[] = rawLandCovers.length > 0
+    ? rawLandCovers.map((lc) => {
+        if (lc.serviceDetails && lc.serviceDetails.length > 0) return lc;
+        const mockMatch = enrichedMockLCs.find(
+          (m) => m.indexCode === lc.indexCode || m.name === lc.name || m.indexName === lc.indexName
+        );
+        if (mockMatch) {
+          return {
+            ...lc,
+            activeServices: mockMatch.activeServices,
+            serviceDetails: mockMatch.serviceDetails,
+            totalValue: mockMatch.totalValue,
+            coordinates: lc.coordinates.length > 0 ? lc.coordinates : mockMatch.coordinates,
+            center: (lc.center[0] !== 0 || lc.center[1] !== 0) ? lc.center : mockMatch.center,
+          };
+        }
+        return lc;
+      })
+    : enrichedMockLCs;
   const indices = projectIndices[activeProjectId] || [];
   const layers = projectLayers[activeProjectId] || [];
+
 
   const getAreaConfig = (areaId: string): AreaServiceConfig => {
     const found = areaConfigs[areaId];
@@ -370,18 +569,51 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (activeProjectId === id) setActiveProjectIdState('');
   };
 
-  const updateProjectStatus = (id: string, status: ProjectStatus) => {
+  const updateProjectStatus = (id: string, status: ProjectStatus, notes?: string, reviewer?: string) => {
+    let updatedReviewers: string[] = [];
+    let combinedReviewer: string | undefined = undefined;
+
+    if (reviewer) {
+      updatedReviewers = annotationService.addProjectReviewer(id, reviewer);
+      combinedReviewer = updatedReviewers.join(', ');
+    } else {
+      updatedReviewers = annotationService.getProjectReviewers(id);
+      combinedReviewer = updatedReviewers.length > 0 ? updatedReviewers.join(', ') : undefined;
+    }
+
     setProjects(prev => prev.map(p => {
       if (p.id === id || p.code === id) {
         return {
           ...p,
           status,
           updatedAt: 'Baru saja',
-          submittedAt: status === 'MENUNGGU_ANALYST' ? new Date().toISOString().split('T')[0] : p.submittedAt
+          submittedAt: status === 'MENUNGGU_ANALYST' ? new Date().toISOString().split('T')[0] : p.submittedAt,
+          analystComment: notes !== undefined ? notes : p.analystComment,
+          reviewedBy: combinedReviewer || p.reviewedBy,
+          reviewers: updatedReviewers.length > 0 ? updatedReviewers : p.reviewers,
         };
       }
       return p;
     }));
+
+    try {
+      localStorage.setItem(`pkspl_status_${id}`, status);
+      if (notes !== undefined) {
+        localStorage.setItem(`pkspl_status_notes_${id}`, notes);
+      }
+      if (combinedReviewer) {
+        localStorage.setItem(`pkspl_reviewer_${id}`, combinedReviewer);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('pkspl_project_status_changed', {
+            detail: { projectId: id, status, notes, reviewer: combinedReviewer, reviewers: updatedReviewers }
+          })
+        );
+      }
+    } catch (e) {
+      console.warn('Failed to save project status to storage:', e);
+    }
   };
 
   const addShpLayer = (name: string, featureCount: number, crs: string, targetProjId?: string) => {
@@ -754,18 +986,130 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
   };
 
+  // Real-time synchronization for project status across components & tabs
+  useEffect(() => {
+    const handleStatusChanged = (e: any) => {
+      const detail = e.detail;
+      if (!detail) return;
+      setProjects(prev => prev.map(p => {
+        if (p.id === detail.projectId || p.code === detail.projectId) {
+          return {
+            ...p,
+            status: toProjectStatus(detail.status),
+            analystComment: detail.notes !== undefined ? detail.notes : p.analystComment,
+            reviewedBy: detail.reviewer || p.reviewedBy,
+            updatedAt: 'Baru saja'
+          };
+        }
+        return p;
+      }));
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('pkspl_status_') && !e.key.startsWith('pkspl_status_notes_')) {
+        const projId = e.key.replace('pkspl_status_', '');
+        const newStatus = e.newValue;
+        if (newStatus) {
+          const notes = localStorage.getItem(`pkspl_status_notes_${projId}`) || undefined;
+          const reviewer = localStorage.getItem(`pkspl_reviewer_${projId}`) || undefined;
+          setProjects(prev => prev.map(p => {
+            if (p.id === projId || p.code === projId) {
+              return {
+                ...p,
+                status: toProjectStatus(newStatus),
+                analystComment: notes ?? p.analystComment,
+                reviewedBy: reviewer ?? p.reviewedBy,
+                updatedAt: 'Baru saja'
+              };
+            }
+            return p;
+          }));
+        }
+      }
+    };
+
+    window.addEventListener('pkspl_project_status_changed', handleStatusChanged);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('pkspl_project_status_changed', handleStatusChanged);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   const simulateAnalystRejection = () => {
-    updateProjectStatus(activeProjectId, 'PERLU_PERBAIKAN');
+    const reviewer = 'Dr. Benny Nababan';
+    const reason = 'Harga unit (Rp 3.231.311) pada Data Valuasi Provisioning Services perlu disesuaikan dengan batas HET Regional Bali 2026 dan verifikasi ulang luas tutupan polygon mangrove.';
+    const sampleComments: ReviewComment[] = [
+      {
+        id: 'comm-rev-01',
+        projectId: activeProjectId,
+        section: '05. DATA VALUASI',
+        author: reviewer,
+        authorRole: 'Quality Analyst',
+        timestamp: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        content: 'Harga unit kayu Cemara Laut (Casuarina equisetifolia) pada metode Market Price melebihi ambang batas acuan pasar lokal Bali (Rp 2.850.000/m³).',
+        status: 'open',
+        replies: []
+      },
+      {
+        id: 'comm-rev-02',
+        projectId: activeProjectId,
+        section: '02. MAPS & SPASIAL',
+        author: reviewer,
+        authorRole: 'Quality Analyst',
+        timestamp: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        content: 'Periksa kembali delineasi batas polygon tutupan lahan Mangrove Primer pada zona selatan.',
+        status: 'open',
+        replies: []
+      }
+    ];
+
+    updateProjectStatus(activeProjectId, 'REVISI', reason, reviewer);
+    if (activeProject?.code && activeProject.code !== activeProjectId) {
+      updateProjectStatus(activeProject.code, 'REVISI', reason, reviewer);
+    }
+
     setAnalystFeedback({
       ...INITIAL_ANALYST_FEEDBACK,
       projectId: activeProjectId,
       timestamp: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     });
+
+    annotationService.saveRevisionDetails(activeProjectId, {
+      projectId: activeProjectId,
+      projectCode: activeProject?.code || activeProjectId,
+      projectName: activeProject?.name || 'Kajian Valuasi Ekonomi Terumbu Karang Nusa Penida',
+      status: 'REVISI',
+      reviewer,
+      reason,
+      timestamp: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      comments: sampleComments,
+      unreadNotification: true
+    });
+
+    if (activeProject?.code && activeProject.code !== activeProjectId) {
+      annotationService.saveRevisionDetails(activeProject.code, {
+        projectId: activeProject.code,
+        projectCode: activeProject.code,
+        projectName: activeProject.name,
+        status: 'REVISI',
+        reviewer,
+        reason,
+        timestamp: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        comments: sampleComments,
+        unreadNotification: true
+      });
+    }
   };
 
   const resolveFeedback = () => {
     setAnalystFeedback(null);
-    updateProjectStatus(activeProjectId, 'SIAP_REVIEW');
+    updateProjectStatus(activeProjectId, 'MENUNGGU_ANALYST', 'Telah diperbaiki oleh peneliti dan diajukan ulang ke analis');
+    if (activeProject?.code && activeProject.code !== activeProjectId) {
+      updateProjectStatus(activeProject.code, 'MENUNGGU_ANALYST', 'Telah diperbaiki oleh peneliti dan diajukan ulang ke analis');
+    }
+    annotationService.resolveRevision(activeProjectId, 'Telah diperbaiki oleh peneliti dan diajukan ulang ke analis');
   };
 
   const resetAllData = () => {

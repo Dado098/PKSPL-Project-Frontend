@@ -19,6 +19,8 @@ interface ReviewStatusHeaderProps {
   projectCode: string;
   projectName: string;
   lead?: string;
+  reviewerName?: string;
+  reviewers?: string[];
   status: ProjectStatus;
   totalComments: number;
   openComments: number;
@@ -33,6 +35,8 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
   projectCode,
   projectName,
   lead,
+  reviewerName,
+  reviewers,
   status,
   totalComments,
   openComments,
@@ -42,6 +46,14 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
   onRequestRevision,
   onMarkComplete
 }) => {
+  const reviewerList = React.useMemo(() => {
+    if (reviewers && reviewers.length > 0) return reviewers;
+    if (reviewerName) {
+      const split = reviewerName.split(',').map(s => s.trim()).filter(Boolean);
+      if (split.length > 0) return split;
+    }
+    return ['Dr. Benny Nababan'];
+  }, [reviewers, reviewerName]);
   return (
     <div className="space-y-4">
       {/* Top Back Link & Breadcrumbs */}
@@ -83,12 +95,44 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
               {projectName}
             </h1>
-            {lead && (
-              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium pt-0.5">
-                <span className="text-slate-400">Peneliti:</span>
-                <span className="text-slate-900 font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{lead}</span>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              {lead && (
+                <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                  <span className="text-slate-400">Peneliti:</span>
+                  <span className="text-slate-900 font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{lead}</span>
+                </div>
+              )}
+              {status === 'DALAM_REVIEW' && (
+                <div className="flex items-center gap-1.5 text-xs font-semibold bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full border border-purple-200 shadow-2xs">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                  <span className="text-purple-600 font-normal">
+                    {reviewerList.length > 1 ? `Tim Reviewer (${reviewerList.length}):` : 'Direview oleh:'}
+                  </span>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {reviewerList.map((name, idx) => (
+                      <span key={idx} className="text-purple-950 font-bold bg-purple-100/90 px-2 py-0.5 rounded-md text-[11px] border border-purple-200">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {status === 'REVISI' && (
+                <div className="flex items-center gap-1.5 text-xs font-semibold bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full border border-rose-200 shadow-2xs">
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  <span className="text-rose-600 font-normal">
+                    {reviewerList.length > 1 ? `Pemberi Revisi (${reviewerList.length}):` : 'Direvisi oleh:'}
+                  </span>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {reviewerList.map((name, idx) => (
+                      <span key={idx} className="text-rose-950 font-bold bg-rose-100/90 px-2 py-0.5 rounded-md text-[11px] border border-rose-200">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <p className="text-xs text-slate-500">
               Telaah mendalam data penelitian, data spasial GIS, metodologi, dan perhitungan Total Economic Value (TEV).
             </p>
@@ -141,6 +185,16 @@ export const ReviewStatusHeader: React.FC<ReviewStatusHeaderProps> = ({
             <div className="flex items-center gap-2">
               <span className="text-slate-400 font-medium">Status Saat Ini:</span>
               <StatusBadge status={status} size="sm" />
+              {status === 'DALAM_REVIEW' && (
+                <span className="text-[11px] font-semibold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                  {reviewerList.length > 1 ? `oleh Tim Reviewer (${reviewerList.join(', ')})` : `oleh ${reviewerList[0] || 'Dr. Benny Nababan'}`}
+                </span>
+              )}
+              {status === 'REVISI' && (
+                <span className="text-[11px] font-semibold text-rose-800 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                  {reviewerList.length > 1 ? `oleh ${reviewerList.join(', ')}` : `oleh ${reviewerList[0] || 'Dr. Benny Nababan'}`}
+                </span>
+              )}
             </div>
 
             <span className="text-slate-300 hidden sm:inline">•</span>
