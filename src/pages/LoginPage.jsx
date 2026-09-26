@@ -58,7 +58,7 @@ function LoginPage() {
       toast.success(`${t('messages.success', { ns: 'common' })}. ${user.nama || 'User'}!`)
       
       let redirectPath = from
-      if (from === '/') {
+      if (from === '/' || from === '/login') {
         const role = user?.role?.nama_role || (typeof user?.role === 'string' ? user?.role : '');
         const normalizedRole = role.toLowerCase();
         if (normalizedRole === 'super admin' || normalizedRole === 'admin' || normalizedRole === 'administrator') {

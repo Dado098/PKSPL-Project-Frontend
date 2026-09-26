@@ -11,8 +11,8 @@ export const register = async (nama, email, password) => {
 };
 
 export const logout = async () => {
-  const response = await api.post('/auth/logout');
-  return response.data;
+  const response = await api.post('/auth/logout', {}, { _skipAuthRedirect: true });
+  return response?.data;
 };
 
 export const getMe = async () => {
@@ -21,7 +21,7 @@ export const getMe = async () => {
 };
 
 export const getGoogleRedirectUrl = async () => {
-  const response = await api.get('/auth/google/redirect');
+  const response = await api.get('/auth/google/redirect', { _skipAuthRedirect: true });
   return response.data;
 };
 

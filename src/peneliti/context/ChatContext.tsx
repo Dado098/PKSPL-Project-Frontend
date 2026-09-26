@@ -59,6 +59,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load initial conversations & directory users
   const loadInitialData = useCallback(async () => {
+    if (!currentUserId) {
+      setConversations([]);
+      setDirectoryUsers([]);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
@@ -85,8 +92,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [currentUserId, activeConversationId]);
 
   useEffect(() => {
+    if (!currentUserId) {
+      setIsLoading(false);
+      return;
+    }
     loadInitialData();
-  }, [loadInitialData]);
+  }, [currentUserId, loadInitialData]);
 
   // Subscribe to real-time events from chatService
   useEffect(() => {

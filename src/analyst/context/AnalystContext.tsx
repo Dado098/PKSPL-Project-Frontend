@@ -33,7 +33,7 @@ export const AnalystProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
-  // Load user profile from AuthContext or fallback to service
+  // Load user profile from AuthContext
   useEffect(() => {
     if (authUser) {
       setUser({
@@ -44,12 +44,17 @@ export const AnalystProvider: React.FC<{ children: React.ReactNode }> = ({ child
         avatar: authUser.avatar || undefined,
       });
     } else {
-      analystDashboardService.getAuthenticatedUser().then(setUser);
+      setUser(null);
     }
   }, [authUser]);
 
   // Fetch dashboard data based on demoState mode
   const fetchDashboard = useCallback(async (mode: DemoStateMode) => {
+    if (!authUser) {
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
 
@@ -70,11 +75,15 @@ export const AnalystProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setErrorMessage(err.message || 'Gagal memuat data dashboard.');
       setIsLoading(false);
     }
-  }, []);
+  }, [authUser]);
 
   useEffect(() => {
+    if (!authUser) {
+      setIsLoading(false);
+      return;
+    }
     fetchDashboard(demoState);
-  }, [demoState, fetchDashboard]);
+  }, [authUser, demoState, fetchDashboard]);
 
   const refreshData = async () => {
     await fetchDashboard(demoState);
