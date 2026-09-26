@@ -8,7 +8,8 @@ import { MapLayerControl } from './MapLayerControl';
 import { PolygonDetailDrawer } from './PolygonDetailDrawer';
 import { useProject } from '../../context/ProjectContext';
 import { MAP_CONFIG, TileProvider } from '../../config/mapConfig';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
+import { isValidPoint, isValidPolygonCoordinates, filterValidPolygons } from '../../utils/geoValidation';
 
 interface MapViewProps {
   selectedPolygonId?: string | null;
@@ -32,7 +33,9 @@ const MapRecenter: React.FC<{ center: [number, number]; zoom?: number }> = ({ ce
   const lastCenterRef = useRef<[number, number]>(center);
 
   useEffect(() => {
+    if (!center || !Array.isArray(center) || center.length < 2) return;
     const [lat, lng] = center;
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
     const [lastLat, lastLng] = lastCenterRef.current;
     if (Math.abs(lat - lastLat) > 0.0001 || Math.abs(lng - lastLng) > 0.0001) {
       lastCenterRef.current = center;
@@ -53,6 +56,9 @@ export const MapView: React.FC<MapViewProps> = ({
   const landCovers = propLandCovers || context.landCovers;
   const layers = propLayers || context.layers;
   const [internalSelected, setInternalSelected] = useState<LandCoverPolygon | null>(null);
+
+  // Filter only valid polygons to protect Leaflet from invalid latlngs
+  const validLandCovers = React.useMemo(() => filterValidPolygons(landCovers), [landCovers]);
 
   // Basemap tile provider state with automatic fallback chain
   const [tileProvider, setTileProvider] = useState<TileProvider>(MAP_CONFIG.primaryTileProvider);
@@ -134,9 +140,9 @@ export const MapView: React.FC<MapViewProps> = ({
 
         <MapRecenter center={currentPolygon?.center || defaultCenter} />
 
-        {/* Render Land Cover Polygons */}
+        {/* Render Land Cover Polygons ONLY when coordinates are valid */}
         {isTutupanVisible &&
-          landCovers.map((poly) => {
+          validLandCovers.map((poly) => {
             const isSelected = currentPolygon?.id === poly.id;
             const colors = COLOR_SCHEME[poly.type] || COLOR_SCHEME.lainnya;
 
@@ -173,6 +179,14 @@ export const MapView: React.FC<MapViewProps> = ({
             );
           })}
       </MapContainer>
+
+      {/* Notice if tutupan exists but no polygon coordinates */}
+      {isTutupanVisible && landCovers.length > 0 && validLandCovers.length === 0 && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-white/95 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-md border border-slate-200 backdrop-blur-xs flex items-center gap-1.5 pointer-events-none">
+          <Info className="w-3.5 h-3.5 text-blue-600" />
+          <span>Data batas spasial polygon belum tersedia untuk proyek ini.</span>
+        </div>
+      )}
 
       {/* Floating GIS Overlay: Legend (Bottom-Left) */}
       <div className="absolute bottom-5 left-4 z-20 pointer-events-auto">

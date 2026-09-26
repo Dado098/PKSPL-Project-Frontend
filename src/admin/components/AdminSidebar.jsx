@@ -343,70 +343,60 @@ export const AdminSidebar = ({
                   <Settings className="w-4 h-4 text-slate-400" />
                   <span>Pengaturan Sistem</span>
                 </button>
-
-                <div className="my-1 border-t border-slate-800" />
-
-                <button
-                  onClick={() => {
-                    setProfileMenuOpen(false);
-                    navigate('/peneliti/projects');
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-blue-300 hover:text-blue-100 hover:bg-blue-900/30 transition-colors text-left cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-4 h-4 text-blue-400" />
-                    <span>Masuk sebagai Peneliti</span>
-                  </div>
-                  <ExternalLink className="w-3 h-3 text-blue-400" />
-                </button>
-
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors text-left cursor-pointer"
-                >
-                  <LogOut className="w-4 h-4 text-rose-400" />
-                  <span>Keluar</span>
-                </button>
               </div>
             </div>
           )}
 
-          {/* Profile Trigger Button */}
-          <button
-            onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-            className={`
-              w-full flex items-center gap-3 p-2 rounded-lg transition-colors cursor-pointer group text-left
-              ${profileMenuOpen ? 'bg-slate-800 ring-1 ring-slate-700' : 'hover:bg-slate-800/70'}
-              ${collapsed && !isMobileOpen ? 'justify-center p-1.5' : ''}
-            `}
-            title={`${userName} (${userRole}) - Klik untuk menu profil`}
-          >
-            {/* Avatar with status indicator */}
-            <div className="relative shrink-0">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm ring-1 ring-white/20">
-                {userInitials}
-              </div>
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#0F172A]" />
-            </div>
-
-            {/* Name & Role */}
-            {(!collapsed || isMobileOpen) && (
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-white truncate group-hover:text-blue-300 transition-colors">
-                  {userName}
+          {/* Profile Card & Tombol Keluar Langsung (Di Luar Menu Pop-up) */}
+          <div className="flex items-center gap-1.5">
+            {/* Profile Trigger Button */}
+            <button
+              onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+              className={`
+                flex-1 min-w-0 flex items-center gap-2.5 p-2 rounded-lg transition-colors cursor-pointer group text-left
+                ${profileMenuOpen ? 'bg-slate-800 ring-1 ring-slate-700' : 'hover:bg-slate-800/70'}
+                ${collapsed && !isMobileOpen ? 'justify-center p-1.5' : ''}
+              `}
+              title={`${userName} (${userRole}) - Klik untuk menu profil`}
+            >
+              {/* Avatar with status indicator */}
+              <div className="relative shrink-0">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm ring-1 ring-white/20">
+                  {userInitials}
                 </div>
-                <div className="text-[11px] text-slate-400 font-medium truncate flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-blue-400 inline shrink-0" />
-                  <span>{userRole}</span>
-                </div>
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#0F172A]" />
               </div>
-            )}
 
-            {/* Dropdown Chevron / Indicator */}
+              {/* Name & Role */}
+              {(!collapsed || isMobileOpen) && (
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-white truncate group-hover:text-blue-300 transition-colors">
+                    {userName}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-medium truncate flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-blue-400 inline shrink-0" />
+                    <span>{userRole}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Indicator */}
+              {(!collapsed || isMobileOpen) && (
+                <MoreVertical className="w-4 h-4 text-slate-400 group-hover:text-slate-200 shrink-0" />
+              )}
+            </button>
+
+            {/* Tombol Keluar (Langsung di luar pop-up) */}
             {(!collapsed || isMobileOpen) && (
-              <MoreVertical className="w-4 h-4 text-slate-400 group-hover:text-slate-200 shrink-0" />
+              <button
+                onClick={handleLogout}
+                title="Keluar dari Sistem"
+                className="p-2.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 transition-colors cursor-pointer shrink-0 border border-slate-800/80 hover:border-rose-900/50"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             )}
-          </button>
+          </div>
         </div>
       </aside>
     </>

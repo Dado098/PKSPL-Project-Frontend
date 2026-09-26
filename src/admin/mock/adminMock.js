@@ -30,8 +30,8 @@ export const ECOSYSTEM_VALUATION_DISTRIBUTION = [
 
 export const PROJECT_STATUS_BREAKDOWN = [
   { name: 'Dikerjakan', count: 8, color: '#2563EB', percentage: 44.4 },
-  { name: 'Menunggu Review', count: 4, color: '#EAB308', percentage: 22.2 },
-  { name: 'Perlu Perbaikan', count: 2, color: '#E11D48', percentage: 11.1 },
+  { name: 'Menunggu Review', count: 4, color: '#F59E0B', percentage: 22.2 },
+  { name: 'Perlu Perbaikan', count: 2, color: '#EF4444', percentage: 11.1 },
   { name: 'Selesai', count: 4, color: '#10B981', percentage: 22.2 },
 ];
 

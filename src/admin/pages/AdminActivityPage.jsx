@@ -4,6 +4,7 @@ import {
   AUDIT_SUMMARY_STATS
 } from '../mock/auditMock';
 import { AdminActivityDetailModal } from '../components/activity/AdminActivityDetailModal';
+import { getActivityLogs } from '../../services/activityService';
 import {
   Activity,
   Users,
@@ -29,6 +30,11 @@ import {
 import * as XLSX from 'xlsx';
 
 export const AdminActivityPage = () => {
+  // Dynamic Activity Logs & Stats from Backend Database
+  const [logs, setLogs] = useState(AUDIT_LOGS_DATA);
+  const [stats, setStats] = useState(AUDIT_SUMMARY_STATS);
+  const [loading, setLoading] = useState(true);
+
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -47,6 +53,27 @@ export const AdminActivityPage = () => {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const exportRef = useRef(null);
 
+  const fetchActivityLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await getActivityLogs();
+      if (res && res.status === 'success' && Array.isArray(res.data) && res.data.length > 0) {
+        setLogs(res.data);
+        if (res.stats) {
+          setStats(res.stats);
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal memuat log aktivitas dari backend, menggunakan data lokal:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchActivityLogs();
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (exportRef.current && !exportRef.current.contains(event.target)) {
@@ -57,30 +84,30 @@ export const AdminActivityPage = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Extract unique project list for filter dropdown
+  // Extract unique project list for filter dropdown from dynamic logs
   const projectOptions = useMemo(() => {
     const set = new Set();
-    AUDIT_LOGS_DATA.forEach((log) => {
+    logs.forEach((log) => {
       if (log.projectCode) {
         set.add(`${log.projectCode} • ${log.projectName || ''}`);
       }
     });
     return Array.from(set);
-  }, []);
+  }, [logs]);
 
   // Filtering Logic
   const filteredLogs = useMemo(() => {
-    return AUDIT_LOGS_DATA.filter((log) => {
+    return logs.filter((log) => {
       // 1. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchUser = log.userName.toLowerCase().includes(q) || log.userEmail.toLowerCase().includes(q);
-        const matchTitle = log.actionTitle.toLowerCase().includes(q) || log.actionDetail.toLowerCase().includes(q);
+        const matchUser = (log.userName || '').toLowerCase().includes(q) || (log.userEmail || '').toLowerCase().includes(q);
+        const matchTitle = (log.actionTitle || '').toLowerCase().includes(q) || (log.actionDetail || '').toLowerCase().includes(q);
         const matchProj =
           (log.projectCode && log.projectCode.toLowerCase().includes(q)) ||
           (log.projectName && log.projectName.toLowerCase().includes(q));
-        const matchModule = log.moduleName.toLowerCase().includes(q);
-        const matchId = log.id.toLowerCase().includes(q);
+        const matchModule = (log.moduleName || '').toLowerCase().includes(q);
+        const matchId = (log.id || '').toLowerCase().includes(q);
 
         if (!matchUser && !matchTitle && !matchProj && !matchModule && !matchId) {
           return false;
@@ -104,16 +131,16 @@ export const AdminActivityPage = () => {
       }
 
       // 5. Date Filter
-      if (dateFilter === 'TODAY' && !log.relativeTime.includes('lalu') && !log.relativeTime.includes('Menit') && !log.relativeTime.includes('Jam')) {
+      if (dateFilter === 'TODAY' && !log.relativeTime.includes('ago') && !log.relativeTime.includes('lalu') && !log.relativeTime.includes('Menit') && !log.relativeTime.includes('Jam') && !log.relativeTime.includes('Hari ini')) {
         return false;
       }
-      if (dateFilter === 'YESTERDAY' && !log.relativeTime.includes('Kemarin')) {
+      if (dateFilter === 'YESTERDAY' && !log.relativeTime.includes('Kemarin') && !log.relativeTime.includes('yesterday') && !log.relativeTime.includes('1 day')) {
         return false;
       }
 
       return true;
     });
-  }, [searchQuery, roleFilter, typeFilter, projectFilter, dateFilter]);
+  }, [logs, searchQuery, roleFilter, typeFilter, projectFilter, dateFilter]);
 
   // Reset Filters
   const handleResetFilters = () => {
@@ -218,28 +245,41 @@ export const AdminActivityPage = () => {
           </p>
         </div>
 
-        {/* Export Dropdown */}
-        <div ref={exportRef} className="relative shrink-0">
+        {/* Header Actions */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => setIsExportOpen(!isExportOpen)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#0F172A] hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            onClick={fetchActivityLogs}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold border border-slate-200 shadow-2xs transition-colors cursor-pointer disabled:opacity-60"
+            title="Sinkronisasi ulang dengan database"
           >
-            <Download className="w-4 h-4 text-slate-300" />
-            <span>Ekspor Log Audit</span>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            <RotateCcw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            <span>Segarkan</span>
           </button>
 
-          {isExportOpen && (
-            <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden text-xs text-slate-700 animate-in fade-in slide-in-from-top-2 duration-150">
-              <button
-                onClick={handleExportExcel}
-                className="w-full px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2.5 text-left font-medium cursor-pointer"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                <span>Unduh Excel (.XLSX)</span>
-              </button>
-            </div>
-          )}
+          {/* Export Dropdown */}
+          <div ref={exportRef} className="relative shrink-0">
+            <button
+              onClick={() => setIsExportOpen(!isExportOpen)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#0F172A] hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-slate-300" />
+              <span>Ekspor Log Audit</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+
+            {isExportOpen && (
+              <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden text-xs text-slate-700 animate-in fade-in slide-in-from-top-2 duration-150">
+                <button
+                  onClick={handleExportExcel}
+                  className="w-full px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2.5 text-left font-medium cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span>Unduh Excel (.XLSX)</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -250,8 +290,10 @@ export const AdminActivityPage = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Aktivitas Hari Ini</span>
             <Activity className="w-5 h-5 text-blue-600" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">{AUDIT_SUMMARY_STATS.todayActivities}</div>
-          <p className="text-[11px] text-emerald-600 font-semibold">{AUDIT_SUMMARY_STATS.todayGrowth}</p>
+          <div className="text-2xl font-bold text-slate-900">
+            {loading ? <span className="text-slate-300 animate-pulse">...</span> : stats.todayActivities}
+          </div>
+          <p className="text-[11px] text-emerald-600 font-semibold">{stats.todayGrowth}</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
@@ -259,8 +301,10 @@ export const AdminActivityPage = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Pengguna Aktif</span>
             <Users className="w-5 h-5 text-purple-600" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">{AUDIT_SUMMARY_STATS.activeUsers}</div>
-          <p className="text-[11px] text-slate-500">{AUDIT_SUMMARY_STATS.activeUsersDesc}</p>
+          <div className="text-2xl font-bold text-slate-900">
+            {loading ? <span className="text-slate-300 animate-pulse">...</span> : stats.activeUsers}
+          </div>
+          <p className="text-[11px] text-slate-500">{stats.activeUsersDesc}</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
@@ -268,8 +312,10 @@ export const AdminActivityPage = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Perubahan Data</span>
             <Database className="w-5 h-5 text-emerald-600" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">{AUDIT_SUMMARY_STATS.dataChanges}</div>
-          <p className="text-[11px] text-slate-500">{AUDIT_SUMMARY_STATS.dataChangesDesc}</p>
+          <div className="text-2xl font-bold text-slate-900">
+            {loading ? <span className="text-slate-300 animate-pulse">...</span> : stats.dataChanges}
+          </div>
+          <p className="text-[11px] text-slate-500">{stats.dataChangesDesc}</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
@@ -277,8 +323,10 @@ export const AdminActivityPage = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Aksi Penting</span>
             <ShieldAlert className="w-5 h-5 text-amber-600" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">{AUDIT_SUMMARY_STATS.importantActivities}</div>
-          <p className="text-[11px] text-slate-500">{AUDIT_SUMMARY_STATS.importantActivitiesDesc}</p>
+          <div className="text-2xl font-bold text-slate-900">
+            {loading ? <span className="text-slate-300 animate-pulse">...</span> : stats.importantActivities}
+          </div>
+          <p className="text-[11px] text-slate-500">{stats.importantActivitiesDesc}</p>
         </div>
       </div>
 

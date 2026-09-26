@@ -195,6 +195,9 @@ const fromApiProject = (project: any, fallbackLead = 'Peneliti Utama'): Project 
     createdAt: project.created_at || '',
     updatedAt: project.updated_at || project.updatedAt || '',
     hasShp: Boolean(project.shapefile_files && Object.keys(project.shapefile_files).length),
+    latitude: project.latitude ?? null,
+    longitude: project.longitude ?? null,
+    geometry: project.geometry ?? null,
   };
 };
 

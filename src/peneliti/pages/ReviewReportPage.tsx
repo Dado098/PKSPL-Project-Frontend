@@ -53,6 +53,7 @@ import { ProjectResearchFullData, LandCoverItem, MasterSpeciesItem, EcosystemCal
 import { Project } from '../types/project';
 import { INITIAL_MAP_LAYERS } from '../mock/spatialData';
 import { updateProyek } from '../../services/projectService';
+import { isValidPolygonCoordinates } from '../utils/geoValidation';
 import {
   ResponsiveContainer,
   BarChart,
@@ -587,9 +588,9 @@ const ReviewReportPageContent: React.FC = () => {
       tevPerHa: tevPerHa,
       spatial: {
         ...researchData.spatial,
-        hasShp: true,
+        hasShp: Boolean(currentProject?.hasShp) || dynamicLandCovers.some(lc => isValidPolygonCoordinates(lc.coordinates)),
         crs: researchData.spatial?.crs || 'EPSG:4326 (WGS 84)',
-        polygonCount: dynamicLandCovers.length,
+        polygonCount: dynamicLandCovers.filter(lc => isValidPolygonCoordinates(lc.coordinates)).length,
         layerCount: 4,
         totalAreaHa: Number(totalAreaHa.toFixed(2)) || 88.70,
         boundingBox: researchData.spatial?.boundingBox || '115.195° E - 115.238° E, -8.762° S - -8.735° S'
@@ -1082,6 +1083,12 @@ const ReviewReportPageContent: React.FC = () => {
                 spatial={activeResearchData.spatial}
                 landCovers={activeResearchData.landCovers}
                 locationText={activeResearchData.location}
+                projectPoint={
+                  currentProject?.latitude != null && currentProject?.longitude != null
+                    ? [Number(currentProject.latitude), Number(currentProject.longitude)]
+                    : null
+                }
+                projectName={currentProject?.name}
               />
             </section>
 

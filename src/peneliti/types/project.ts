@@ -26,6 +26,9 @@ export interface Project {
   reviewedAt?: string;
   analystComment?: string;
   hasShp?: boolean;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  geometry?: any;
 }
 
 export type WorkflowStepId = '01' | '02' | '03' | '04' | '05' | '06' | '07' | '08';

@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Search, MapPin, ChevronRight, Navigation2, RefreshCw } from 'lucide-react';
+import { Search, MapPin, ChevronRight, Navigation2, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { categories, locations, getCategoryInfo, PROVINCE_GEOJSON_URL } from './map/mapData';
+import { categories, getCategoryInfo, PROVINCE_GEOJSON_URL } from './map/mapData';
+import { getPublicMapProjects } from '../services/projectService';
 import { MAP_CONFIG } from '../peneliti/config/mapConfig';
 
 // Fix default marker icon issues in Vite/Webpack
@@ -35,6 +36,9 @@ function MapController({ mapRef }) {
 
 export default function MapSection() {
   const { t } = useTranslation(['map', 'landing', 'common']);
+  const [locations, setLocations] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeFilters, setActiveFilters] = useState(categories.map(c => c.id));
   const [selectedLocId, setSelectedLocId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +53,44 @@ export default function MapSection() {
       .catch(err => console.error("Error loading geojson", err));
   }, []);
 
+  // Fetch projects from public API (Section 3 & 4)
+  const fetchProjects = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getPublicMapProjects();
+      const rawList = Array.isArray(data) ? data : (data?.data || []);
+
+      // Validasi koordinat (Section 7)
+      const validProjects = rawList.filter(item => {
+        const lat = parseFloat(item.latitude);
+        const lng = parseFloat(item.longitude);
+        const isValid = !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+        if (!isValid) {
+          console.warn(`[MapSection] Proyek ${item.kode_proyek || item.id} memiliki koordinat tidak valid dan dilewati:`, item.latitude, item.longitude);
+        }
+        return isValid;
+      }).map(item => ({
+        ...item,
+        id: String(item.id || item.id_proyek),
+        coords: [parseFloat(item.latitude), parseFloat(item.longitude)],
+      }));
+
+      setLocations(validProjects);
+    } catch (err) {
+      console.error("Error loading public map projects:", err);
+      setError("Data proyek tidak dapat dimuat.");
+      // PENTING: Sesuai Section 15, JANGAN fallback diam-diam ke data mock!
+      setLocations([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
   // Filter toggle handler
   const toggleFilter = (categoryId) => {
     setActiveFilters(prev => 
@@ -58,15 +100,24 @@ export default function MapSection() {
     );
   };
 
-  // Filter locations based on active categories and search query
+  // Filter locations based on active categories and search query (Section 10 & 11)
   const filteredLocations = useMemo(() => {
-    return locations.filter(loc => 
-      activeFilters.includes(loc.category) &&
-      loc.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [activeFilters, searchQuery]);
+    const query = searchQuery.trim().toLowerCase();
+    return locations.filter(loc => {
+      const matchesCategory = activeFilters.includes(loc.category);
+      if (!matchesCategory) return false;
+      if (!query) return true;
 
-  // Calculate statistics per category
+      const nameMatch = (loc.name || loc.nama_proyek || '').toLowerCase().includes(query);
+      const codeMatch = (loc.kode_proyek || '').toLowerCase().includes(query);
+      const provMatch = (loc.provinsi || '').toLowerCase().includes(query);
+      const kabMatch = (loc.kabupaten || loc.kabupaten_kota || '').toLowerCase().includes(query);
+
+      return nameMatch || codeMatch || provMatch || kabMatch;
+    });
+  }, [locations, activeFilters, searchQuery]);
+
+  // Calculate statistics per category dynamically (Section 12)
   const stats = useMemo(() => {
     const counts = {};
     categories.forEach(c => counts[c.id] = 0);
@@ -76,7 +127,7 @@ export default function MapSection() {
       }
     });
     return counts;
-  }, []);
+  }, [locations]);
 
   // Color palette for province polygons
   const provinceColors = [
@@ -218,8 +269,15 @@ export default function MapSection() {
                 />
               )}
 
+              {isLoading && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-white/95 backdrop-blur px-3.5 py-1.5 rounded-full shadow-md border border-slate-200 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  <span>Memuat data proyek...</span>
+                </div>
+              )}
+
               {filteredLocations.map(loc => {
-                const catInfo = getCategoryInfo(loc.category);
+                const catInfo = getCategoryInfo(loc.category) || { label: loc.category, color: '#3b82f6', emoji: '📍' };
                 return (
                   <Marker 
                     key={loc.id} 
@@ -231,21 +289,26 @@ export default function MapSection() {
                   >
                     <Popup className="custom-popup" minWidth={320}>
                       <div className="p-1">
-                        <div className="flex items-center space-x-2 mb-2">
+                        <div className="flex items-center justify-between gap-2 mb-2">
                           <span 
-                            className="text-xs px-2.5 py-1 rounded-full font-medium text-white shadow-sm"
+                            className="text-xs px-2.5 py-1 rounded-full font-medium text-white shadow-sm inline-flex items-center gap-1"
                             style={{ backgroundColor: catInfo.color }}
                           >
-                            {catInfo.emoji} {catInfo.label}
+                            <span>{catInfo.emoji}</span> <span>{catInfo.label}</span>
                           </span>
+                          {loc.kode_proyek && (
+                            <span className="text-[11px] font-mono px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-semibold border border-slate-200">
+                              {loc.kode_proyek}
+                            </span>
+                          )}
                         </div>
                         <h3 className="text-lg font-bold text-slate-900 leading-tight mb-2">{loc.name}</h3>
-                        <p className="text-sm text-slate-600 mb-4">{loc.ringkasan}</p>
+                        <p className="text-sm text-slate-600 mb-4 line-clamp-3">{loc.ringkasan}</p>
                         
                         <div className="grid grid-cols-2 gap-2 text-sm mb-4">
                           <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                             <span className="block text-slate-400 text-[11px] uppercase tracking-wider font-semibold mb-0.5">Provinsi</span>
-                            <span className="font-semibold text-slate-700">{loc.provinsi}</span>
+                            <span className="font-semibold text-slate-700 truncate block">{loc.provinsi}</span>
                           </div>
                           <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                             <span className="block text-slate-400 text-[11px] uppercase tracking-wider font-semibold mb-0.5">Luas</span>
@@ -303,7 +366,7 @@ export default function MapSection() {
                   {t('map.locationList')}
                 </h3>
                 <span className="bg-blue-100 text-blue-700 text-xs px-2.5 py-1 rounded-full font-bold">
-                  {filteredLocations.length}
+                  {isLoading ? '...' : filteredLocations.length}
                 </span>
               </div>
               <div className="relative">
@@ -314,18 +377,48 @@ export default function MapSection() {
                   className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow shadow-sm"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  disabled={isLoading}
                 />
               </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-              {filteredLocations.length === 0 ? (
+              {isLoading ? (
+                <div className="space-y-3 p-1">
+                  {[1, 2, 3, 4].map(idx => (
+                    <div key={idx} className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60 animate-pulse space-y-2">
+                      <div className="flex justify-between items-center">
+                        <div className="h-4 bg-slate-200 rounded w-2/3"></div>
+                        <div className="h-3.5 bg-slate-200 rounded-full w-12"></div>
+                      </div>
+                      <div className="h-3 bg-slate-200 rounded w-1/3"></div>
+                      <div className="pt-2 border-t border-slate-100 flex justify-between">
+                        <div className="h-3 bg-slate-200 rounded w-1/4"></div>
+                        <div className="h-3 bg-slate-200 rounded w-1/4"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <AlertCircle className="w-10 h-10 text-rose-500 mb-3" />
+                  <p className="text-slate-800 font-semibold mb-1">{error}</p>
+                  <p className="text-xs text-slate-500 mb-4">Gagal menghubungi server database.</p>
+                  <button
+                    onClick={fetchProjects}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Muat Ulang
+                  </button>
+                </div>
+              ) : filteredLocations.length === 0 ? (
                 <div className="text-center py-10 text-slate-500 text-sm">
-                  {t('map.noLocationFound')}
+                  {locations.length === 0 ? 'Belum ada proyek yang tersedia.' : t('map.noLocationFound')}
                 </div>
               ) : (
                 filteredLocations.map(loc => {
-                  const catInfo = getCategoryInfo(loc.category);
+                  const catInfo = getCategoryInfo(loc.category) || { label: loc.category, color: '#3b82f6', emoji: '📍' };
                   const isSelected = selectedLocId === loc.id;
                   
                   return (

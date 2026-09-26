@@ -688,6 +688,12 @@ export const AnalystProjectReviewPage: React.FC = () => {
             spatial={activeResearchData.spatial}
             landCovers={activeResearchData.landCovers}
             locationText={activeResearchData.location}
+            projectPoint={
+              (projectMeta as any)?.latitude != null && (projectMeta as any)?.longitude != null
+                ? [Number((projectMeta as any).latitude), Number((projectMeta as any).longitude)]
+                : null
+            }
+            projectName={activeResearchData.projectName}
           />
         </section>
 

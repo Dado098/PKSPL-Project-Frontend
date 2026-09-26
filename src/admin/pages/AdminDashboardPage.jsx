@@ -14,6 +14,8 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { ProjectModulesModal } from '../components/ProjectModulesModal';
 import { getLandingStatistics } from '../../services/statisticsService';
 import { getProyekList } from '../../services/projectService';
+import { getAdminAnalyticsOverview } from '../../services/adminAnalyticsService';
+import { getActivityLogs } from '../../services/activityService';
 import {
   Coins,
   FolderKanban,
@@ -69,7 +71,11 @@ export const AdminDashboardPage = () => {
 
   // Dynamic API state with fallbacks to mock
   const [stats, setStats] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(null);
   const [projectsList, setProjectsList] = useState(ADMIN_PROJECTS_LIST);
+  const [activityLogsList, setActivityLogsList] = useState(ADMIN_ACTIVITY_LOGS);
   const [loading, setLoading] = useState(false);
   const [selectedProjectForModal, setSelectedProjectForModal] = useState(null);
   const [isModulesModalOpen, setIsModulesModalOpen] = useState(false);
@@ -83,21 +89,63 @@ export const AdminDashboardPage = () => {
   const [selectedMonths, setSelectedMonths] = useState([
     'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
   ]);
-  const [selectedYears, setSelectedYears] = useState(['2021', '2022', '2023', '2024', '2025', '2026']);
+  const [selectedYears, setSelectedYears] = useState(['2025', '2026']);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadDashboardData = async () => {
       setLoading(true);
+      setAnalyticsLoading(true);
+      setAnalyticsError(null);
       try {
-        const [statsRes, projectsRes] = await Promise.allSettled([
+        const [statsRes, projectsRes, analyticsRes, activityRes] = await Promise.allSettled([
           getLandingStatistics(),
-          getProyekList({ per_page: 50 })
+          getProyekList({ per_page: 50 }),
+          getAdminAnalyticsOverview({ year: selectedYear }),
+          getActivityLogs({ limit: 5 })
         ]);
 
         if (isMounted && statsRes.status === 'fulfilled' && statsRes.value) {
           setStats(statsRes.value);
+        }
+
+        if (isMounted && analyticsRes.status === 'fulfilled' && analyticsRes.value) {
+          const aData = analyticsRes.value;
+          setAnalytics(aData);
+          if (aData.header?.available_years?.length > 0) {
+            const avail = aData.header.available_years;
+            if (!avail.includes(selectedYear)) {
+              setSelectedYear(avail[0]);
+            }
+          }
+          if (aData.yearly_trend?.length > 0) {
+            setSelectedYears(aData.yearly_trend.map((y) => y.period || String(y.year)));
+          }
+        } else if (isMounted && analyticsRes.status === 'rejected') {
+          console.warn('Admin analytics fetch failed:', analyticsRes.reason);
+          setAnalyticsError(analyticsRes.reason?.message || 'Gagal memuat analitik dinamis dari server');
+        }
+
+        if (isMounted && activityRes.status === 'fulfilled' && activityRes.value) {
+          const rawActs = activityRes.value?.data || (Array.isArray(activityRes.value) ? activityRes.value : []);
+          if (rawActs.length > 0) {
+            setActivityLogsList(rawActs.map((act, idx) => ({
+              id: act.id_log || act.id || idx,
+              userName: act.user?.nama || act.user_name || act.userName || 'Administrator',
+              userRole: act.user?.role?.nama_role || act.user_role || act.userRole || 'Admin',
+              action: act.aktivitas || act.action || 'Memperbarui data',
+              target: act.modul || act.target || 'Proyek Valuasi',
+              timestamp: act.created_at
+                ? new Date(act.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })
+                : 'Hari ini',
+              badgeColor: (act.user?.role?.nama_role === 'Admin' || act.userRole === 'Admin')
+                ? 'bg-purple-100 text-purple-700'
+                : (act.user?.role?.nama_role === 'Analyst' || act.userRole === 'Analyst')
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-blue-100 text-blue-700',
+            })));
+          }
         }
 
         if (isMounted && projectsRes.status === 'fulfilled' && Array.isArray(projectsRes.value) && projectsRes.value.length > 0) {
@@ -126,7 +174,10 @@ export const AdminDashboardPage = () => {
       } catch (err) {
         console.warn('Dashboard data fetch error:', err);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setAnalyticsLoading(false);
+        }
       }
     };
 
@@ -149,10 +200,16 @@ export const AdminDashboardPage = () => {
   });
 
   // Dynamic metrics with fallback
-  const totalTevNominal = stats?.total_tev ?? ADMIN_SYSTEM_STATS.totalTevNominal;
-  const totalTevMiliar = stats?.total_tev_miliar ? Number(stats.total_tev_miliar).toFixed(2) : (totalTevNominal / 1e9).toFixed(2);
-  const totalProjects = stats?.total_projects ?? projectsList.length ?? ADMIN_SYSTEM_STATS.totalProjects;
-  const totalAreaHa = stats?.total_area_ha ?? ADMIN_SYSTEM_STATS.totalAreaHa;
+  const totalTevNominal = stats?.total_tev ?? (analytics?.header?.total_tev_miliar ? analytics.header.total_tev_miliar * 1e9 : ADMIN_SYSTEM_STATS.totalTevNominal);
+  const totalTevMiliar = analytics?.header?.total_tev_miliar
+    ?? (stats?.total_tev_miliar ? Number(stats.total_tev_miliar).toFixed(2) : (totalTevNominal / 1e9).toFixed(2));
+  const totalProjects = analytics?.header?.total_projects
+    ?? stats?.total_projects
+    ?? projectsList.length
+    ?? ADMIN_SYSTEM_STATS.totalProjects;
+  const totalAreaHa = analytics?.header?.total_area_ha
+    ?? stats?.total_area_ha
+    ?? ADMIN_SYSTEM_STATS.totalAreaHa;
   const totalUsers = stats?.total_users ?? ADMIN_SYSTEM_STATS.totalUsers;
   const usersPeneliti = stats?.users_by_role?.peneliti ?? ADMIN_SYSTEM_STATS.usersPeneliti;
   const usersAnalyst = stats?.users_by_role?.analyst ?? ADMIN_SYSTEM_STATS.usersAnalyst;
@@ -172,38 +229,48 @@ export const AdminDashboardPage = () => {
   const activeCount = workflowData.find((w) => w.name === 'Dikerjakan')?.count ?? ADMIN_SYSTEM_STATS.projectsActive;
   const pendingCount = workflowData.find((w) => w.name === 'Menunggu Review')?.count ?? ADMIN_SYSTEM_STATS.projectsPendingReview;
   const revisionCount = workflowData.find((w) => w.name === 'Perlu Perbaikan')?.count ?? ADMIN_SYSTEM_STATS.projectsNeedsRevision;
-  const completedCount = workflowData.find((w) => w.name === 'Selesai')?.count ?? ADMIN_SYSTEM_STATS.projectsCompleted;
+  const completedCount = analytics?.header?.total_completed
+    ?? workflowData.find((w) => w.name === 'Selesai')?.count
+    ?? ADMIN_SYSTEM_STATS.projectsCompleted;
 
   const avgTevPerProject = totalProjects > 0 ? totalTevNominal / totalProjects : 0;
 
   // Dynamic Trend Datasets (Bulanan vs Tahunan)
   const defaultMonthlyTrend = [
-    { label: 'Apr 2026', period: 'Apr', akumulasiTevMiliar: Number((totalTevNominal * 0.58 / 1e9).toFixed(2)), proyekBaru: 1, proyekSelesai: 0, luasHa: 3800.0 },
-    { label: 'Mei 2026', period: 'Mei', akumulasiTevMiliar: Number((totalTevNominal * 0.67 / 1e9).toFixed(2)), proyekBaru: 2, proyekSelesai: 1, luasHa: 4650.0 },
-    { label: 'Jun 2026', period: 'Jun', akumulasiTevMiliar: Number((totalTevNominal * 0.76 / 1e9).toFixed(2)), proyekBaru: 2, proyekSelesai: 1, luasHa: 5400.0 },
-    { label: 'Jul 2026', period: 'Jul', akumulasiTevMiliar: Number((totalTevNominal * 0.84 / 1e9).toFixed(2)), proyekBaru: 3, proyekSelesai: 1, luasHa: 6250.0 },
-    { label: 'Agu 2026', period: 'Agu', akumulasiTevMiliar: Number((totalTevNominal * 0.92 / 1e9).toFixed(2)), proyekBaru: 2, proyekSelesai: 2, luasHa: 7150.0 },
-    { label: 'Sep 2026', period: 'Sep', akumulasiTevMiliar: Number(totalTevMiliar), proyekBaru: 1, proyekSelesai: completedCount, luasHa: Number(totalAreaHa) },
+    { label: 'Jan 2026', period: 'Jan', akumulasiTevMiliar: 87.12, proyekBaru: 1, proyekSelesai: 1, luasHa: 1760.5 },
+    { label: 'Feb 2026', period: 'Feb', akumulasiTevMiliar: 88.86, proyekBaru: 1, proyekSelesai: 0, luasHa: 1805.7 },
+    { label: 'Mar 2026', period: 'Mar', akumulasiTevMiliar: 123.06, proyekBaru: 1, proyekSelesai: 1, luasHa: 2125.7 },
+    { label: 'Apr 2026', period: 'Apr', akumulasiTevMiliar: 172.01, proyekBaru: 1, proyekSelesai: 0, luasHa: 2966.5 },
+    { label: 'Mei 2026', period: 'Mei', akumulasiTevMiliar: 188.81, proyekBaru: 1, proyekSelesai: 1, luasHa: 3396.7 },
+    { label: 'Jun 2026', period: 'Jun', akumulasiTevMiliar: 201.31, proyekBaru: 1, proyekSelesai: 0, luasHa: 4066.7 },
+    { label: 'Jul 2026', period: 'Jul', akumulasiTevMiliar: 243.81, proyekBaru: 1, proyekSelesai: 0, luasHa: 5916.7 },
+    { label: 'Agu 2026', period: 'Agu', akumulasiTevMiliar: 277.81, proyekBaru: 2, proyekSelesai: 0, luasHa: 6467.1 },
+    { label: 'Sep 2026', period: 'Sep', akumulasiTevMiliar: 343.21, proyekBaru: 1, proyekSelesai: 0, luasHa: 8007.6 },
+    { label: 'Okt 2026', period: 'Okt', akumulasiTevMiliar: 343.21, proyekBaru: 0, proyekSelesai: 0, luasHa: 8007.6 },
+    { label: 'Nov 2026', period: 'Nov', akumulasiTevMiliar: 343.21, proyekBaru: 0, proyekSelesai: 0, luasHa: 8007.6 },
+    { label: 'Des 2026', period: 'Des', akumulasiTevMiliar: 343.21, proyekBaru: 0, proyekSelesai: 0, luasHa: 8007.6 },
   ];
 
   const defaultYearlyTrend = [
-    { label: 'Tahun 2021', period: '2021', akumulasiTevMiliar: 58.7, proyekBaru: 2, proyekSelesai: 2, luasHa: 1250.5 },
-    { label: 'Tahun 2022', period: '2022', akumulasiTevMiliar: 104.2, proyekBaru: 3, proyekSelesai: 2, luasHa: 2420.0 },
-    { label: 'Tahun 2023', period: '2023', akumulasiTevMiliar: 168.9, proyekBaru: 5, proyekSelesai: 4, luasHa: 3950.0 },
-    { label: 'Tahun 2024', period: '2024', akumulasiTevMiliar: 234.5, proyekBaru: 7, proyekSelesai: 6, luasHa: 5620.0 },
-    { label: 'Tahun 2025', period: '2025', akumulasiTevMiliar: 295.8, proyekBaru: 9, proyekSelesai: 8, luasHa: 7100.0 },
-    { label: 'Tahun 2026', period: '2026', akumulasiTevMiliar: Number(totalTevMiliar), proyekBaru: totalProjects, proyekSelesai: completedCount, luasHa: Number(totalAreaHa) },
+    { label: 'Tahun 2025', period: '2025', akumulasiTevMiliar: 28.4, proyekBaru: 1, proyekSelesai: 0, luasHa: 510.0 },
+    { label: 'Tahun 2026', period: '2026', akumulasiTevMiliar: 343.21, proyekBaru: 10, proyekSelesai: 3, luasHa: 8007.6 },
   ];
 
   // Available years from API or default
-  const availableYears = stats?.years_available || [2026, 2025, 2024];
+  const availableYears = analytics?.header?.available_years || stats?.years_available || [2026, 2025];
 
   // Full dataset for current mode and selected year
-  const currentMonthlyList = stats?.monthly_trend_by_year?.[selectedYear] || defaultMonthlyTrend;
+  const currentMonthlyList = analytics?.monthly_trend_by_year?.[selectedYear]
+    || stats?.monthly_trend_by_year?.[selectedYear]
+    || defaultMonthlyTrend;
+
+  const currentYearlyList = analytics?.yearly_trend
+    || stats?.yearly_trend
+    || defaultYearlyTrend;
 
   const fullBaseData = trendTimeframe === 'monthly'
     ? currentMonthlyList
-    : (stats?.yearly_trend || defaultYearlyTrend);
+    : currentYearlyList;
 
   // Active selected period keys
   const activeSelectedKeys = trendTimeframe === 'monthly' ? selectedMonths : selectedYears;
@@ -258,13 +325,51 @@ export const AdminDashboardPage = () => {
       const trio = fullBaseData.slice(-3).map((d) => d.period || String(d.year));
       if (trendTimeframe === 'monthly') setSelectedMonths(trio);
       else setSelectedYears(trio);
+    } else if (fullBaseData.length > 0) {
+      const allKeys = fullBaseData.map((d) => d.period || String(d.year));
+      if (trendTimeframe === 'monthly') setSelectedMonths(allKeys);
+      else setSelectedYears(allKeys);
     }
   };
 
-  const handleYearChange = (year) => {
+  const handleYearChange = async (year) => {
     setSelectedYear(year);
-    const monthsForYear = stats?.monthly_trend_by_year?.[year] || defaultMonthlyTrend;
-    setSelectedMonths(monthsForYear.map((m) => m.period));
+    const cachedMonths = analytics?.monthly_trend_by_year?.[year];
+    if (cachedMonths && cachedMonths.length > 0) {
+      setSelectedMonths(cachedMonths.map((m) => m.period));
+      return;
+    }
+
+    try {
+      setAnalyticsLoading(true);
+      const res = await getAdminAnalyticsOverview({ year });
+      if (res) {
+        setAnalytics(res);
+        const monthsForYear = res.monthly_trend_by_year?.[year] || [];
+        if (monthsForYear.length > 0) {
+          setSelectedMonths(monthsForYear.map((m) => m.period));
+        }
+      }
+    } catch (err) {
+      console.warn('Year change fetch error:', err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const handleTimeframeChange = (mode) => {
+    setTrendTimeframe(mode);
+    if (mode === 'monthly') {
+      const mList = analytics?.monthly_trend_by_year?.[selectedYear] || stats?.monthly_trend_by_year?.[selectedYear] || [];
+      if (mList.length > 0 && selectedMonths.length === 0) {
+        setSelectedMonths(mList.map((m) => m.period));
+      }
+    } else {
+      const yList = analytics?.yearly_trend || stats?.yearly_trend || [];
+      if (yList.length > 0 && selectedYears.length === 0) {
+        setSelectedYears(yList.map((y) => y.period || String(y.year)));
+      }
+    }
   };
 
   // Comparison metrics calculation (only shown when user is actually comparing a subset, not the full dataset)
@@ -493,18 +598,37 @@ export const AdminDashboardPage = () => {
                   tickFormatter={(val) => `${val} M`}
                 />
                 <Tooltip
-                  formatter={(value, name, item) => [
-                    `${formatIDR(item.payload.fullValue)} (${formatNumber(item.payload.areaHa)} Ha)`,
-                    'Nilai Valuasi',
-                  ]}
-                  contentStyle={{
-                    backgroundColor: '#0F172A',
-                    color: '#fff',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    border: 'none',
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const item = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900/95 backdrop-blur-md text-white px-3.5 py-2.5 rounded-xl shadow-2xl border border-slate-700/80 text-xs min-w-[200px] pointer-events-none z-50">
+                          <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 mb-1.5">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span className="font-bold text-slate-100">{item.name}</span>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-slate-300">
+                              <span className="text-slate-400">Nilai Valuasi:</span>
+                              <span className="font-bold text-emerald-400 font-mono">
+                                {formatIDR(item.fullValue)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-slate-300">
+                              <span className="text-slate-400">Luas Kawasan:</span>
+                              <span className="font-semibold text-blue-300 font-mono">
+                                {formatNumber(item.areaHa)} Ha
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
                   }}
-                  itemStyle={{ color: '#93C5FD' }}
                 />
                 <Bar dataKey="miliar" radius={[6, 6, 0, 0]}>
                   {ecosystemData.map((entry, index) => (
@@ -559,13 +683,26 @@ export const AdminDashboardPage = () => {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(val, name) => [`${val} Proyek`, name]}
-                  contentStyle={{
-                    backgroundColor: '#0F172A',
-                    color: '#fff',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    border: 'none',
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900/95 backdrop-blur-md text-white px-3.5 py-2.5 rounded-xl shadow-2xl border border-slate-700/80 text-xs pointer-events-none z-50">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
+                              style={{ backgroundColor: data.color }}
+                            />
+                            <span className="font-semibold text-slate-100">{data.name}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 font-mono">
+                            <span className="text-sm font-bold text-white">{data.count} Proyek</span>
+                            <span className="text-xs font-semibold text-blue-300">({data.percentage}%)</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
                   }}
                 />
               </PieChart>
@@ -607,12 +744,18 @@ export const AdminDashboardPage = () => {
               <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
               <h2 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
                 <span>Tren Pertumbuhan Valuasi & Dinamika Riset</span>
+                {analyticsLoading && (
+                  <span className="flex items-center gap-1 text-[10px] font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                    <span>Sinkronisasi DB...</span>
+                  </span>
+                )}
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {trendTimeframe === 'monthly'
                 ? `Eksplorasi data bulanan ${selectedYear} dan komparasi antar periode penelitian.`
-                : 'Analisis tren multi-tahun perkembangan nilai valuasi (TEV) dan rekapitulasi proyek periode 2021 - 2026.'}
+                : `Analisis tren multi-tahun perkembangan nilai valuasi (TEV) dan rekapitulasi proyek periode ${availableYears[availableYears.length - 1] || 2025} - ${availableYears[0] || 2026}.`}
             </p>
           </div>
 
@@ -654,7 +797,7 @@ export const AdminDashboardPage = () => {
             {/* Timeframe Toggle: Bulanan vs Tahunan */}
             <div className="flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-xs">
               <button
-                onClick={() => setTrendTimeframe('monthly')}
+                onClick={() => handleTimeframeChange('monthly')}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
                   trendTimeframe === 'monthly'
                     ? 'bg-white text-blue-700 shadow-2xs'
@@ -664,7 +807,7 @@ export const AdminDashboardPage = () => {
                 🗓️ Bulanan
               </button>
               <button
-                onClick={() => setTrendTimeframe('yearly')}
+                onClick={() => handleTimeframeChange('yearly')}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
                   trendTimeframe === 'yearly'
                     ? 'bg-white text-blue-700 shadow-2xs'
@@ -754,7 +897,9 @@ export const AdminDashboardPage = () => {
             <div className="text-[11px] font-medium text-slate-500">
               {activeTrendData.length === fullBaseData.length ? (
                 <span className="text-slate-500">
-                  {trendTimeframe === 'monthly' ? `Menampilkan 12 bulan penuh (${selectedYear})` : 'Menampilkan seluruh tahun (2021-2026)'}
+                  {trendTimeframe === 'monthly'
+                    ? `Menampilkan 12 bulan penuh (${selectedYear})`
+                    : `Menampilkan seluruh tahun (${availableYears[availableYears.length - 1] || 2025}-${availableYears[0] || 2026})`}
                 </span>
               ) : activeTrendData.length === 2 ? (
                 <span className="text-blue-600 font-semibold flex items-center gap-1">
@@ -979,6 +1124,17 @@ export const AdminDashboardPage = () => {
                               <span className="font-semibold text-slate-200 font-mono">
                                 {formatNumber(item.luasHa)} Ha
                               </span>
+                            </div>
+                          )}
+                          {item.project_names && item.project_names.length > 0 && (
+                            <div className="pt-1.5 border-t border-slate-800 text-[11px] space-y-1">
+                              <span className="text-slate-400 font-semibold block text-[10px] uppercase">Riset Ditambahkan:</span>
+                              {item.project_names.slice(0, 2).map((name, i) => (
+                                <div key={i} className="text-slate-200 truncate max-w-[210px] text-[10.5px]">• {name}</div>
+                              ))}
+                              {item.project_names.length > 2 && (
+                                <div className="text-slate-400 text-[10px]">+{item.project_names.length - 2} riset lainnya</div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1242,7 +1398,7 @@ export const AdminDashboardPage = () => {
 
             {/* Feed items */}
             <div className="space-y-3.5">
-              {ADMIN_ACTIVITY_LOGS.map((act) => (
+              {activityLogsList.map((act) => (
                 <div key={act.id} className="flex items-start gap-2.5 text-xs">
                   <div className="w-2 h-2 rounded-full bg-blue-600 mt-1.5 shrink-0" />
                   <div className="space-y-0.5 flex-1 leading-relaxed">
