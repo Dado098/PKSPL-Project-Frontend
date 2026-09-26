@@ -102,11 +102,14 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
   const systemColumns = schema.columns.filter(col => col.key !== 'no');
 
   // Helper to dynamically calculate row's economic value
-  const getRowTotal = (row: Record<string, any>): number => {
+  const getRowTotal = (row: Record<string, any>, rowBiota?: 'flora' | 'fauna'): number => {
     if (row.totalNilai !== undefined && row.totalNilai !== null && !isNaN(Number(row.totalNilai)) && Number(row.totalNilai) > 0) {
       return Number(row.totalNilai);
     }
-    const calc = schema.calculateRow(row);
+    const currentSchema = serviceId === 'provisioning'
+      ? getMethodSchema(serviceId, methodId, rowBiota || (biota === 'fauna' ? 'fauna' : 'flora'))
+      : schema;
+    const calc = currentSchema.calculateRow(row);
     return (calc && typeof calc.total === 'number' && !isNaN(calc.total)) ? calc.total : 0;
   };
 
@@ -136,8 +139,8 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
       ]
     : customColumns;
 
-  const floraTotal = floraRows.reduce((acc, row) => acc + getRowTotal(row), 0);
-  const faunaTotal = faunaRows.reduce((acc, row) => acc + getRowTotal(row), 0);
+  const floraTotal = floraRows.reduce((acc, row) => acc + getRowTotal(row, 'flora'), 0);
+  const faunaTotal = faunaRows.reduce((acc, row) => acc + getRowTotal(row, 'fauna'), 0);
   const displayRowCount = serviceId === 'provisioning' ? floraRows.length + faunaRows.length : rows.length;
 
   // Dynamic sum of all rows in this category
@@ -243,7 +246,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
                 key={col.key}
                 className="py-2 px-3 border-r border-slate-200 text-right bg-slate-50 font-mono font-bold text-slate-900 select-all"
               >
-                {formatIDR(getRowTotal(row))}
+                {formatIDR(getRowTotal(row, rowBiota))}
               </td>
             );
           }
@@ -253,6 +256,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
             return (
               <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
                 <FormattedNumberInput
+                  key={`${row.id}-${col.key}`}
                   value={val}
                   onChange={(numVal) => handleCellChange(row.id, col.key, numVal, rowBiota)}
                   placeholder={col.placeholder || '0'}
@@ -271,6 +275,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
           return (
             <td key={col.key} className="py-1 px-2 border-r border-slate-200">
               <input
+                key={`${row.id}-${col.key}`}
                 type="text"
                 value={val || ''}
                 onChange={(e) => handleCellChange(row.id, col.key, e.target.value, rowBiota)}
@@ -293,6 +298,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
             return (
               <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
                 <FormattedNumberInput
+                  key={`${row.id}-${col.key}`}
                   value={val}
                   isIntegerOnly={true}
                   decimals={0}
@@ -308,6 +314,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
             return (
               <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
                 <FormattedNumberInput
+                  key={`${row.id}-${col.key}`}
                   value={val}
                   decimals={2}
                   onChange={(numVal) => handleCellChange(row.id, col.key, numVal, rowBiota)}
@@ -322,6 +329,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
             return (
               <td key={col.key} className="py-1 px-2 border-r border-slate-200">
                 <input
+                  key={`${row.id}-${col.key}`}
                   type="date"
                   value={val || ''}
                   onChange={(e) => handleCellChange(row.id, col.key, e.target.value, rowBiota)}
@@ -335,6 +343,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
             return (
               <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-center">
                 <select
+                  key={`${row.id}-${col.key}`}
                   value={val === true ? 'true' : val === false ? 'false' : ''}
                   onChange={(e) => {
                     const v = e.target.value === 'true' ? true : e.target.value === 'false' ? false : null;
@@ -354,6 +363,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
           return (
             <td key={col.key} className="py-1 px-2 border-r border-slate-200">
               <input
+                key={`${row.id}-${col.key}`}
                 type="text"
                 value={val || ''}
                 onChange={(e) => handleCellChange(row.id, col.key, e.target.value, rowBiota)}

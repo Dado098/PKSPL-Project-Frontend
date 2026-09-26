@@ -9,8 +9,8 @@ import { updateProfile } from '../services/profileService';
 const EditProfileModal = ({ onClose }) => {
   const { t } = useTranslation(['profile', 'common']);
   const { user, refreshUser } = useAuth();
-  const [nama, setNama] = useState(user?.nama || '');
-  const [previewUrl, setPreviewUrl] = useState(user?.foto || null);
+  const [nama, setNama] = useState(user?.nama || user?.name || '');
+  const [previewUrl, setPreviewUrl] = useState(user?.foto || user?.avatar || null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});

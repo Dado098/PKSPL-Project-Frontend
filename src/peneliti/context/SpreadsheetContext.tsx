@@ -162,9 +162,9 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (store[key]) {
       return store[key];
     }
-    // If not in store, retrieve initial rows from schema
+    // If not in store, retrieve initial rows from schema with fresh copies
     const schema = getMethodSchema(serviceId, methodId, biota);
-    return schema.initialRows || [];
+    return (schema.initialRows || []).map(r => ({ ...r }));
   }, [store]);
 
   const updateCell = useCallback(async (
@@ -179,7 +179,7 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
   ) => {
     const key = makeKey(projectId, areaId, serviceId, methodId, biota);
     const schema = getMethodSchema(serviceId, methodId, biota);
-    const currentRows = store[key] || schema.initialRows || [];
+    const currentRows = store[key] ? [...store[key]] : (schema.initialRows ? schema.initialRows.map(r => ({ ...r })) : []);
 
     const updatedRows = currentRows.map((r) => {
       if (r.id !== rowId) return r;
@@ -227,10 +227,10 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
   ) => {
     const key = makeKey(projectId, areaId, serviceId, methodId, biota);
     const schema = getMethodSchema(serviceId, methodId, biota);
-    const currentRows = store[key] || schema.initialRows || [];
+    const currentRows = store[key] ? [...store[key]] : (schema.initialRows ? schema.initialRows.map(r => ({ ...r })) : []);
 
     const nextNo = currentRows.length + 1;
-    const newRow = schema.defaultNewRow(nextNo, areaHa);
+    const newRow = { ...schema.defaultNewRow(nextNo, areaHa) };
 
     const updatedRows = [...currentRows, newRow];
     const nextStore = { ...store, [key]: updatedRows };
@@ -264,7 +264,7 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
   ) => {
     const key = makeKey(projectId, areaId, serviceId, methodId, biota);
     const schema = getMethodSchema(serviceId, methodId, biota);
-    const currentRows = store[key] || schema.initialRows || [];
+    const currentRows = store[key] ? [...store[key]] : (schema.initialRows ? schema.initialRows.map(r => ({ ...r })) : []);
 
     const filtered = currentRows.filter(r => r.id !== rowId);
     const renumbered = filtered.map((r, idx) => ({ ...r, no: idx + 1 }));
@@ -295,7 +295,7 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
   ) => {
     const key = makeKey(projectId, areaId, serviceId, methodId, biota);
     const schema = getMethodSchema(serviceId, methodId, biota);
-    const currentRows = store[key] || schema.initialRows || [];
+    const currentRows = store[key] ? [...store[key]] : (schema.initialRows ? schema.initialRows.map(r => ({ ...r })) : []);
 
     const calculatedNewRows = newRows.map(r => {
       const calc = schema.calculateRow(r);

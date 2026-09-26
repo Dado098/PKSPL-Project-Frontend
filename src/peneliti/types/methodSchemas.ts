@@ -51,7 +51,7 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       { key: 'no', label: 'No', type: 'number', width: 'w-12', align: 'center' },
       { key: 'item', label: 'Jenis Flora', type: 'text', width: 'min-w-[220px]', align: 'left', placeholder: 'Contoh: Rhizophora apiculata' },
       { key: 'produktivitas', label: 'Produktivitas', type: 'number', unit: 'm³/ha', width: 'w-28', align: 'right', placeholder: '0.00' },
-      { key: 'satuan', label: 'Satuan', type: 'text', width: 'w-20', align: 'center' },
+      { key: 'satuan', label: 'Satuan', type: 'text', width: 'w-20', align: 'center', placeholder: 'm³/ha' },
       { key: 'hargaUnit', label: 'Harga / Unit (Rp)', type: 'number', width: 'w-36', align: 'right', placeholder: '0' },
       { key: 'jumlah', label: 'Volume (m³)', type: 'number', width: 'w-28', align: 'right', placeholder: '0.00' },
       { key: 'luasHa', label: 'Luas (Ha)', type: 'number', width: 'w-24', align: 'right' },
@@ -67,16 +67,16 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: vol, total };
     },
     defaultNewRow: (no, luasHa) => ({
-      id: `ROW-PRV-${Date.now()}-${no}`,
+      id: `ROW-PRV-FLR-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       produktivitas: null,
-      satuan: 'm³/ha',
+      satuan: '',
       hargaUnit: null,
       jumlah: null,
-      luasHa,
+      luasHa: Number(luasHa) || 0,
       totalNilai: 0,
-      source: 'Survei Lapangan Peneliti'
+      source: ''
     }),
     initialRows: [
       {
@@ -144,7 +144,7 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       { key: 'no', label: 'No', type: 'number', width: 'w-12', align: 'center' },
       { key: 'item', label: 'Jenis Fauna', type: 'text', width: 'min-w-[220px]', align: 'left', placeholder: 'Contoh: Scylla serrata (Kepiting Bakau)' },
       { key: 'produktivitas', label: 'Produktivitas', type: 'number', unit: 'kg/ha/th', width: 'w-28', align: 'right', placeholder: '0.00' },
-      { key: 'satuan', label: 'Satuan', type: 'text', width: 'w-20', align: 'center' },
+      { key: 'satuan', label: 'Satuan', type: 'text', width: 'w-20', align: 'center', placeholder: 'kg/ha/th' },
       { key: 'hargaUnit', label: 'Harga / Unit (Rp)', type: 'number', width: 'w-36', align: 'right', placeholder: '0' },
       { key: 'jumlah', label: 'Volume (kg)', type: 'number', width: 'w-28', align: 'right', placeholder: '0.00' },
       { key: 'luasHa', label: 'Luas (Ha)', type: 'number', width: 'w-24', align: 'right' },
@@ -160,16 +160,16 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: vol, total };
     },
     defaultNewRow: (no, luasHa) => ({
-      id: `ROW-PRV-FAU-${Date.now()}-${no}`,
+      id: `ROW-PRV-FAU-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       produktivitas: null,
-      satuan: 'kg/ha/th',
+      satuan: '',
       hargaUnit: null,
       jumlah: null,
-      luasHa,
+      luasHa: Number(luasHa) || 0,
       totalNilai: 0,
-      source: 'Hasil Tangkapan Nelayan Lokal'
+      source: ''
     }),
     initialRows: [
       {
@@ -226,14 +226,14 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: q, total: Math.round(q * margin) };
     },
     defaultNewRow: (no) => ({
-      id: `ROW-EOP-${Date.now()}-${no}`,
+      id: `ROW-EOP-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       outputQty: null,
       hargaOutput: null,
-      biayaTambahan: 0,
+      biayaTambahan: null,
       totalNilai: 0,
-      source: 'Dinas Perikanan'
+      source: ''
     }),
     initialRows: [
       {
@@ -286,14 +286,14 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: pjg, total };
     },
     defaultNewRow: (no) => ({
-      id: `ROW-REG-RC-${Date.now()}-${no}`,
+      id: `ROW-REG-RC-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       panjangUnit: null,
-      biayaPengganti: 4500000,
-      biayaPemeliharaan: 0,
+      biayaPengganti: null,
+      biayaPemeliharaan: null,
       totalNilai: 0,
-      source: 'Standar Biaya Khusus PUPR Bali'
+      source: ''
     }),
     initialRows: [
       {
@@ -347,14 +347,14 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: Number((c * l).toFixed(2)), total };
     },
     defaultNewRow: (no, luasHa) => ({
-      id: `ROW-REG-CS-${Date.now()}-${no}`,
+      id: `ROW-REG-CS-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
-      stokKarbon: 120,
-      luasHa,
-      hargaKarbon: 210000,
+      stokKarbon: null,
+      luasHa: Number(luasHa) || 0,
+      hargaKarbon: null,
       totalNilai: 0,
-      source: 'Faktor Emisi Nasional KLHK'
+      source: ''
     }),
     initialRows: [
       {
@@ -402,19 +402,21 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     calculateRow: (r) => {
       const l = Number(r.luasHa) || 0;
       const n = Number(r.kontribusiPerHa) || 0;
-      const ef = (Number(r.efektivitas) || 100) / 100;
+      const efRaw = r.efektivitas;
+      const efVal = efRaw !== null && efRaw !== undefined && efRaw !== '' ? Number(efRaw) : 100;
+      const ef = (isNaN(efVal) ? 100 : efVal) / 100;
       const total = Math.round(l * n * ef);
       return { quantity: l, total };
     },
     defaultNewRow: (no, luasHa) => ({
-      id: `ROW-SUP-${Date.now()}-${no}`,
+      id: `ROW-SUP-NG-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
-      luasHa,
-      kontribusiPerHa: 19052268,
-      efektivitas: 100,
+      luasHa: Number(luasHa) || 0,
+      kontribusiPerHa: null,
+      efektivitas: null,
       totalNilai: 0,
-      source: 'Balai Riset Perikanan Budidaya'
+      source: ''
     }),
     initialRows: [
       {
@@ -467,14 +469,14 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: q, total };
     },
     defaultNewRow: (no) => ({
-      id: `ROW-CUL-TCM-${Date.now()}-${no}`,
+      id: `ROW-CUL-TCM-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       kunjungan: null,
       biayaPerjalanan: null,
-      biayaTiket: 25000,
+      biayaTiket: null,
       totalNilai: 0,
-      source: 'Pengelola Ekowisata Mangrove'
+      source: ''
     }),
     initialRows: [
       {
@@ -527,14 +529,14 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: pop, total };
     },
     defaultNewRow: (no) => ({
-      id: `ROW-CUL-CVM-${Date.now()}-${no}`,
+      id: `ROW-CUL-CVM-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       populasi: null,
       wtp: null,
-      biayaProgram: 0,
+      biayaProgram: null,
       totalNilai: 0,
-      source: 'Hasil Kuesioner WTP Warga'
+      source: ''
     }),
     initialRows: [
       {
@@ -587,14 +589,14 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: n, total };
     },
     defaultNewRow: (no) => ({
-      id: `ROW-CUL-CE-${Date.now()}-${no}`,
+      id: `ROW-CUL-CE-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       responden: null,
       nilaiMarginal: null,
-      biayaSkema: 0,
+      biayaSkema: null,
       totalNilai: 0,
-      source: 'Analisis Choice Experiment PKSPL'
+      source: ''
     }),
     initialRows: [
       {
@@ -645,13 +647,13 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: prob, total };
     },
     defaultNewRow: (no) => ({
-      id: `ROW-REG-AC-${Date.now()}-${no}`,
+      id: `ROW-REG-AC-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       nilaiAset: null,
       probabilitasBencana: null,
       totalNilai: 0,
-      source: 'BPBD / Studi Risiko Bencana'
+      source: ''
     }),
     initialRows: [
       {
@@ -700,13 +702,13 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: unit, total };
     },
     defaultNewRow: (no) => ({
-      id: `ROW-REG-HPM-${Date.now()}-${no}`,
+      id: `ROW-REG-HPM-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       jumlahUnit: null,
       hargaLingkungan: null,
       totalNilai: 0,
-      source: 'BPN / NJOP / Survei Harga Properti'
+      source: ''
     }),
     initialRows: [
       {
@@ -757,14 +759,14 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
       return { quantity: Number((laju * luas).toFixed(2)), total };
     },
     defaultNewRow: (no, luasHa) => ({
-      id: `ROW-SUP-NC-${Date.now()}-${no}`,
+      id: `ROW-SUP-NC-${Date.now()}-${no}-${Math.random().toString(36).substring(2, 7)}`,
       no,
       item: '',
       lajuSedimentasi: null,
-      luasHa,
+      luasHa: Number(luasHa) || 0,
       nilaiKonservasi: null,
       totalNilai: 0,
-      source: 'Hasil Analisis Sedimen Lapangan'
+      source: ''
     }),
     initialRows: [
       {

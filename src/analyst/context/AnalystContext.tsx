@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { AnalystDashboardData, AnalystUser } from '../types/analystDashboard';
 import { analystDashboardService } from '../services/analystDashboardService';
 import { DEFAULT_ANALYST_USER } from '../mock/analystDashboardMock';
@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 export type DemoStateMode = 'normal' | 'loading' | 'empty' | 'error';
 
 interface AnalystContextValue {
-  user: AnalystUser;
+  user: AnalystUser | null;
   dashboardData: AnalystDashboardData | null;
   isLoading: boolean;
   errorMessage: string | null;
@@ -25,28 +25,25 @@ const AnalystContext = createContext<AnalystContextValue | undefined>(undefined)
 export const AnalystProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth = useAuth();
   const authUser = auth?.user;
-  const [user, setUser] = useState<AnalystUser>(DEFAULT_ANALYST_USER);
+
+  // Derivasi data user profil secara sinkron dari AuthContext (mencegah desynchronization dan null race conditions)
+  const user = useMemo<AnalystUser | null>(() => {
+    if (!authUser) return null;
+    return {
+      id: String(authUser.id || authUser.id_user || DEFAULT_ANALYST_USER.id),
+      name: authUser.nama || authUser.name || DEFAULT_ANALYST_USER.name,
+      email: authUser.email || DEFAULT_ANALYST_USER.email,
+      role: authUser.role?.nama_role || (typeof authUser.role === 'string' ? authUser.role : DEFAULT_ANALYST_USER.role),
+      avatar: authUser.avatar || authUser.foto || undefined,
+    };
+  }, [authUser]);
+
   const [dashboardData, setDashboardData] = useState<AnalystDashboardData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [demoState, setDemoState] = useState<DemoStateMode>('normal');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-
-  // Load user profile from AuthContext
-  useEffect(() => {
-    if (authUser) {
-      setUser({
-        id: String(authUser.id || authUser.id_user || DEFAULT_ANALYST_USER.id),
-        name: authUser.nama || authUser.name || DEFAULT_ANALYST_USER.name,
-        email: authUser.email || DEFAULT_ANALYST_USER.email,
-        role: authUser.role?.nama_role || (typeof authUser.role === 'string' ? authUser.role : DEFAULT_ANALYST_USER.role),
-        avatar: authUser.avatar || undefined,
-      });
-    } else {
-      setUser(null);
-    }
-  }, [authUser]);
 
   // Fetch dashboard data based on demoState mode
   const fetchDashboard = useCallback(async (mode: DemoStateMode) => {
@@ -65,7 +62,7 @@ export const AnalystProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     try {
       const data = await analystDashboardService.getDashboardSummary({
-        simulateDelayMs: 400,
+        simulateDelayMs: 0,
         simulateError: mode === 'error',
         simulateEmpty: mode === 'empty'
       });

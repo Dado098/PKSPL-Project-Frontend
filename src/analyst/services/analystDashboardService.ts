@@ -30,6 +30,9 @@ export interface ProjectsResponse {
 }
 
 class AnalystDashboardService {
+  private projectsCache: { data: ProjectsResponse; timestamp: number } | null = null;
+  private pendingProjectsPromise: Promise<ProjectsResponse> | null = null;
+
   /**
    * Helper untuk mentransformasikan raw project dari database/API ke model AttentionProject UI
    */
@@ -138,55 +141,86 @@ class AnalystDashboardService {
 
   /**
    * Mengambil daftar proyek riil dari database melalui endpoint /api/v1/proyek
+   * Dilengkapi in-flight promise deduplication dan short-lived cache (15s) untuk performa optimal.
    */
-  async getProjects(params: ProjectQueryParams = {}): Promise<ProjectsResponse> {
-    try {
-      const queryParams: Record<string, string | number> = {
-        per_page: params.per_page || 50,
-      };
+  async getProjects(params: ProjectQueryParams = {}, forceRefresh = false): Promise<ProjectsResponse> {
+    const isDefaultQuery = !params.search && (!params.status || params.status === 'Semua Status' || params.status === 'ALL') && (!params.per_page || params.per_page === 50);
 
-      if (params.search && params.search.trim() !== '') {
-        queryParams.search = params.search.trim();
+    if (isDefaultQuery && !forceRefresh) {
+      const now = Date.now();
+      if (this.projectsCache && now - this.projectsCache.timestamp < 15000) {
+        return this.projectsCache.data;
       }
-
-      if (params.status && params.status !== 'Semua Status' && params.status !== 'ALL') {
-        queryParams.status = params.status;
+      if (this.pendingProjectsPromise) {
+        return this.pendingProjectsPromise;
       }
-
-      const res = await apiClient.get<any>('/proyek', queryParams);
-      const rawList: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      const totalCount = res?.meta?.total || rawList.length;
-
-      const mapped = rawList.map((item: any) => this.mapToAttentionProject(item));
-      const waitingCount = mapped.filter(p => p.status === 'SIAP_REVIEW').length;
-
-      return {
-        data: mapped,
-        total: totalCount,
-        waitingReviewCount: waitingCount
-      };
-    } catch (err) {
-      console.warn('Gagal memuat proyek dari database, menggunakan fallback data:', err);
-      // Fallback ke data mock jika API belum terhubung atau sesi unauthenticated
-      let filtered = [...MOCK_ATTENTION_PROJECTS];
-      if (params.search) {
-        const q = params.search.toLowerCase();
-        filtered = filtered.filter(p =>
-          p.name.toLowerCase().includes(q) ||
-          p.code.toLowerCase().includes(q) ||
-          p.lead.toLowerCase().includes(q) ||
-          p.ecosystem.toLowerCase().includes(q)
-        );
-      }
-      if (params.status && params.status !== 'Semua Status' && params.status !== 'ALL') {
-        filtered = filtered.filter(p => p.status === params.status);
-      }
-      return {
-        data: filtered,
-        total: filtered.length,
-        waitingReviewCount: filtered.filter(p => p.status === 'SIAP_REVIEW').length
-      };
     }
+
+    const fetchPromise = (async () => {
+      try {
+        const queryParams: Record<string, string | number> = {
+          per_page: params.per_page || 50,
+        };
+
+        if (params.search && params.search.trim() !== '') {
+          queryParams.search = params.search.trim();
+        }
+
+        if (params.status && params.status !== 'Semua Status' && params.status !== 'ALL') {
+          queryParams.status = params.status;
+        }
+
+        const res = await apiClient.get<any>('/proyek', queryParams);
+        const rawList: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const totalCount = res?.meta?.total || rawList.length;
+
+        const mapped = rawList.map((item: any) => this.mapToAttentionProject(item));
+        const waitingCount = mapped.filter(p => p.status === 'SIAP_REVIEW').length;
+
+        const result: ProjectsResponse = {
+          data: mapped,
+          total: totalCount,
+          waitingReviewCount: waitingCount
+        };
+
+        if (isDefaultQuery) {
+          this.projectsCache = { data: result, timestamp: Date.now() };
+        }
+
+        return result;
+      } catch (err) {
+        console.warn('Gagal memuat proyek dari database, menggunakan fallback data:', err);
+        // Fallback ke data mock jika API belum terhubung atau sesi unauthenticated
+        let filtered = [...MOCK_ATTENTION_PROJECTS];
+        if (params.search) {
+          const q = params.search.toLowerCase();
+          filtered = filtered.filter(p =>
+            p.name.toLowerCase().includes(q) ||
+            p.code.toLowerCase().includes(q) ||
+            p.lead.toLowerCase().includes(q) ||
+            p.ecosystem.toLowerCase().includes(q)
+          );
+        }
+        if (params.status && params.status !== 'Semua Status' && params.status !== 'ALL') {
+          filtered = filtered.filter(p => p.status === params.status);
+        }
+        return {
+          data: filtered,
+          total: filtered.length,
+          waitingReviewCount: filtered.filter(p => p.status === 'SIAP_REVIEW').length
+        };
+      } finally {
+        if (isDefaultQuery) {
+          this.pendingProjectsPromise = null;
+        }
+      }
+    })();
+
+    if (isDefaultQuery) {
+      this.pendingProjectsPromise = fetchPromise;
+    }
+
+    return fetchPromise;
   }
 
   /**
@@ -216,7 +250,7 @@ class AnalystDashboardService {
    * Mengintegrasikan data proyek riil dari database PostgreSQL.
    */
   async getDashboardSummary(options: DashboardServiceOptions = {}): Promise<AnalystDashboardData> {
-    const { simulateDelayMs = 200, simulateError = false, simulateEmpty = false } = options;
+    const { simulateDelayMs = 0, simulateError = false, simulateEmpty = false } = options;
 
     if (simulateDelayMs > 0) {
       await new Promise(resolve => setTimeout(resolve, simulateDelayMs));

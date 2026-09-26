@@ -13,8 +13,12 @@ const ProfileModal = ({ onClose, onEditProfile, onChangePassword }) => {
     return name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   };
 
-  const avatarUrl = user?.foto;
-  const initials = getInitials(user?.nama);
+  const avatarUrl = user?.foto || user?.avatar || null;
+  const userName = user?.nama || user?.name || 'Pengguna';
+  const userEmail = user?.email || '-';
+  const roleName = user?.role?.nama_role || (typeof user?.role === 'string' ? user.role : 'Pengguna');
+  const userStatus = user?.status || 'Aktif';
+  const initials = getInitials(userName);
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
@@ -41,12 +45,12 @@ const ProfileModal = ({ onClose, onEditProfile, onChangePassword }) => {
             {avatarUrl ? (
               <img
                 src={avatarUrl}
-                alt={user?.nama}
+                alt={userName}
                 referrerPolicy="no-referrer"
                 className="w-24 h-24 rounded-full object-cover ring-4 ring-white shadow-lg"
                 onError={(e) => {
                   e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
+                  if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
                 }}
               />
             ) : null}
@@ -62,8 +66,8 @@ const ProfileModal = ({ onClose, onEditProfile, onChangePassword }) => {
           {/* User Info */}
           <div className="px-6 pt-4 pb-6">
             <div className="text-center mb-5">
-              <h3 className="text-xl font-bold text-slate-800">{user?.nama}</h3>
-              <p className="text-sm text-slate-500 mt-0.5">{user?.email}</p>
+              <h3 className="text-xl font-bold text-slate-800">{userName}</h3>
+              <p className="text-sm text-slate-500 mt-0.5">{userEmail}</p>
             </div>
 
             <div className="space-y-3">
@@ -71,7 +75,7 @@ const ProfileModal = ({ onClose, onEditProfile, onChangePassword }) => {
                 <Mail size={18} className="text-slate-400 flex-shrink-0" />
                 <div className="min-w-0">
                   <p className="text-xs text-slate-400 font-medium">Email</p>
-                  <p className="text-sm text-slate-700 truncate">{user?.email}</p>
+                  <p className="text-sm text-slate-700 truncate">{userEmail}</p>
                 </div>
               </div>
 
@@ -79,20 +83,20 @@ const ProfileModal = ({ onClose, onEditProfile, onChangePassword }) => {
                 <Shield size={18} className="text-slate-400 flex-shrink-0" />
                 <div>
                   <p className="text-xs text-slate-400 font-medium">{t('role')}</p>
-                  <p className="text-sm text-slate-700">{user?.role?.nama_role}</p>
+                  <p className="text-sm text-slate-700">{roleName}</p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl">
-                <CheckCircle size={18} className={`flex-shrink-0 ${user?.status === 'Aktif' ? 'text-emerald-500' : 'text-slate-400'}`} />
+                <CheckCircle size={18} className={`flex-shrink-0 ${userStatus === 'Aktif' ? 'text-emerald-500' : 'text-slate-400'}`} />
                 <div>
                   <p className="text-xs text-slate-400 font-medium">{t('status')}</p>
                   <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
-                    user?.status === 'Aktif'
+                    userStatus === 'Aktif'
                       ? 'bg-emerald-100 text-emerald-700'
                       : 'bg-slate-100 text-slate-600'
                   }`}>
-                    {user?.status === 'Aktif' ? t('status.active', { ns: 'common' }) : user?.status}
+                    {userStatus === 'Aktif' ? t('status.active', { ns: 'common' }) : userStatus}
                   </span>
                 </div>
               </div>

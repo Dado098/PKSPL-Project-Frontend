@@ -80,8 +80,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTotalUnreadCount(chatService.getTotalUnreadCount());
 
       // Auto-select first conversation on desktop if none selected
-      if (!activeConversationId && convs.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
-        setActiveConversationId(convs[0].id);
+      if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+        setActiveConversationId((prev) => prev || (convs.length > 0 ? convs[0].id : null));
       }
     } catch (err: any) {
       console.warn('[ChatContext] Gagal memuat data awal:', err);
@@ -89,7 +89,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, [currentUserId, activeConversationId]);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!currentUserId) {

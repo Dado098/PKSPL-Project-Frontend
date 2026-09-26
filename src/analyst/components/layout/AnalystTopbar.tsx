@@ -301,26 +301,28 @@ export const AnalystTopbar: React.FC = () => {
         <div className="relative">
           <button
             onClick={() => {
-              setShowProfileDropdown(prev => !prev);
-              setShowNotifications(false);
+              if (user) {
+                setShowProfileDropdown(prev => !prev);
+                setShowNotifications(false);
+              }
             }}
             className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200 hover:opacity-90 transition-opacity"
           >
             <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 border border-blue-200 flex items-center justify-center font-bold text-xs shrink-0">
-              A
+              {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
             </div>
             <div className="hidden sm:block text-left leading-tight">
-              <div className="text-xs font-semibold text-slate-800 truncate max-w-[140px]" title={user.name}>
-                {user.name}
+              <div className="text-xs font-semibold text-slate-800 truncate max-w-[140px]" title={user?.name || 'Analyst PKSPL'}>
+                {user ? user.name : <div className="h-3 w-20 bg-slate-200 rounded animate-pulse" />}
               </div>
               <div className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span>{user.role}</span>
+                <span>{user ? user.role : 'Analyst'}</span>
               </div>
             </div>
           </button>
 
-          {showProfileDropdown && (
+          {showProfileDropdown && user && (
             <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50">
               <div className="px-4 py-3 border-b border-slate-100">
                 <div className="text-xs font-bold text-slate-800">{user.name}</div>

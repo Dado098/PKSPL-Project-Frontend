@@ -4,8 +4,6 @@ import {
   LayoutDashboard,
   ClipboardCheck,
   MessageSquare,
-  User,
-  LogOut,
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
@@ -13,29 +11,32 @@ import {
 } from 'lucide-react';
 import { useAnalyst } from '../../context/AnalystContext';
 import { discussionService } from '../../services/discussionService';
-import { useAuth } from '../../../contexts/AuthContext';
 import { getEcho } from '../../../lib/echo';
 import { analystDashboardService } from '../../services/analystDashboardService';
+import { SidebarAccountMenu } from '../../../components/profile/SidebarAccountMenu';
 
 interface AnalystSidebarProps {
   isMobile?: boolean;
 }
 
 export const AnalystSidebar: React.FC<AnalystSidebarProps> = ({ isMobile = false }) => {
-  const { user, sidebarCollapsed, toggleSidebar, setMobileMenuOpen } = useAnalyst();
-  const { logout } = useAuth() || {};
+  const { user, sidebarCollapsed, toggleSidebar, setMobileMenuOpen, dashboardData } = useAnalyst();
   const location = useLocation();
   const [unreadChatCount, setUnreadChatCount] = React.useState<number>(0);
   const [waitingReviewCount, setWaitingReviewCount] = React.useState<number>(0);
 
-  // Ambil jumlah proyek yang butuh review secara dinamis dari database
+  // Ambil jumlah proyek yang butuh review secara dinamis dari context / cache database
   React.useEffect(() => {
+    if (dashboardData?.stats?.waitingReview !== undefined) {
+      setWaitingReviewCount(dashboardData.stats.waitingReview);
+      return;
+    }
     analystDashboardService.getProjects()
       .then(res => {
         setWaitingReviewCount(res.waitingReviewCount || 0);
       })
       .catch(() => {});
-  }, [location.pathname]);
+  }, [dashboardData?.stats?.waitingReview]);
 
   React.useEffect(() => {
     const updateCount = () => {
@@ -87,17 +88,6 @@ export const AnalystSidebar: React.FC<AnalystSidebarProps> = ({ isMobile = false
       badge: unreadChatCount > 0 ? String(unreadChatCount) : undefined
     },
   ];
-
-  const handleLogout = async () => {
-    localStorage.removeItem('pkspl_token');
-    if (logout) {
-      await logout();
-    } else {
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
-    }
-    window.location.href = '/login';
-  };
 
   const isCollapsed = !isMobile && sidebarCollapsed;
 
@@ -215,50 +205,8 @@ export const AnalystSidebar: React.FC<AnalystSidebarProps> = ({ isMobile = false
           );
         })}
       </div>
-
-      {/* Bottom Profile & Logout Section */}
-      <div className="p-2 border-t border-slate-800 space-y-1 bg-slate-950/20">
-        {/* Profile Item */}
-        {!isCollapsed ? (
-          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-slate-300 hover:bg-slate-800/70 transition-colors">
-            <div className="w-7 h-7 rounded-full bg-blue-950 text-blue-300 border border-blue-700/50 flex items-center justify-center font-bold text-xs shrink-0">
-              <User className="w-3.5 h-3.5" />
-            </div>
-            <div className="text-left truncate flex-1">
-              <div className="font-semibold text-slate-100 truncate" title={user.name}>
-                {user.name}
-              </div>
-              <div className="text-[10px] text-slate-400 truncate">{user.role}</div>
-            </div>
-          </div>
-        ) : (
-          <div
-            title={`${user.name} (${user.role})`}
-            className="w-full flex items-center justify-center p-2 rounded-lg text-slate-300 hover:bg-slate-800"
-          >
-            <User className="w-4 h-4" />
-          </div>
-        )}
-
-        {/* Logout Button */}
-        {!isCollapsed ? (
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-rose-400 hover:bg-rose-950/30 hover:text-rose-300 transition-colors"
-          >
-            <LogOut className="w-4 h-4 shrink-0" />
-            <span>Keluar</span>
-          </button>
-        ) : (
-          <button
-            onClick={handleLogout}
-            title="Keluar / Logout"
-            className="w-full flex items-center justify-center p-2 rounded-lg text-rose-400 hover:bg-rose-950/30"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        )}
-      </div>
+      {/* Standardized Bottom Profile & Logout Section */}
+      <SidebarAccountMenu collapsed={sidebarCollapsed} isMobileOpen={isMobile} />
     </aside>
   );
 };
