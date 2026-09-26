@@ -274,6 +274,16 @@ export const ServicesMethodsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Notice regarding method change & data preservation */}
+        <div className="bg-blue-50/80 border border-blue-200/90 rounded-lg p-3.5 flex items-start gap-3 text-xs shadow-2xs">
+          <div className="p-1 rounded bg-blue-100 text-blue-700 shrink-0 mt-0.5">
+            <Info className="w-4 h-4" />
+          </div>
+          <p className="text-slate-600 leading-relaxed">
+            <strong className="text-blue-900 font-semibold">Ketentuan Metode & Penyimpanan Data:</strong> Setiap jasa ekosistem pada area tutupan lahan hanya menggunakan <strong>1 metode valuasi</strong>. Jika Anda mengganti metode, data lama Anda <strong>tetap tersimpan aman</strong> namun <strong>tidak digunakan dalam perhitungan</strong> selanjutnya (sistem akan beralih menggunakan lembar input baru untuk metode yang aktif).
+          </p>
+        </div>
+
         {/* 2x2 Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* A. Provisioning Services */}
@@ -320,33 +330,6 @@ export const ServicesMethodsPage: React.FC = () => {
 
                   {isActive && (
                     <div className="space-y-3 pt-2 border-t border-slate-100">
-                      {/* Biota Switcher */}
-                      <div className="flex items-center justify-between text-xs bg-slate-50 p-2 rounded border border-slate-200">
-                        <span className="font-semibold text-slate-700">Kategori Biota:</span>
-                        <div className="inline-flex rounded-md shadow-2xs">
-                          <button
-                            onClick={() => handleBiotaChange('flora')}
-                            className={`px-3 py-1 text-xs font-semibold rounded-l-md transition-colors ${
-                              (areaConfig.biota || 'flora') === 'flora'
-                                ? 'bg-cyan-600 text-white'
-                                : 'bg-white text-slate-700 hover:bg-slate-100'
-                            }`}
-                          >
-                            Flora (Vegetasi)
-                          </button>
-                          <button
-                            onClick={() => handleBiotaChange('fauna')}
-                            className={`px-3 py-1 text-xs font-semibold rounded-r-md transition-colors ${
-                              areaConfig.biota === 'fauna'
-                                ? 'bg-cyan-600 text-white'
-                                : 'bg-white text-slate-700 hover:bg-slate-100'
-                            }`}
-                          >
-                            Fauna (Perikanan)
-                          </button>
-                        </div>
-                      </div>
-
                       {/* Method selector */}
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">

@@ -33,6 +33,7 @@ import { annotationService } from '../../analyst/services/annotationService';
 import { ReviewComment } from '../../analyst/types/annotation';
 
 import { AreaServiceConfig, EcosystemServiceId } from '../types/valuation';
+import { getValuationConfigs, upsertValuationConfigs } from '../services/valuationDataService';
 
 interface ProjectContextType {
   projects: Project[];
@@ -517,6 +518,55 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const indices = projectIndices[activeProjectId] || [];
   const layers = projectLayers[activeProjectId] || [];
 
+  useEffect(() => {
+    const fetchConfigs = async () => {
+      const numericAreaIds = landCovers
+        .map(lc => lc.id)
+        .filter(id => !isNaN(Number(id)) && Number(id) > 0);
+        
+      for (const areaId of numericAreaIds) {
+        try {
+          const apiConfigs = await getValuationConfigs(areaId);
+          if (apiConfigs && apiConfigs.length > 0) {
+            setAreaConfigs(prev => {
+              const current = prev[areaId] || DEFAULT_AREA_CONFIG;
+              const nextServices = { ...current.activeServices };
+              const nextMethods = { ...current.selectedMethods };
+              let nextBiota = current.biota;
+              
+              apiConfigs.forEach(cfg => {
+                const sId = cfg.service_id as keyof AreaServiceConfig['activeServices'];
+                if (sId) {
+                  nextServices[sId] = cfg.is_active;
+                  nextMethods[sId] = cfg.method_id;
+                  if (sId === 'provisioning' && cfg.biota) {
+                    nextBiota = cfg.biota;
+                  }
+                }
+              });
+              
+              return {
+                ...prev,
+                [areaId]: {
+                  ...current,
+                  activeServices: nextServices,
+                  selectedMethods: nextMethods,
+                  biota: nextBiota
+                }
+              };
+            });
+          }
+        } catch (e) {
+          console.warn('[ValuationData] Error loading configs for area ' + areaId, e);
+        }
+      }
+    };
+    if (landCovers && landCovers.length > 0) {
+      fetchConfigs();
+    }
+  }, [landCovers]);
+
+
 
   const getAreaConfig = (areaId: string): AreaServiceConfig => {
     const found = areaConfigs[areaId];
@@ -544,6 +594,20 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         activeServices: updates.activeServices ? { ...current.activeServices, ...updates.activeServices } : current.activeServices,
         selectedMethods: updates.selectedMethods ? { ...current.selectedMethods, ...updates.selectedMethods } : current.selectedMethods,
       };
+      
+      // Sync ke backend jika areaId adalah numeric
+      if (!isNaN(Number(areaId)) && Number(areaId) > 0) {
+        const configsPayload = [
+          { service_id: 'provisioning', is_active: next.activeServices.provisioning, method_id: next.selectedMethods.provisioning, biota: next.biota },
+          { service_id: 'regulating', is_active: next.activeServices.regulating, method_id: next.selectedMethods.regulating },
+          { service_id: 'supporting', is_active: next.activeServices.supporting, method_id: next.selectedMethods.supporting },
+          { service_id: 'cultural', is_active: next.activeServices.cultural, method_id: next.selectedMethods.cultural },
+        ];
+        upsertValuationConfigs(areaId, configsPayload).catch(err => 
+          console.warn('[ValuationData] Gagal sync configs ke backend:', err)
+        );
+      }
+      
       return { ...prev, [areaId]: next };
     });
   };

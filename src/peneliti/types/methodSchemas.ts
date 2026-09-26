@@ -80,7 +80,7 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     }),
     initialRows: [
       {
-        id: 'ROW-PRV-1',
+        id: 'ROW-FLR-001',
         no: 1,
         item: 'Cemara Laut (Casuarina equisetifolia)',
         produktivitas: 33.18,
@@ -92,7 +92,7 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
         source: 'Dinas Kehutanan Provinsi Bali'
       },
       {
-        id: 'ROW-PRV-2',
+        id: 'ROW-FLR-002',
         no: 2,
         item: 'Sengon Laut (Falcataria moluccana)',
         produktivitas: 23.93,
@@ -104,7 +104,7 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
         source: 'Survei Lapangan Peneliti PKSPL'
       },
       {
-        id: 'ROW-PRV-3',
+        id: 'ROW-FLR-003',
         no: 3,
         item: 'Jabon Merah (Neolamarckia macrophylla)',
         produktivitas: 18.50,
@@ -116,7 +116,7 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
         source: 'Rencana Kelola Ekosistem 2024'
       },
       {
-        id: 'ROW-PRV-4',
+        id: 'ROW-FLR-004',
         no: 4,
         item: 'Rhizophora apiculata (Bakau Minyak)',
         produktivitas: 45.20,
@@ -126,6 +126,75 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
         luasHa: 79.86,
         totalNilai: 6174588375,
         source: 'Data Inventarisasi Tegakan 2024'
+      }
+    ]
+  },
+
+  // -------------------------------------------------------------
+  // PROVISIONING - MARKET PRICE (FAUNA)
+  // -------------------------------------------------------------
+  'provisioning_market-price_fauna': {
+    serviceId: 'provisioning',
+    methodId: 'market-price',
+    methodName: 'Market Price (Fauna)',
+    subtitle: 'Nilai Pasar Aktual - Komoditas Perikanan & Satwa Mangrove',
+    formulaDescription: 'Total = Produktivitas (kg/ha/th) × Luas (Ha) × Harga/Unit (Rp)',
+    templateFileName: 'Provisioning_MarketPrice_Fauna.xlsx',
+    columns: [
+      { key: 'no', label: 'No', type: 'number', width: 'w-12', align: 'center' },
+      { key: 'item', label: 'Jenis Fauna', type: 'text', width: 'min-w-[220px]', align: 'left', placeholder: 'Contoh: Scylla serrata (Kepiting Bakau)' },
+      { key: 'produktivitas', label: 'Produktivitas', type: 'number', unit: 'kg/ha/th', width: 'w-28', align: 'right', placeholder: '0.00' },
+      { key: 'satuan', label: 'Satuan', type: 'text', width: 'w-20', align: 'center' },
+      { key: 'hargaUnit', label: 'Harga / Unit (Rp)', type: 'number', width: 'w-36', align: 'right', placeholder: '0' },
+      { key: 'jumlah', label: 'Volume (kg)', type: 'number', width: 'w-28', align: 'right', placeholder: '0.00' },
+      { key: 'luasHa', label: 'Luas (Ha)', type: 'number', width: 'w-24', align: 'right' },
+      { key: 'totalNilai', label: 'Total Nilai (Rp)', type: 'readonly_calculated', width: 'min-w-[180px]', align: 'right', isTotal: true },
+      { key: 'source', label: 'Sumber Data', type: 'text', width: 'min-w-[180px]', align: 'left', placeholder: 'TPI / Survei Nelayan 2024' },
+    ],
+    calculateRow: (r) => {
+      const prod = Number(r.produktivitas) || 0;
+      const luas = Number(r.luasHa) || 0;
+      const harga = Number(r.hargaUnit) || 0;
+      const vol = prod > 0 && luas > 0 ? Number((prod * luas).toFixed(2)) : (Number(r.jumlah) || 0);
+      const total = vol > 0 && harga > 0 ? Math.round(vol * harga) : 0;
+      return { quantity: vol, total };
+    },
+    defaultNewRow: (no, luasHa) => ({
+      id: `ROW-PRV-FAU-${Date.now()}-${no}`,
+      no,
+      item: '',
+      produktivitas: null,
+      satuan: 'kg/ha/th',
+      hargaUnit: null,
+      jumlah: null,
+      luasHa,
+      totalNilai: 0,
+      source: 'Hasil Tangkapan Nelayan Lokal'
+    }),
+    initialRows: [
+      {
+        id: 'ROW-FAU-001',
+        no: 1,
+        item: 'Kepiting Bakau (Scylla serrata)',
+        produktivitas: 450,
+        satuan: 'kg/ha/th',
+        hargaUnit: 125000,
+        jumlah: 35937,
+        luasHa: 79.86,
+        totalNilai: 4492125000,
+        source: 'TPI & Kelompok Nelayan Lokal'
+      },
+      {
+        id: 'ROW-FAU-002',
+        no: 2,
+        item: 'Ikan Bandeng Tambak (Chanos chanos)',
+        produktivitas: 520,
+        satuan: 'kg/ha/th',
+        hargaUnit: 48000,
+        jumlah: 41527.2,
+        luasHa: 79.86,
+        totalNilai: 1993305600,
+        source: 'Dinas Kelautan dan Perikanan'
       }
     ]
   },
@@ -168,14 +237,24 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     }),
     initialRows: [
       {
-        id: 'ROW-EOP-1',
+        id: 'ROW-EOP-001',
         no: 1,
-        item: 'Produksi Ikan Bandeng Tambak Payau',
-        outputQty: 48000,
+        item: 'Ikan Bandeng Tambak (Chanos chanos)',
+        outputQty: 8500,
         hargaOutput: 38000,
         biayaTambahan: 12000,
-        totalNilai: 1248000000,
-        source: 'Dinas Perikanan Kab. Badung'
+        totalNilai: 221000000,
+        source: 'Dinas Kelautan dan Perikanan'
+      },
+      {
+        id: 'ROW-EOP-002',
+        no: 2,
+        item: 'Udang Windu Tradisional (Penaeus monodon)',
+        outputQty: 4200,
+        hargaOutput: 95000,
+        biayaTambahan: 25000,
+        totalNilai: 294000000,
+        source: 'Survei Tambak Pesisir 2024'
       }
     ]
   },
@@ -218,14 +297,24 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     }),
     initialRows: [
       {
-        id: 'ROW-REG-RC-1',
+        id: 'ROW-RC-001',
         no: 1,
-        item: 'Tanggul Penahan Gelombang & Abrasi Zona Barat',
-        panjangUnit: 480,
+        item: 'Sabuk Hijau Pesisir Barat (Pelindung Tambak)',
+        panjangUnit: 2500,
         biayaPengganti: 4500000,
-        biayaPemeliharaan: 197865750,
-        totalNilai: 2357865750,
-        source: 'Dinas PUPR Provinsi Bali'
+        biayaPemeliharaan: 150000000,
+        totalNilai: 11400000000,
+        source: 'Standar Biaya Dinas PUPR'
+      },
+      {
+        id: 'ROW-RC-002',
+        no: 2,
+        item: 'Mangrove Muara Estuari (Penahan Gelombang Pelabuhan)',
+        panjangUnit: 1200,
+        biayaPengganti: 5200000,
+        biayaPemeliharaan: 80000000,
+        totalNilai: 6320000000,
+        source: 'Studi Kelayakan Breakwater 2024'
       }
     ]
   },
@@ -269,14 +358,24 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     }),
     initialRows: [
       {
-        id: 'ROW-REG-CS-1',
+        id: 'ROW-CS-001',
         no: 1,
-        item: 'Cadangan Karbon Biomassa Atas & Bawah Tanah (AGC+BGC)',
-        stokKarbon: 135.5,
+        item: 'Biomassa Karbon Atas Permukaan (Above-ground Biomass)',
+        stokKarbon: 142.5,
         luasHa: 79.86,
         hargaKarbon: 210000,
-        totalNilai: 8345712000,
-        source: 'Hasil Analisis Allometrik PKSPL 2024'
+        totalNilai: 8769399890,
+        source: 'Hasil Analisis Laboratorium & Allometrik'
+      },
+      {
+        id: 'ROW-CS-002',
+        no: 2,
+        item: 'Karbon Organik Sedimen Tanah (Soil Organic Carbon)',
+        stokKarbon: 320.0,
+        luasHa: 79.86,
+        hargaKarbon: 210000,
+        totalNilai: 19692997507,
+        source: 'Faktor Emisi Karbon Mangrove KLHK'
       }
     ]
   },
@@ -319,14 +418,24 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     }),
     initialRows: [
       {
-        id: 'ROW-SUP-1',
+        id: 'ROW-SUP-001',
         no: 1,
-        item: 'Daerah Asuhan Benih Kepiting Bakau (Scylla serrata)',
+        item: 'Zona Asuhan Larva Udang & Kepiting Bakau (Nursery Habitat)',
         luasHa: 79.86,
         kontribusiPerHa: 19052268,
-        efektivitas: 100,
-        totalNilai: 1521514120,
-        source: 'Hasil Riset Ekologi Pesisir Balai Riset Perikanan'
+        efektivitas: 95,
+        totalNilai: 1445404473,
+        source: 'Balai Riset Perikanan Budidaya'
+      },
+      {
+        id: 'ROW-SUP-002',
+        no: 2,
+        item: 'Tempat Pemijahan Ikan Karang & Demersal (Spawning Ground)',
+        luasHa: 79.86,
+        kontribusiPerHa: 12500000,
+        efektivitas: 85,
+        totalNilai: 848512500,
+        source: 'Kajian Biologi Perikanan PKSPL'
       }
     ]
   },
@@ -369,24 +478,24 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     }),
     initialRows: [
       {
-        id: 'ROW-CUL-TCM-1',
+        id: 'ROW-TCM-001',
         no: 1,
-        item: 'Pengunjung Domestik Jalur Boardwalk Mangrove',
+        item: 'Wisatawan Nusantara (Domestik)',
         kunjungan: 18500,
-        biayaPerjalanan: 35000,
-        biayaTiket: 15000,
-        totalNilai: 925000000,
-        source: 'Buku Tamu Pengelola Boardwalk Benoa'
+        biayaPerjalanan: 350000,
+        biayaTiket: 25000,
+        totalNilai: 6937500000,
+        source: 'Survei Pengunjung Pengelola Ekowisata'
       },
       {
-        id: 'ROW-CUL-TCM-2',
+        id: 'ROW-TCM-002',
         no: 2,
-        item: 'Rombongan Edukasi Kampus & Pelajar',
-        kunjungan: 4200,
-        biayaPerjalanan: 25000,
-        biayaTiket: 10000,
-        totalNilai: 147000000,
-        source: 'Registrasi Program Edukasi Pesisir'
+        item: 'Wisatawan Mancanegara (Internasional)',
+        kunjungan: 6200,
+        biayaPerjalanan: 1850000,
+        biayaTiket: 100000,
+        totalNilai: 12090000000,
+        source: 'Survei Kunjungan Turis Mancanegara'
       }
     ]
   },
@@ -429,24 +538,24 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     }),
     initialRows: [
       {
-        id: 'ROW-CUL-CVM-1',
+        id: 'ROW-CVM-001',
         no: 1,
-        item: 'Rumah Tangga Sekitar Pesisir Teluk Benoa',
-        populasi: 3200,
-        wtp: 180000,
-        biayaProgram: 26000000,
-        totalNilai: 550000000,
-        source: 'Kuesioner WTP Rumah Tangga 2024'
+        item: 'Masyarakat Rumah Tangga Sekitar Pesisir',
+        populasi: 4500,
+        wtp: 120000,
+        biayaProgram: 45000000,
+        totalNilai: 495000000,
+        source: 'Kuesioner WTP Masyarakat Lokal 2024'
       },
       {
-        id: 'ROW-CUL-CVM-2',
+        id: 'ROW-CVM-002',
         no: 2,
-        item: 'Pengusaha Restoran & Usaha Pariwisata Lokal',
-        populasi: 250,
-        wtp: 1200000,
-        biayaProgram: 0,
-        totalNilai: 300000000,
-        source: 'Wawancara Terstruktur Pelaku Usaha'
+        item: 'Pelaku Usaha Wisata & UMKM Pesisir',
+        populasi: 280,
+        wtp: 750000,
+        biayaProgram: 20000000,
+        totalNilai: 190000000,
+        source: 'Kuesioner WTP Pelaku Usaha'
       }
     ]
   },
@@ -489,24 +598,194 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
     }),
     initialRows: [
       {
-        id: 'ROW-CUL-CE-1',
+        id: 'ROW-CE-001',
         no: 1,
-        item: 'Atribut Kejernihan Air Muara & Keberadaan Burung Air',
+        item: 'Skenario Peningkatan Kejernihan Air & Keanekaragaman Burung Air',
         responden: 1200,
-        nilaiMarginal: 450000,
-        biayaSkema: 40000000,
-        totalNilai: 500000000,
-        source: 'Hasil Estimasi Model Logit Multinominal'
+        nilaiMarginal: 185000,
+        biayaSkema: 35000000,
+        totalNilai: 187000000,
+        source: 'Model Estimasi Multinomial Logit'
       },
       {
-        id: 'ROW-CUL-CE-2',
+        id: 'ROW-CE-002',
         no: 2,
-        item: 'Atribut Zonasi Suaka Ikan Tradisional',
+        item: 'Skenario Restorasi Kanopi Mangrove & Fasilitas Interpretasi Edukasi',
         responden: 1200,
-        nilaiMarginal: 320000,
-        biayaSkema: 34000000,
-        totalNilai: 350000000,
-        source: 'Estimasi Kesediaan Membayar Atribut Pesisir'
+        nilaiMarginal: 240000,
+        biayaSkema: 50000000,
+        totalNilai: 238000000,
+        source: 'Hasil Analisis Choice Experiment'
+      }
+    ]
+  },
+
+  // -------------------------------------------------------------
+  // REGULATING - AVOIDED COST (Biaya Kerusakan yang Dihindari)
+  // -------------------------------------------------------------
+  'regulating_avoided-cost': {
+    serviceId: 'regulating',
+    methodId: 'avoided-cost',
+    methodName: 'Avoided Cost',
+    subtitle: 'Biaya Kerusakan Ekonomi yang Dihindari',
+    formulaDescription: 'Total = Nilai Aset Berisiko (Rp) × Probabilitas Bencana per Tahun',
+    templateFileName: 'Regulating_AvoidedCost.xlsx',
+    columns: [
+      { key: 'no', label: 'No', type: 'number', width: 'w-12', align: 'center' },
+      { key: 'item', label: 'Aset / Zona yang Terlindungi', type: 'text', width: 'min-w-[240px]', align: 'left', placeholder: 'Contoh: Permukiman Pesisir Zona Barat' },
+      { key: 'nilaiAset', label: 'Nilai Aset Berisiko (Rp)', type: 'number', width: 'w-40', align: 'right', placeholder: '0' },
+      { key: 'probabilitasBencana', label: 'Probabilitas Bencana (/th)', type: 'number', width: 'w-36', align: 'right', placeholder: '0.00' },
+      { key: 'totalNilai', label: 'Total Nilai (Rp)', type: 'readonly_calculated', width: 'min-w-[180px]', align: 'right', isTotal: true },
+      { key: 'source', label: 'Sumber Data', type: 'text', width: 'min-w-[180px]', align: 'left', placeholder: 'BPBD / Kajian Risiko Bencana' },
+    ],
+    calculateRow: (r) => {
+      const aset = Number(r.nilaiAset) || 0;
+      const prob = Math.min(1, Math.max(0, Number(r.probabilitasBencana) || 0));
+      const total = Math.round(aset * prob);
+      return { quantity: prob, total };
+    },
+    defaultNewRow: (no) => ({
+      id: `ROW-REG-AC-${Date.now()}-${no}`,
+      no,
+      item: '',
+      nilaiAset: null,
+      probabilitasBencana: null,
+      totalNilai: 0,
+      source: 'BPBD / Studi Risiko Bencana'
+    }),
+    initialRows: [
+      {
+        id: 'ROW-AC-001',
+        no: 1,
+        item: 'Permukiman Warga Pesisir Teluk Benoa (Risiko Gelombang Pasang)',
+        nilaiAset: 35000000000,
+        probabilitasBencana: 0.15,
+        totalNilai: 5250000000,
+        source: 'Kajian Risiko Bencana BPBD'
+      },
+      {
+        id: 'ROW-AC-002',
+        no: 2,
+        item: 'Tambak Budidaya & Fasilitas Usaha Nelayan (Risiko Abrasi)',
+        nilaiAset: 18000000000,
+        probabilitasBencana: 0.20,
+        totalNilai: 3600000000,
+        source: 'Laporan Kerentanan Pesisir DKP'
+      }
+    ]
+  },
+
+  // -------------------------------------------------------------
+  // REGULATING - HPM (Hedonic Pricing Method)
+  // -------------------------------------------------------------
+  'regulating_hpm': {
+    serviceId: 'regulating',
+    methodId: 'hpm',
+    methodName: 'HPM (Hedonic Pricing)',
+    subtitle: 'Premi Kualitas Lingkungan pada Nilai Properti',
+    formulaDescription: 'Total = Jumlah Unit Properti × Premi Kualitas Lingkungan per Unit (Rp)',
+    templateFileName: 'Regulating_HPM.xlsx',
+    columns: [
+      { key: 'no', label: 'No', type: 'number', width: 'w-12', align: 'center' },
+      { key: 'item', label: 'Kawasan / Segmen Properti', type: 'text', width: 'min-w-[240px]', align: 'left', placeholder: 'Contoh: Perumahan Pesisir Timur Mangrove' },
+      { key: 'jumlahUnit', label: 'Jumlah Unit Properti', type: 'number', width: 'w-32', align: 'right', placeholder: '0' },
+      { key: 'hargaLingkungan', label: 'Premi Kualitas Lingkungan (Rp/unit)', type: 'number', width: 'w-44', align: 'right', placeholder: '0' },
+      { key: 'totalNilai', label: 'Total Nilai (Rp)', type: 'readonly_calculated', width: 'min-w-[180px]', align: 'right', isTotal: true },
+      { key: 'source', label: 'Sumber Data', type: 'text', width: 'min-w-[180px]', align: 'left', placeholder: 'BPN / NJOP / Survei Harga Properti' },
+    ],
+    calculateRow: (r) => {
+      const unit = Number(r.jumlahUnit) || 0;
+      const premi = Number(r.hargaLingkungan) || 0;
+      const total = Math.round(unit * premi);
+      return { quantity: unit, total };
+    },
+    defaultNewRow: (no) => ({
+      id: `ROW-REG-HPM-${Date.now()}-${no}`,
+      no,
+      item: '',
+      jumlahUnit: null,
+      hargaLingkungan: null,
+      totalNilai: 0,
+      source: 'BPN / NJOP / Survei Harga Properti'
+    }),
+    initialRows: [
+      {
+        id: 'ROW-HPM-001',
+        no: 1,
+        item: 'Kompleks Villa & Residensial Bersebelahan Sabuk Hijau',
+        jumlahUnit: 85,
+        hargaLingkungan: 45000000,
+        totalNilai: 3825000000,
+        source: 'Survei NJOP & Pasar Properti Agen Real Estate'
+      },
+      {
+        id: 'ROW-HPM-002',
+        no: 2,
+        item: 'Rumah Tinggal Dekat Kawasan Estuari Terlindung',
+        jumlahUnit: 210,
+        hargaLingkungan: 18000000,
+        totalNilai: 3780000000,
+        source: 'Analisis Regresi Hedonik PKSPL'
+      }
+    ]
+  },
+
+  // -------------------------------------------------------------
+  // SUPPORTING - NUTRIENT CYCLING (Siklus Nutrisi & Perangkap Sedimen)
+  // -------------------------------------------------------------
+  'supporting_nutrient-cycling': {
+    serviceId: 'supporting',
+    methodId: 'nutrient-cycling',
+    methodName: 'Nutrient Cycling',
+    subtitle: 'Siklus Nutrisi & Pengendapan Sedimen Estuari',
+    formulaDescription: 'Total = Laju Sedimentasi (ton/ha/th) × Luas (ha) × Nilai Konservasi Nutrisi (Rp/ton)',
+    templateFileName: 'Supporting_NutrientCycling.xlsx',
+    columns: [
+      { key: 'no', label: 'No', type: 'number', width: 'w-12', align: 'center' },
+      { key: 'item', label: 'Komponen Nutrisi / Sedimen', type: 'text', width: 'min-w-[240px]', align: 'left', placeholder: 'Contoh: Perangkap Sedimen Kaya N & P' },
+      { key: 'lajuSedimentasi', label: 'Laju Sedimentasi (ton/ha/th)', type: 'number', width: 'w-40', align: 'right', placeholder: '0.00' },
+      { key: 'luasHa', label: 'Luas (Ha)', type: 'number', width: 'w-24', align: 'right' },
+      { key: 'nilaiKonservasi', label: 'Nilai Konservasi Nutrisi (Rp/ton)', type: 'number', width: 'w-44', align: 'right', placeholder: '0' },
+      { key: 'totalNilai', label: 'Total Nilai (Rp)', type: 'readonly_calculated', width: 'min-w-[180px]', align: 'right', isTotal: true },
+      { key: 'source', label: 'Sumber Data', type: 'text', width: 'min-w-[180px]', align: 'left', placeholder: 'Analisis Sedimen Lapangan' },
+    ],
+    calculateRow: (r) => {
+      const laju = Number(r.lajuSedimentasi) || 0;
+      const luas = Number(r.luasHa) || 0;
+      const nilai = Number(r.nilaiKonservasi) || 0;
+      const total = Math.round(laju * luas * nilai);
+      return { quantity: Number((laju * luas).toFixed(2)), total };
+    },
+    defaultNewRow: (no, luasHa) => ({
+      id: `ROW-SUP-NC-${Date.now()}-${no}`,
+      no,
+      item: '',
+      lajuSedimentasi: null,
+      luasHa,
+      nilaiKonservasi: null,
+      totalNilai: 0,
+      source: 'Hasil Analisis Sedimen Lapangan'
+    }),
+    initialRows: [
+      {
+        id: 'ROW-NC-001',
+        no: 1,
+        item: 'Retensi Sedimen Organik & Nitrogen (N)',
+        lajuSedimentasi: 12.8,
+        luasHa: 79.86,
+        nilaiKonservasi: 650000,
+        totalNilai: 664434240,
+        source: 'Hasil Uji Sampel Sedimen Laboratorium'
+      },
+      {
+        id: 'ROW-NC-002',
+        no: 2,
+        item: 'Perangkap Fosfor (P) & Pengendap Partikel Logam',
+        lajuSedimentasi: 8.4,
+        luasHa: 79.86,
+        nilaiKonservasi: 820000,
+        totalNilai: 550079040,
+        source: 'Kajian Kapasitas Asimilasi Estuari'
       }
     ]
   }
@@ -516,20 +795,49 @@ export const METHOD_SCHEMAS: Record<string, MethodSchema> = {
  * Helper untuk mengambil schema yang tepat berdasarkan serviceId, methodId, dan biota
  */
 export const getMethodSchema = (serviceId?: string, methodId?: string, biota?: string): MethodSchema => {
-  const normService = (serviceId || 'provisioning').toLowerCase();
-  const normMethod = (methodId || '').toLowerCase();
+  const normServiceRaw = (serviceId || 'provisioning').toLowerCase();
+  const normService = normServiceRaw.includes('provisioning') ? 'provisioning' :
+                      normServiceRaw.includes('regulating') ? 'regulating' :
+                      normServiceRaw.includes('supporting') ? 'supporting' :
+                      normServiceRaw.includes('cultural') ? 'cultural' : 'provisioning';
 
-  // Try direct match
-  if (normMethod) {
-    const key1 = `${normService}_${normMethod}_${biota || 'flora'}`;
+  const normMethodRaw = (methodId || '').toLowerCase();
+  const cleanMeth = normMethodRaw.replace(/[^a-z0-9]/g, '');
+
+  // 1. Try direct keys in METHOD_SCHEMAS
+  if (normMethodRaw) {
+    const key1 = `${normService}_${normMethodRaw}_${biota || 'flora'}`;
     if (METHOD_SCHEMAS[key1]) return METHOD_SCHEMAS[key1];
 
-    const key2 = `${normService}_${normMethod}`;
+    const key2 = `${normService}_${normMethodRaw}`;
     if (METHOD_SCHEMAS[key2]) return METHOD_SCHEMAS[key2];
+
+    // 2. Search METHOD_SCHEMAS by comparing methodId or methodName
+    const found = Object.values(METHOD_SCHEMAS).find(s => {
+      if (s.serviceId !== normService) return false;
+      const sMethId = s.methodId.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const sMethName = s.methodName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchMeth = cleanMeth === sMethId || cleanMeth === sMethName ||
+                        sMethId.includes(cleanMeth) || cleanMeth.includes(sMethId) ||
+                        sMethName.includes(cleanMeth) || cleanMeth.includes(sMethName);
+      if (!matchMeth) return false;
+
+      if (normService === 'provisioning') {
+        const targetBiota = (biota || 'flora').toLowerCase();
+        return s.methodName.toLowerCase().includes(targetBiota);
+      }
+      return true;
+    });
+
+    if (found) return found;
   }
 
   // Default fallbacks per service
-  if (normService === 'provisioning') return METHOD_SCHEMAS['provisioning_market-price_flora'];
+  if (normService === 'provisioning') {
+    return (biota === 'fauna' && METHOD_SCHEMAS['provisioning_market-price_fauna'])
+      ? METHOD_SCHEMAS['provisioning_market-price_fauna']
+      : METHOD_SCHEMAS['provisioning_market-price_flora'];
+  }
   if (normService === 'regulating') return METHOD_SCHEMAS['regulating_replacement-cost'];
   if (normService === 'supporting') return METHOD_SCHEMAS['supporting_nursery-ground'];
   if (normService === 'cultural') return METHOD_SCHEMAS['cultural_tcm'];

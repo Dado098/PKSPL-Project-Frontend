@@ -33,7 +33,7 @@ interface DynamicServiceSectionProps {
   areaHa: number;
   isOpen: boolean;
   onToggleOpen: () => void;
-  onMethodChange: (newMethodId: string) => void;
+  onMethodChange?: (newMethodId: string) => void;
   onBiotaChange?: (newBiota: 'flora' | 'fauna') => void;
   onOpenImportModal: (service: string, method: string, category: string) => void;
   highlightedRowId?: string | null;
@@ -95,6 +95,8 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
   // Available methods for this service from master config
   const serviceConfig = ECOSYSTEM_SERVICES_CONFIG.find(s => s.id === serviceId);
   const availableMethods = serviceConfig?.methods || [];
+  const selectedMethodConfig = availableMethods.find(m => m.id === methodId);
+  const cleanMethodName = selectedMethodConfig?.name || schema.methodName.replace(/\s*\((Flora|Fauna)\)/i, '');
 
   // System columns from schema, excluding 'no' which is rendered as dedicated 1-based index column
   const systemColumns = schema.columns.filter(col => col.key !== 'no');
@@ -108,13 +110,46 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
     return (calc && typeof calc.total === 'number' && !isNaN(calc.total)) ? calc.total : 0;
   };
 
+  // Modal states for import/download dropdowns in provisioning
+  const [importDropdownOpen, setImportDropdownOpen] = useState(false);
+  const [downloadDropdownOpen, setDownloadDropdownOpen] = useState(false);
+
+  // For Provisioning: load both flora and fauna rows separately (displayed in one combined table)
+  const floraRows = serviceId === 'provisioning'
+    ? getRows(currentProjId, areaId, serviceId, methodId, 'flora')
+    : [];
+  const faunaRows = serviceId === 'provisioning'
+    ? getRows(currentProjId, areaId, serviceId, methodId, 'fauna')
+    : [];
+
+  const floraCustomCols = serviceId === 'provisioning'
+    ? getCustomColumns(currentProjId, areaId, serviceId, methodId, 'flora')
+    : [];
+  const faunaCustomCols = serviceId === 'provisioning'
+    ? getCustomColumns(currentProjId, areaId, serviceId, methodId, 'fauna')
+    : [];
+
+  const combinedCustomCols: CustomColumnDefinition[] = serviceId === 'provisioning'
+    ? [
+        ...floraCustomCols,
+        ...faunaCustomCols.filter(f => !floraCustomCols.some(fc => fc.key === f.key || fc.label.toLowerCase() === f.label.toLowerCase()))
+      ]
+    : customColumns;
+
+  const floraTotal = floraRows.reduce((acc, row) => acc + getRowTotal(row), 0);
+  const faunaTotal = faunaRows.reduce((acc, row) => acc + getRowTotal(row), 0);
+  const displayRowCount = serviceId === 'provisioning' ? floraRows.length + faunaRows.length : rows.length;
+
   // Dynamic sum of all rows in this category
-  const categoryTotal = rows.reduce((acc, row) => acc + getRowTotal(row), 0);
+  const categoryTotal = serviceId === 'provisioning'
+    ? floraTotal + faunaTotal
+    : rows.reduce((acc, row) => acc + getRowTotal(row), 0);
 
   // Column spanning calculation for table footer
   const totalColIndex = systemColumns.findIndex(col => col.key === 'totalNilai');
   const leadingColSpan = 1 + (totalColIndex >= 0 ? totalColIndex : systemColumns.length);
-  const remainingColSpan = (totalColIndex >= 0 ? systemColumns.length - 1 - totalColIndex : 0) + customColumns.length + 1;
+  const remainingColSpan = (totalColIndex >= 0 ? systemColumns.length - 1 - totalColIndex : 0) + combinedCustomCols.length + 1;
+  const totalColSpan = 1 + systemColumns.length + combinedCustomCols.length + 1;
 
   const serviceCategoryTitle =
     serviceId === 'provisioning' ? 'PROVISIONING SERVICES' :
@@ -126,69 +161,224 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
   const existingColumnLabels = [
     'No',
     ...systemColumns.map(c => c.label),
-    ...customColumns.map(c => c.label)
+    ...combinedCustomCols.map(c => c.label)
   ];
 
   const handleDownloadTemplate = () => {
     downloadContextTemplate(
-      serviceId === 'provisioning' ? 'Provisioning' : serviceName.replace(/\s+/g, ''),
-      schema.methodName.replace(/\s+/g, ''),
+      serviceId,
+      methodId,
       serviceId === 'provisioning' ? (biota === 'fauna' ? 'Fauna' : 'Flora') : 'General'
     );
   };
 
-  const handleAddRow = () => {
-    addRow(currentProjId, areaId, serviceId, methodId, serviceId === 'provisioning' ? biota : undefined, areaHa);
+  const handleAddRow = (targetBiota?: 'flora' | 'fauna') => {
+    const b = serviceId === 'provisioning' ? (targetBiota || 'flora') : 'none';
+    addRow(currentProjId, areaId, serviceId, methodId, b, areaHa);
   };
 
-  const handleDeleteRow = (rowId: string) => {
-    deleteRow(currentProjId, areaId, serviceId, methodId, serviceId === 'provisioning' ? biota : 'none', rowId);
+  const handleDeleteRow = (rowId: string, targetBiota?: 'flora' | 'fauna') => {
+    const b = serviceId === 'provisioning' ? (targetBiota || 'flora') : 'none';
+    deleteRow(currentProjId, areaId, serviceId, methodId, b, rowId);
   };
 
-  const handleCellChange = (rowId: string, colKey: string, val: any) => {
-    updateCell(currentProjId, areaId, serviceId, methodId, serviceId === 'provisioning' ? biota : 'none', rowId, colKey, val);
+  const handleCellChange = (rowId: string, colKey: string, val: any, targetBiota?: 'flora' | 'fauna') => {
+    const b = serviceId === 'provisioning' ? (targetBiota || 'flora') : 'none';
+    updateCell(currentProjId, areaId, serviceId, methodId, b, rowId, colKey, val);
   };
 
   const handleSaveCustomColumn = (data: { label: string; type: CustomColumnType; required: boolean }) => {
     if (editingColumn) {
-      updateCustomColumn(
-        currentProjId,
-        areaId,
-        serviceId,
-        methodId,
-        serviceId === 'provisioning' ? biota : undefined,
-        editingColumn.id,
-        {
-          label: data.label,
-          type: data.type,
-          required: data.required
-        }
-      );
+      if (serviceId === 'provisioning') {
+        updateCustomColumn(currentProjId, areaId, serviceId, methodId, 'flora', editingColumn.id, data);
+        updateCustomColumn(currentProjId, areaId, serviceId, methodId, 'fauna', editingColumn.id, data);
+      } else {
+        updateCustomColumn(currentProjId, areaId, serviceId, methodId, undefined, editingColumn.id, data);
+      }
     } else {
-      addCustomColumn(
-        currentProjId,
-        areaId,
-        serviceId,
-        methodId,
-        serviceId === 'provisioning' ? biota : undefined,
-        data
-      );
+      if (serviceId === 'provisioning') {
+        addCustomColumn(currentProjId, areaId, serviceId, methodId, 'flora', data);
+        addCustomColumn(currentProjId, areaId, serviceId, methodId, 'fauna', data);
+      } else {
+        addCustomColumn(currentProjId, areaId, serviceId, methodId, undefined, data);
+      }
     }
     setEditingColumn(null);
   };
 
   const handleConfirmDeleteColumn = () => {
     if (deletingColumn) {
-      deleteCustomColumn(
-        currentProjId,
-        areaId,
-        serviceId,
-        methodId,
-        serviceId === 'provisioning' ? biota : undefined,
-        deletingColumn.id
-      );
+      if (serviceId === 'provisioning') {
+        deleteCustomColumn(currentProjId, areaId, serviceId, methodId, 'flora', deletingColumn.id);
+        deleteCustomColumn(currentProjId, areaId, serviceId, methodId, 'fauna', deletingColumn.id);
+      } else {
+        deleteCustomColumn(currentProjId, areaId, serviceId, methodId, undefined, deletingColumn.id);
+      }
       setDeletingColumn(null);
     }
+  };
+
+  const renderRow = (row: Record<string, any>, rIdx: number, rowBiota?: 'flora' | 'fauna') => {
+    const isHighlighted = highlightedRowId === row.id || highlightedRowId === String(row.no);
+
+    return (
+      <tr
+        key={row.id || `${rowBiota || 'row'}-${rIdx}`}
+        className={`hover:bg-blue-50/30 transition-colors ${
+          isHighlighted ? 'bg-rose-50 border-2 border-rose-500' : ''
+        }`}
+      >
+        <td className="py-2 px-3 text-center font-mono text-slate-400 border-r border-slate-200 bg-slate-50/50">
+          {rIdx + 1}
+        </td>
+
+        {/* 1. Render System Column Cells */}
+        {systemColumns.map((col: ColumnDefinition) => {
+          const val = row[col.key];
+
+          // Read-only Calculated Total Nilai Ekonomi
+          if (col.key === 'totalNilai' || col.type === 'readonly_calculated') {
+            return (
+              <td
+                key={col.key}
+                className="py-2 px-3 border-r border-slate-200 text-right bg-slate-50 font-mono font-bold text-slate-900 select-all"
+              >
+                {formatIDR(getRowTotal(row))}
+              </td>
+            );
+          }
+
+          // Number Column (Indonesian Excel-style formatting)
+          if (col.type === 'number') {
+            return (
+              <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
+                <FormattedNumberInput
+                  value={val}
+                  onChange={(numVal) => handleCellChange(row.id, col.key, numVal, rowBiota)}
+                  placeholder={col.placeholder || '0'}
+                  decimals={2}
+                  className={`w-full px-2 py-1 text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 rounded border font-mono ${
+                    isHighlighted && (col.key === 'hargaUnit' || col.key === 'hargaOutput')
+                      ? 'border-rose-400 bg-rose-50 text-rose-800 font-bold focus:ring-rose-500'
+                      : 'border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800'
+                  }`}
+                />
+              </td>
+            );
+          }
+
+          // Text Column
+          return (
+            <td key={col.key} className="py-1 px-2 border-r border-slate-200">
+              <input
+                type="text"
+                value={val || ''}
+                onChange={(e) => handleCellChange(row.id, col.key, e.target.value, rowBiota)}
+                placeholder={
+                  col.key === 'item' && serviceId === 'provisioning'
+                    ? (rowBiota === 'fauna' ? 'Contoh: Scylla serrata (Kepiting Bakau)' : 'Contoh: Rhizophora apiculata')
+                    : (col.placeholder || '')
+                }
+                className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-medium"
+              />
+            </td>
+          );
+        })}
+
+        {/* 2. Render Custom Column Cells (Text, Integer, Decimal, Date, Boolean) */}
+        {combinedCustomCols.map((col: CustomColumnDefinition) => {
+          const val = row[col.key];
+
+          if (col.type === 'integer') {
+            return (
+              <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
+                <FormattedNumberInput
+                  value={val}
+                  isIntegerOnly={true}
+                  decimals={0}
+                  onChange={(numVal) => handleCellChange(row.id, col.key, numVal, rowBiota)}
+                  placeholder="0"
+                  className="w-full px-2 py-1 text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-mono"
+                />
+              </td>
+            );
+          }
+
+          if (col.type === 'decimal') {
+            return (
+              <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
+                <FormattedNumberInput
+                  value={val}
+                  decimals={2}
+                  onChange={(numVal) => handleCellChange(row.id, col.key, numVal, rowBiota)}
+                  placeholder="0,00"
+                  className="w-full px-2 py-1 text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-mono"
+                />
+              </td>
+            );
+          }
+
+          if (col.type === 'date') {
+            return (
+              <td key={col.key} className="py-1 px-2 border-r border-slate-200">
+                <input
+                  type="date"
+                  value={val || ''}
+                  onChange={(e) => handleCellChange(row.id, col.key, e.target.value, rowBiota)}
+                  className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-mono text-xs"
+                />
+              </td>
+            );
+          }
+
+          if (col.type === 'boolean') {
+            return (
+              <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-center">
+                <select
+                  value={val === true ? 'true' : val === false ? 'false' : ''}
+                  onChange={(e) => {
+                    const v = e.target.value === 'true' ? true : e.target.value === 'false' ? false : null;
+                    handleCellChange(row.id, col.key, v, rowBiota);
+                  }}
+                  className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 text-xs cursor-pointer font-medium"
+                >
+                  <option value="">-</option>
+                  <option value="true">Ya</option>
+                  <option value="false">Tidak</option>
+                </select>
+              </td>
+            );
+          }
+
+          // Default text type
+          return (
+            <td key={col.key} className="py-1 px-2 border-r border-slate-200">
+              <input
+                type="text"
+                value={val || ''}
+                onChange={(e) => handleCellChange(row.id, col.key, e.target.value, rowBiota)}
+                placeholder={col.label}
+                className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-medium"
+              />
+            </td>
+          );
+        })}
+
+        {/* 3. Action Column */}
+        <td className="py-1.5 px-2 text-center">
+          {!isAdmin && (
+            <button
+              type="button"
+              onClick={() => handleDeleteRow(row.id, rowBiota)}
+              className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+              title="Hapus baris"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </td>
+      </tr>
+    );
   };
 
   return (
@@ -210,7 +400,7 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
                 {prefixLetter}. {serviceName}
               </h3>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${accent.pillBg} ${accent.pillText} border border-slate-200/60 hidden sm:inline-block`}>
-                {schema.methodName}
+                {cleanMethodName}
               </span>
               {customColumns.length > 0 && (
                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 hidden md:inline-block">
@@ -227,9 +417,15 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
         {/* Right: Item Count (No Subtotal Calculation) & Accordion Chevron Toggle */}
         <div className="flex items-center gap-3 md:gap-4">
           <div className="text-right">
-            <span className="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded">
-              {rows.length} item
-            </span>
+            {serviceId === 'provisioning' ? (
+              <span className="text-xs font-semibold text-cyan-800 bg-cyan-50 border border-cyan-200 px-2.5 py-1 rounded">
+                {floraRows.length + faunaRows.length} item ({floraRows.length} Flora, {faunaRows.length} Fauna)
+              </span>
+            ) : (
+              <span className="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded">
+                {rows.length} item
+              </span>
+            )}
           </div>
 
           <button
@@ -244,79 +440,57 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
       {/* Accordion Body / Spreadsheet Workspace */}
       {isOpen && (
         <div className="p-4 space-y-3 bg-white animate-in slide-in-from-top-1 duration-150">
-          {/* Optional sub-header for Provisioning: A.1 FLORA / A.2 FAUNA */}
-          {serviceId === 'provisioning' && (
-            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider pb-1 border-b border-slate-100 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-600"></span>
-              <span>A.1 {biota === 'flora' ? 'FLORA' : 'FAUNA'}</span>
-            </div>
-          )}
-
           {/* Sub-toolbar */}
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 text-xs">
-            {/* Left: Method Selector Dropdown & Biota toggle */}
+            {/* Left: Method Display Badge */}
             <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-500 font-semibold">Metode Valuasi:</span>
-                <select
-                  value={methodId}
-                  onChange={(e) => onMethodChange(e.target.value)}
-                  disabled={isAdmin}
-                  className={`bg-slate-50 border border-slate-300 rounded px-2.5 py-1 text-slate-800 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none ${isAdmin ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                >
-                  {availableMethods.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} — ({m.subtitle})
-                    </option>
-                  ))}
-                </select>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 font-semibold">Metode:</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-100 text-slate-800 border border-slate-300 font-semibold text-xs shadow-2xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                  {cleanMethodName}
+                </span>
               </div>
-
-              {/* Flora / Fauna Toggle for Provisioning */}
-              {serviceId === 'provisioning' && onBiotaChange && (
-                <div className={`flex items-center gap-2 pl-3 border-l border-slate-200 ${isAdmin ? 'opacity-60' : ''}`}>
-                  <span className="text-slate-500 font-semibold">Biota:</span>
-                  <div className="flex items-center gap-2">
-                    <label className={`flex items-center gap-1 font-medium text-slate-700 ${isAdmin ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <input
-                        type="radio"
-                        name={`biota-sec-${serviceId}-${areaId}`}
-                        checked={biota === 'flora'}
-                        onChange={() => onBiotaChange('flora')}
-                        disabled={isAdmin}
-                        className="text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>Flora</span>
-                    </label>
-                    <label className={`flex items-center gap-1 font-medium text-slate-700 ${isAdmin ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <input
-                        type="radio"
-                        name={`biota-sec-${serviceId}-${areaId}`}
-                        checked={biota === 'fauna'}
-                        onChange={() => onBiotaChange('fauna')}
-                        disabled={isAdmin}
-                        className="text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>Fauna</span>
-                    </label>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Right: Section Action Buttons: [ + Tambah Baris ] [ + Tambah Kolom ] [ Import Excel ] [ Download Template ] */}
+            {/* Right: Section Action Buttons */}
             <div className="flex items-center flex-wrap gap-2">
               {!isAdmin && (
                 <>
-                  <button
-                    onClick={handleAddRow}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Tambah Baris</span>
-                  </button>
+                  {serviceId === 'provisioning' ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleAddRow('flora')}
+                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
+                        title="Tambah baris data Flora (Vegetasi)"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ Tambah Flora</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAddRow('fauna')}
+                        className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
+                        title="Tambah baris data Fauna (Perikanan / Satwa)"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ Tambah Fauna</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleAddRow()}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Tambah Baris</span>
+                    </button>
+                  )}
 
                   <button
+                    type="button"
                     onClick={() => {
                       setEditingColumn(null);
                       setIsColumnModalOpen(true);
@@ -330,23 +504,115 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
                 </>
               )}
 
-              <button
-                onClick={() => onOpenImportModal(serviceName, schema.methodName, biota)}
-                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                title={`Import Excel khusus template ${schema.templateFileName}`}
-              >
-                <Upload className="w-3.5 h-3.5 text-blue-600" />
-                <span>Import Excel</span>
-              </button>
+              {/* Import Excel */}
+              {serviceId === 'provisioning' ? (
+                <div className="relative inline-block text-left">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportDropdownOpen(prev => !prev);
+                      setDownloadDropdownOpen(false);
+                    }}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Import Excel untuk Flora atau Fauna"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Import Excel</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400" />
+                  </button>
+                  {importDropdownOpen && (
+                    <div className="absolute right-0 mt-1 w-44 bg-white rounded-md shadow-lg border border-slate-200 py-1 z-30 animate-in fade-in-50 duration-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImportDropdownOpen(false);
+                          onOpenImportModal(serviceId, methodId, 'Flora');
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                        Import Data Flora
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImportDropdownOpen(false);
+                          onOpenImportModal(serviceId, methodId, 'Fauna');
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-amber-600"></span>
+                        Import Data Fauna
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onOpenImportModal(serviceId, methodId, 'General')}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                  title={`Import Excel khusus template ${schema.templateFileName}`}
+                >
+                  <Upload className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Import Excel</span>
+                </button>
+              )}
 
-              <button
-                onClick={handleDownloadTemplate}
-                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                title={`Download template resmi ${schema.templateFileName}`}
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Download Template</span>
-              </button>
+              {/* Download Template */}
+              {serviceId === 'provisioning' ? (
+                <div className="relative inline-block text-left">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDownloadDropdownOpen(prev => !prev);
+                      setImportDropdownOpen(false);
+                    }}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Download template Excel resmi Flora atau Fauna"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Download Template</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400" />
+                  </button>
+                  {downloadDropdownOpen && (
+                    <div className="absolute right-0 mt-1 w-44 bg-white rounded-md shadow-lg border border-slate-200 py-1 z-30 animate-in fade-in-50 duration-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDownloadDropdownOpen(false);
+                          downloadContextTemplate(serviceId, methodId, 'Flora');
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                        Template Flora
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDownloadDropdownOpen(false);
+                          downloadContextTemplate(serviceId, methodId, 'Fauna');
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-amber-600"></span>
+                        Template Fauna
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                  title={`Download template resmi ${schema.templateFileName}`}
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Download Template</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -379,14 +645,18 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
                         className={`py-2.5 px-3 border-r border-slate-200 ${col.width || ''} text-${col.align || 'left'}`}
                       >
                         <div className="flex items-center justify-between gap-1">
-                          <span>{col.label} {col.unit ? `(${col.unit})` : ''}</span>
+                          <span>
+                            {serviceId === 'provisioning' && col.key === 'item'
+                              ? 'Jenis Biota (Flora / Fauna)'
+                              : `${col.label} ${col.unit ? `(${col.unit})` : ''}`}
+                          </span>
                         </div>
                       </th>
                     );
                   })}
 
                   {/* 2. CUSTOM COLUMNS (USER DEFINED, MARKED AS CUSTOM, EDITABLE & DELETABLE) */}
-                  {customColumns.map((col: CustomColumnDefinition) => (
+                  {combinedCustomCols.map((col: CustomColumnDefinition) => (
                     <th
                       key={col.key}
                       className="py-2 px-3 border-r border-slate-200 min-w-[170px] bg-slate-100/90 text-left select-none group"
@@ -439,171 +709,130 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {rows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={1 + systemColumns.length + customColumns.length + 1}
-                      className="py-10 text-center text-slate-400 italic"
-                    >
-                      Belum ada baris data. Klik <strong>"+ Tambah Baris"</strong> untuk memulai pengisian data {serviceName}.
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row, rIdx) => {
-                    const isHighlighted = highlightedRowId === row.id || highlightedRowId === String(row.no);
+                {serviceId === 'provisioning' ? (
+                  <>
+                    {/* A.1 FLORA SECTION HEADER ROW */}
+                    <tr className="bg-emerald-50/80 border-b border-emerald-200 select-none">
+                      <td colSpan={totalColSpan} className="py-2.5 px-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 ring-2 ring-emerald-200"></span>
+                            <span className="font-bold text-xs uppercase tracking-wider text-emerald-950">
+                              A.1 Flora
+                            </span>
+                            <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100/80 border border-emerald-200 px-2 py-0.5 rounded-full shadow-2xs">
+                              {floraRows.length} item
+                            </span>
+                          </div>
+                          {!isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddRow('flora')}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>+ Tambah Flora</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
 
-                    return (
-                      <tr
-                        key={row.id || rIdx}
-                        className={`hover:bg-blue-50/30 transition-colors ${
-                          isHighlighted ? 'bg-rose-50 border-2 border-rose-500' : ''
-                        }`}
-                      >
-                        <td className="py-2 px-3 text-center font-mono text-slate-400 border-r border-slate-200 bg-slate-50/50">
-                          {rIdx + 1}
-                        </td>
-
-                        {/* 1. Render System Column Cells */}
-                        {systemColumns.map((col: ColumnDefinition) => {
-                          const val = row[col.key];
-
-                          // Read-only Calculated Total Nilai Ekonomi
-                          if (col.key === 'totalNilai' || col.type === 'readonly_calculated') {
-                            return (
-                              <td
-                                key={col.key}
-                                className="py-2 px-3 border-r border-slate-200 text-right bg-slate-50 font-mono font-bold text-slate-900 select-all"
-                              >
-                                {formatIDR(getRowTotal(row))}
-                              </td>
-                            );
-                          }
-
-                          // Number Column (Indonesian Excel-style formatting)
-                          if (col.type === 'number') {
-                            return (
-                              <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
-                                <FormattedNumberInput
-                                  value={val}
-                                  onChange={(numVal) => handleCellChange(row.id, col.key, numVal)}
-                                  placeholder={col.placeholder || '0'}
-                                  decimals={2}
-                                  className={`w-full px-2 py-1 text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 rounded border font-mono ${
-                                    isHighlighted && (col.key === 'hargaUnit' || col.key === 'hargaOutput')
-                                      ? 'border-rose-400 bg-rose-50 text-rose-800 font-bold focus:ring-rose-500'
-                                      : 'border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800'
-                                  }`}
-                                />
-                              </td>
-                            );
-                          }
-
-                          // Text Column
-                          return (
-                            <td key={col.key} className="py-1 px-2 border-r border-slate-200">
-                              <input
-                                type="text"
-                                value={val || ''}
-                                onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
-                                placeholder={col.placeholder || ''}
-                                className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-medium"
-                              />
-                            </td>
-                          );
-                        })}
-
-                        {/* 2. Render Custom Column Cells (Text, Integer, Decimal, Date, Boolean) */}
-                        {customColumns.map((col: CustomColumnDefinition) => {
-                          const val = row[col.key];
-
-                          if (col.type === 'integer') {
-                            return (
-                              <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
-                                <FormattedNumberInput
-                                  value={val}
-                                  isIntegerOnly={true}
-                                  decimals={0}
-                                  onChange={(numVal) => handleCellChange(row.id, col.key, numVal)}
-                                  placeholder="0"
-                                  className="w-full px-2 py-1 text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-mono"
-                                />
-                              </td>
-                            );
-                          }
-
-                          if (col.type === 'decimal') {
-                            return (
-                              <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-right">
-                                <FormattedNumberInput
-                                  value={val}
-                                  decimals={2}
-                                  onChange={(numVal) => handleCellChange(row.id, col.key, numVal)}
-                                  placeholder="0,00"
-                                  className="w-full px-2 py-1 text-right bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-mono"
-                                />
-                              </td>
-                            );
-                          }
-
-                          if (col.type === 'date') {
-                            return (
-                              <td key={col.key} className="py-1 px-2 border-r border-slate-200">
-                                <input
-                                  type="date"
-                                  value={val || ''}
-                                  onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
-                                  className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-mono text-xs"
-                                />
-                              </td>
-                            );
-                          }
-
-                          if (col.type === 'boolean') {
-                            return (
-                              <td key={col.key} className="py-1 px-2 border-r border-slate-200 text-center">
-                                <select
-                                  value={val === true ? 'true' : val === false ? 'false' : ''}
-                                  onChange={(e) => {
-                                    const v = e.target.value === 'true' ? true : e.target.value === 'false' ? false : null;
-                                    handleCellChange(row.id, col.key, v);
-                                  }}
-                                  className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 text-xs cursor-pointer font-medium"
-                                >
-                                  <option value="">-</option>
-                                  <option value="true">Ya</option>
-                                  <option value="false">Tidak</option>
-                                </select>
-                              </td>
-                            );
-                          }
-
-                          // Default text type
-                          return (
-                            <td key={col.key} className="py-1 px-2 border-r border-slate-200">
-                              <input
-                                type="text"
-                                value={val || ''}
-                                onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
-                                placeholder={col.label}
-                                className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-blue-500 rounded border border-transparent hover:border-slate-300 focus:border-blue-500 text-slate-800 font-medium"
-                              />
-                            </td>
-                          );
-                        })}
-
-                        {/* 3. Action Column */}
-                        <td className="py-1.5 px-2 text-center">
-                          <button
-                            onClick={() => handleDeleteRow(row.id)}
-                            className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
-                            title="Hapus baris"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                    {/* FLORA ROWS */}
+                    {floraRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={totalColSpan} className="py-6 text-center text-slate-400 italic bg-white">
+                          Belum ada data Flora.{' '}
+                          {!isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddRow('flora')}
+                              className="text-emerald-700 font-semibold underline hover:text-emerald-800 ml-1 cursor-pointer"
+                            >
+                              + Tambah baris Flora
+                            </button>
+                          )}
                         </td>
                       </tr>
-                    );
-                  })
+                    ) : (
+                      floraRows.map((row, idx) => renderRow(row, idx, 'flora'))
+                    )}
+
+                    {/* PEMISAH SEDIKIT ANTARA FLORA & FAUNA */}
+                    <tr className="bg-slate-100/90 border-y-2 border-slate-300 select-none">
+                      <td colSpan={totalColSpan} className="py-2.5 px-4 text-center">
+                        <div className="flex items-center justify-center gap-3">
+                          <div className="h-px bg-slate-300 flex-1"></div>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            Pemisah Kategori Biota (Flora & Fauna)
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                          </span>
+                          <div className="h-px bg-slate-300 flex-1"></div>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* A.2 FAUNA SECTION HEADER ROW */}
+                    <tr className="bg-amber-50/80 border-b border-amber-200 select-none">
+                      <td colSpan={totalColSpan} className="py-2.5 px-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-600 ring-2 ring-amber-200"></span>
+                            <span className="font-bold text-xs uppercase tracking-wider text-amber-950">
+                              A.2 Fauna
+                            </span>
+                            <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/80 border border-amber-200 px-2 py-0.5 rounded-full shadow-2xs">
+                              {faunaRows.length} item
+                            </span>
+                          </div>
+                          {!isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddRow('fauna')}
+                              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>+ Tambah Fauna</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* FAUNA ROWS */}
+                    {faunaRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={totalColSpan} className="py-6 text-center text-slate-400 italic bg-white">
+                          Belum ada data Fauna.{' '}
+                          {!isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddRow('fauna')}
+                              className="text-amber-700 font-semibold underline hover:text-amber-800 ml-1 cursor-pointer"
+                            >
+                              + Tambah baris Fauna
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      faunaRows.map((row, idx) => renderRow(row, idx, 'fauna'))
+                    )}
+                  </>
+                ) : (
+                  rows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={totalColSpan}
+                        className="py-10 text-center text-slate-400 italic"
+                      >
+                        Belum ada baris data. Klik <strong>"+ Tambah Baris"</strong> untuk memulai pengisian data {serviceName}.
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((row, rIdx) => renderRow(row, rIdx))
+                  )
                 )}
               </tbody>
 
@@ -624,7 +853,9 @@ export const DynamicServiceSection: React.FC<DynamicServiceSectionProps> = ({
                     colSpan={remainingColSpan}
                     className="py-3 px-3 text-xs text-slate-500 font-normal"
                   >
-                    {rows.length} {serviceId === 'provisioning' ? 'komoditas' : 'item'} terhitung
+                    {serviceId === 'provisioning'
+                      ? `${floraRows.length + faunaRows.length} komoditas (${floraRows.length} Flora, ${faunaRows.length} Fauna) terhitung`
+                      : `${rows.length} item terhitung`}
                   </td>
                 </tr>
 

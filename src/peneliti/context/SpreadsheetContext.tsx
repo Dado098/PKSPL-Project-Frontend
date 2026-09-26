@@ -3,6 +3,17 @@ import { getMethodSchema, MethodSchema, CustomColumnDefinition, CustomColumnType
 import { loadFromStorage, saveToStorage } from '../utils/storage';
 import { formatTime } from '../utils/formatter';
 import { EcosystemServiceId } from '../types/valuation';
+import {
+  getValuationRows,
+  addValuationRow,
+  updateValuationRow,
+  deleteValuationRow,
+  reorderValuationRows,
+  getCustomColumns as apiGetCustomColumns,
+  addCustomColumn as apiAddCustomColumn,
+  updateCustomColumn as apiUpdateCustomColumn,
+  deleteCustomColumn as apiDeleteCustomColumn,
+} from '../services/valuationDataService';
 
 interface SpreadsheetContextType {
   isSaving: boolean;
@@ -19,9 +30,9 @@ interface SpreadsheetContextType {
     rowId: string,
     field: string,
     value: any
-  ) => void;
-  addRow: (projectId: string, areaId: string, serviceId: string, methodId: string, biota?: string, areaHa?: number) => void;
-  deleteRow: (projectId: string, areaId: string, serviceId: string, methodId: string, biota: string, rowId: string) => void;
+  ) => Promise<void>;
+  addRow: (projectId: string, areaId: string, serviceId: string, methodId: string, biota?: string, areaHa?: number) => Promise<void>;
+  deleteRow: (projectId: string, areaId: string, serviceId: string, methodId: string, biota: string, rowId: string) => Promise<void>;
   importRows: (projectId: string, areaId: string, serviceId: string, methodId: string, biota: string, newRows: Record<string, any>[]) => void;
   getServiceSubtotal: (projectId: string, areaId: string, serviceId: string, methodId: string, biota?: string) => number;
   getGrandTotalForArea: (
@@ -32,7 +43,7 @@ interface SpreadsheetContextType {
     biota?: string
   ) => number;
   rows: Record<string, any>[];
-  getTotalEconomicValue: (projectId?: string) => number;
+  getTotalEconomicValue: (projectId: string, areaId?: string) => number;
   getAllProjectRows: (projectId: string) => Record<string, any>[];
   retrySave: () => void;
   toggleOfflineSimulation: () => void;
@@ -93,6 +104,24 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<boolean>(false);
 
+  const [backendRowIds, setBackendRowIds] = useState<Record<string, number>>({});
+
+  const loadRowsFromBackend = useCallback(async (
+    landCoverId: string,
+    serviceId: string,
+    methodId: string,
+    biota?: string
+  ) => {
+    if (!landCoverId || isNaN(Number(landCoverId))) return;
+    try {
+      const result = await getValuationRows(landCoverId, { service_id: serviceId, method_id: methodId, biota });
+      // We don't overwrite local store completely to keep it simple, but we map the IDs if possible, 
+      // or we just trust localStorage as primary for now in this offline-first setup.
+    } catch (err) {
+      console.warn('[ValuationData] Gagal load dari backend:', err);
+    }
+  }, []);
+
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Autosave trigger with debounce
@@ -138,12 +167,12 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return schema.initialRows || [];
   }, [store]);
 
-  const updateCell = useCallback((
+  const updateCell = useCallback(async (
     projectId: string,
     areaId: string,
     serviceId: string,
     methodId: string,
-    biota: string = 'flora',
+    biota: string = 'none',
     rowId: string,
     field: string,
     value: any
@@ -169,14 +198,31 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const nextStore = { ...store, [key]: updatedRows };
     setStore(nextStore);
     triggerAutosave(nextStore);
-  }, [store, triggerAutosave]);
+    
+    if (!isNaN(Number(areaId)) && Number(areaId) > 0) {
+      const backendId = backendRowIds[rowId];
+      if (backendId) {
+        const ur = updatedRows.find(r => r.id === rowId);
+        if (ur) {
+          try {
+            await updateValuationRow(areaId, backendId, {
+              row_data: ur,
+              total_nilai: ur.totalNilai,
+            });
+          } catch (err) {
+            console.warn('[ValuationData] Gagal sync updateCell ke backend:', err);
+          }
+        }
+      }
+    }
+  }, [store, triggerAutosave, backendRowIds]);
 
-  const addRow = useCallback((
+  const addRow = useCallback(async (
     projectId: string,
     areaId: string,
     serviceId: string,
     methodId: string,
-    biota: string = 'flora',
+    biota: string = 'none',
     areaHa: number = 79.86
   ) => {
     const key = makeKey(projectId, areaId, serviceId, methodId, biota);
@@ -190,14 +236,30 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const nextStore = { ...store, [key]: updatedRows };
     setStore(nextStore);
     triggerAutosave(nextStore);
+    
+    if (!isNaN(Number(areaId)) && Number(areaId) > 0) {
+      try {
+        const backendRow = await addValuationRow(areaId, {
+          service_id: serviceId,
+          method_id: methodId,
+          biota: serviceId === 'provisioning' ? biota : undefined,
+          row_order: nextNo - 1,
+          row_data: newRow,
+          total_nilai: 0,
+        });
+        setBackendRowIds(prev => ({ ...prev, [newRow.id]: backendRow.id }));
+      } catch (err) {
+        console.warn('[ValuationData] Gagal sync addRow ke backend:', err);
+      }
+    }
   }, [store, triggerAutosave]);
 
-  const deleteRow = useCallback((
+  const deleteRow = useCallback(async (
     projectId: string,
     areaId: string,
     serviceId: string,
     methodId: string,
-    biota: string = 'flora',
+    biota: string = 'none',
     rowId: string
   ) => {
     const key = makeKey(projectId, areaId, serviceId, methodId, biota);
@@ -210,14 +272,25 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const nextStore = { ...store, [key]: renumbered };
     setStore(nextStore);
     triggerAutosave(nextStore);
-  }, [store, triggerAutosave]);
+    
+    if (!isNaN(Number(areaId)) && Number(areaId) > 0) {
+      const backendId = backendRowIds[rowId];
+      if (backendId) {
+        try {
+          await deleteValuationRow(areaId, backendId);
+        } catch (err) {
+          console.warn('[ValuationData] Gagal sync deleteRow ke backend:', err);
+        }
+      }
+    }
+  }, [store, triggerAutosave, backendRowIds]);
 
   const importRows = useCallback((
     projectId: string,
     areaId: string,
     serviceId: string,
     methodId: string,
-    biota: string = 'flora',
+    biota: string = 'none',
     newRows: Record<string, any>[]
   ) => {
     const key = makeKey(projectId, areaId, serviceId, methodId, biota);
@@ -246,7 +319,7 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
     areaId: string,
     serviceId: string,
     methodId: string,
-    biota: string = 'flora'
+    biota: string = 'none'
   ): number => {
     const rows = getRows(projectId, areaId, serviceId, methodId, biota);
     const schema = getMethodSchema(serviceId, methodId, biota);
@@ -277,7 +350,9 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
           sId === 'regulating' ? 'replacement-cost' :
           sId === 'supporting' ? 'nursery-ground' : 'tcm'
         );
-        const sub = getServiceSubtotal(projectId, areaId, sId, mId, sId === 'provisioning' ? biota : undefined);
+        const sub = sId === 'provisioning'
+          ? (getServiceSubtotal(projectId, areaId, sId, mId, 'flora') + getServiceSubtotal(projectId, areaId, sId, mId, 'fauna'))
+          : getServiceSubtotal(projectId, areaId, sId, mId, 'none');
         grand += (sub || 0);
       }
     });
@@ -285,8 +360,8 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return grand;
   }, [getServiceSubtotal]);
 
-  // Convenience: fallback rows for active project or first area
-  const rows = getRows('PRJ-2024-001', 'lc-01', 'provisioning', 'market-price', 'flora');
+  // Removed hardcoded rows variable
+  const rows: Record<string, any>[] = [];
 
   const getAllProjectRows = useCallback((projectId: string): Record<string, any>[] => {
     const all: Record<string, any>[] = [];
@@ -300,6 +375,7 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // Return defaults across services
       return [
         ...getRows(projectId, 'lc-01', 'provisioning', 'market-price', 'flora'),
+        ...getRows(projectId, 'lc-01', 'provisioning', 'market-price', 'fauna'),
         ...getRows(projectId, 'lc-01', 'regulating', 'replacement-cost'),
         ...getRows(projectId, 'lc-01', 'supporting', 'nursery-ground'),
         ...getRows(projectId, 'lc-01', 'cultural', 'tcm'),
@@ -308,12 +384,13 @@ export const SpreadsheetProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return all;
   }, [store, getRows]);
 
-  const getTotalEconomicValue = useCallback((projectId?: string): number => {
-    const pid = projectId || 'PRJ-2024-001';
-    const prov = getServiceSubtotal(pid, 'lc-01', 'provisioning', 'market-price', 'flora');
-    const reg = getServiceSubtotal(pid, 'lc-01', 'regulating', 'replacement-cost');
-    const supp = getServiceSubtotal(pid, 'lc-01', 'supporting', 'nursery-ground');
-    const cult = getServiceSubtotal(pid, 'lc-01', 'cultural', 'tcm');
+  const getTotalEconomicValue = useCallback((projectId: string, areaId: string = 'lc-01'): number => {
+    if (!projectId) return 0;
+    const prov = getServiceSubtotal(projectId, areaId, 'provisioning', 'market-price', 'flora') +
+                 getServiceSubtotal(projectId, areaId, 'provisioning', 'market-price', 'fauna');
+    const reg = getServiceSubtotal(projectId, areaId, 'regulating', 'replacement-cost', 'none');
+    const supp = getServiceSubtotal(projectId, areaId, 'supporting', 'nursery-ground', 'none');
+    const cult = getServiceSubtotal(projectId, areaId, 'cultural', 'tcm', 'none');
     return prov + reg + supp + cult;
   }, [getServiceSubtotal]);
 

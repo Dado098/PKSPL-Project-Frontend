@@ -21,19 +21,19 @@ export const ReportPrintView: React.FC = () => {
 
   const provTotal = landCovers.reduce((s, lc) => {
     const c = getAreaConfig(lc.id);
-    return s + (c.activeServices.provisioning ? getServiceSubtotal(activeProjectId, lc.id, 'provisioning', c.selectedMethods.provisioning, 'flora') : 0);
+    return s + (c.activeServices.provisioning ? (getServiceSubtotal(activeProjectId, lc.id, 'provisioning', c.selectedMethods.provisioning, 'flora') + getServiceSubtotal(activeProjectId, lc.id, 'provisioning', c.selectedMethods.provisioning, 'fauna')) : 0);
   }, 0);
   const regTotal = landCovers.reduce((s, lc) => {
     const c = getAreaConfig(lc.id);
-    return s + (c.activeServices.regulating ? getServiceSubtotal(activeProjectId, lc.id, 'regulating', c.selectedMethods.regulating) : 0);
+    return s + (c.activeServices.regulating ? getServiceSubtotal(activeProjectId, lc.id, 'regulating', c.selectedMethods.regulating, 'none') : 0);
   }, 0);
   const suppTotal = landCovers.reduce((s, lc) => {
     const c = getAreaConfig(lc.id);
-    return s + (c.activeServices.supporting ? getServiceSubtotal(activeProjectId, lc.id, 'supporting', c.selectedMethods.supporting) : 0);
+    return s + (c.activeServices.supporting ? getServiceSubtotal(activeProjectId, lc.id, 'supporting', c.selectedMethods.supporting, 'none') : 0);
   }, 0);
   const cultTotal = landCovers.reduce((s, lc) => {
     const c = getAreaConfig(lc.id);
-    return s + (c.activeServices.cultural ? getServiceSubtotal(activeProjectId, lc.id, 'cultural', c.selectedMethods.cultural) : 0);
+    return s + (c.activeServices.cultural ? getServiceSubtotal(activeProjectId, lc.id, 'cultural', c.selectedMethods.cultural, 'none') : 0);
   }, 0);
   const grandTEV = provTotal + regTotal + suppTotal + cultTotal;
 

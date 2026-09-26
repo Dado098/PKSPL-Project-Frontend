@@ -7,6 +7,7 @@ import { ExcelImportModal } from '../components/spreadsheet/ExcelImportModal';
 import { DetectedCustomColumn } from '../utils/excelEngine';
 import { formatNumber } from '../utils/formatter';
 import { EcosystemServiceId } from '../types/valuation';
+import { getMethodSchema } from '../types/methodSchemas';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import {
   TableProperties,
@@ -14,7 +15,8 @@ import {
   FolderX,
   Layers,
   SlidersHorizontal,
-  CheckCircle2
+  CheckCircle2,
+  Info
 } from 'lucide-react';
 
 const DataValuationPageContent: React.FC = () => {
@@ -68,14 +70,18 @@ const DataValuationPageContent: React.FC = () => {
   // Modal import state
   const [importModalConfig, setImportModalConfig] = useState<{
     isOpen: boolean;
+    serviceId: EcosystemServiceId;
     serviceName: string;
+    methodId: string;
     methodName: string;
     categoryName: string;
   }>({
     isOpen: false,
+    serviceId: 'provisioning',
     serviceName: '',
+    methodId: '',
     methodName: '',
-    categoryName: 'Flora',
+    categoryName: 'General',
   });
 
   const toggleSection = (serviceId: EcosystemServiceId) => {
@@ -107,38 +113,45 @@ const DataValuationPageContent: React.FC = () => {
     setSearchParams({ area: newAreaId });
   };
 
-  const handleMethodChange = (serviceId: EcosystemServiceId, newMethodId: string) => {
-    updateAreaConfig(selectedAreaId, {
-      selectedMethods: {
-        ...areaConfig.selectedMethods,
-        [serviceId]: newMethodId
-      }
-    });
-  };
-
   const handleBiotaChange = (newBiota: 'flora' | 'fauna') => {
     updateAreaConfig(selectedAreaId, { biota: newBiota });
   };
 
-  const handleOpenImport = (serviceName: string, methodName: string, category: string) => {
-    setImportModalConfig({
-      isOpen: true,
-      serviceName,
-      methodName,
-      categoryName: category,
-    });
-  };
+  const handleOpenImport = (serviceIdOrName: string, methodIdOrName: string, category: string) => {
+    const sId: EcosystemServiceId = serviceIdOrName.toLowerCase().includes('provisioning') ? 'provisioning' :
+                serviceIdOrName.toLowerCase().includes('regulating') ? 'regulating' :
+                serviceIdOrName.toLowerCase().includes('supporting') ? 'supporting' :
+                serviceIdOrName.toLowerCase().includes('cultural') ? 'cultural' : 'provisioning';
 
-  const handleConfirmImportRows = (newRows: Record<string, any>[], detectedCustomColumns?: DetectedCustomColumn[]) => {
-    const sId: EcosystemServiceId = importModalConfig.serviceName.toLowerCase().includes('provisioning') ? 'provisioning' :
-                importModalConfig.serviceName.toLowerCase().includes('regulating') ? 'regulating' :
-                importModalConfig.serviceName.toLowerCase().includes('supporting') ? 'supporting' : 'cultural';
-    const mId = areaConfig.selectedMethods?.[sId] || (
+    const sName = sId === 'provisioning' ? 'Provisioning Services' :
+                  sId === 'regulating' ? 'Regulating Services' :
+                  sId === 'supporting' ? 'Supporting Services' : 'Cultural Services';
+
+    const mId = areaConfig.selectedMethods?.[sId] || methodIdOrName || (
       sId === 'provisioning' ? 'market-price' :
       sId === 'regulating' ? 'replacement-cost' :
       sId === 'supporting' ? 'nursery-ground' : 'tcm'
     );
-    const biotaParam = sId === 'provisioning' ? areaConfig.biota || 'flora' : undefined;
+
+    const schema = getMethodSchema(sId, mId, category?.toLowerCase());
+
+    setImportModalConfig({
+      isOpen: true,
+      serviceId: sId,
+      serviceName: sName,
+      methodId: mId,
+      methodName: schema?.methodName || methodIdOrName,
+      categoryName: category || (sId === 'provisioning' ? 'Flora' : 'General'),
+    });
+  };
+
+  const handleConfirmImportRows = (newRows: Record<string, any>[], detectedCustomColumns?: DetectedCustomColumn[]) => {
+    const sId = importModalConfig.serviceId;
+    const mId = importModalConfig.methodId;
+    const isProvisioning = sId === 'provisioning';
+    const targetBiota = isProvisioning
+      ? (importModalConfig.categoryName?.toLowerCase().includes('fauna') ? 'fauna' : 'flora')
+      : undefined;
 
     // Automatically register any newly detected custom columns from the Excel file
     if (detectedCustomColumns && detectedCustomColumns.length > 0) {
@@ -147,7 +160,7 @@ const DataValuationPageContent: React.FC = () => {
         selectedAreaId,
         sId,
         mId,
-        biotaParam,
+        targetBiota,
         detectedCustomColumns.map(c => ({ label: c.label, type: c.type }))
       );
     }
@@ -157,7 +170,7 @@ const DataValuationPageContent: React.FC = () => {
       selectedAreaId,
       sId,
       mId,
-      sId === 'provisioning' ? areaConfig.biota || 'flora' : 'none',
+      isProvisioning ? (targetBiota || 'flora') : 'none',
       newRows
     );
     setImportModalConfig(prev => ({ ...prev, isOpen: false }));
@@ -327,6 +340,33 @@ const DataValuationPageContent: React.FC = () => {
         </div>
       </div>
 
+      {/* Unified Warning / Notice Banner: Method locked to Services-Methods configuration & Data Preservation Notice */}
+      <div className="bg-amber-50/90 border border-amber-200/90 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+        <div className="flex items-start gap-3">
+          <div className="p-1.5 rounded-md bg-amber-100 text-amber-800 shrink-0 mt-0.5">
+            <Info className="w-4 h-4" />
+          </div>
+          <div className="space-y-1 text-slate-700 leading-relaxed">
+            <p>
+              Setiap jasa ekosistem pada area ini menggunakan <strong className="text-slate-900 font-bold">1 jenis metode valuasi</strong> yang telah dikonfigurasi. Jika ingin mengubah metode valuasi, silakan lakukan pada halaman <strong className="text-slate-900 font-bold">Jasa & Metode</strong>.
+            </p>
+            <p className="text-[11px] text-amber-900/90 bg-amber-100/60 rounded px-2 py-1 border border-amber-200/60">
+              <strong className="font-semibold text-amber-950">Catatan Data:</strong> Jika Anda mengubah metode, sistem akan beralih menggunakan data input baru untuk metode tersebut. Data lama Anda <strong>tetap tersimpan aman dan tidak hilang</strong>, namun <strong>tidak akan digunakan sebagai sumber perhitungan</strong> selanjutnya kecuali Anda kembali menggunakan metode tersebut.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => navigate(`/peneliti/projects/${routeProjId}/services-methods?area=${selectedAreaId}`)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-white hover:bg-amber-100/80 text-amber-900 font-semibold border border-amber-300 shadow-2xs transition-colors shrink-0 text-xs cursor-pointer self-start sm:self-center"
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-amber-700" />
+          <span>Ubah Jasa & Metode</span>
+          <ArrowRight className="w-3 h-3 text-amber-700" />
+        </button>
+      </div>
+
       {/* 3. Accordion Sections for All 4 Ecosystem Services (ALL 4 ON ONE PAGE) */}
       <div className="space-y-4">
         {/* SECTION A: Provisioning Services */}
@@ -335,7 +375,7 @@ const DataValuationPageContent: React.FC = () => {
             projectId={currentProject.id}
             prefixLetter="A"
             serviceId="provisioning"
-            serviceName="Provisioning Services (Jasa Penyediaan)"
+            serviceName="Provisioning Services"
             methodId={areaConfig.selectedMethods?.provisioning || 'market-price'}
             biota={areaConfig.biota || 'flora'}
             areaId={selectedAreaId}
@@ -343,7 +383,6 @@ const DataValuationPageContent: React.FC = () => {
             areaHa={currentArea?.areaHa || 79.86}
             isOpen={openSections.provisioning}
             onToggleOpen={() => toggleSection('provisioning')}
-            onMethodChange={(m) => handleMethodChange('provisioning', m)}
             onBiotaChange={handleBiotaChange}
             onOpenImportModal={handleOpenImport}
             highlightedRowId={highlightParam}
@@ -356,14 +395,13 @@ const DataValuationPageContent: React.FC = () => {
             projectId={currentProject.id}
             prefixLetter="B"
             serviceId="regulating"
-            serviceName="Regulating Services (Jasa Pengaturan)"
+            serviceName="Regulating Services"
             methodId={areaConfig.selectedMethods?.regulating || 'replacement-cost'}
             areaId={selectedAreaId}
             areaName={currentArea?.name || 'Area'}
             areaHa={currentArea?.areaHa || 79.86}
             isOpen={openSections.regulating}
             onToggleOpen={() => toggleSection('regulating')}
-            onMethodChange={(m) => handleMethodChange('regulating', m)}
             onOpenImportModal={handleOpenImport}
           />
         )}
@@ -374,14 +412,13 @@ const DataValuationPageContent: React.FC = () => {
             projectId={currentProject.id}
             prefixLetter="C"
             serviceId="supporting"
-            serviceName="Supporting Services (Jasa Pendukung)"
+            serviceName="Supporting Services"
             methodId={areaConfig.selectedMethods?.supporting || 'nursery-ground'}
             areaId={selectedAreaId}
             areaName={currentArea?.name || 'Area'}
             areaHa={currentArea?.areaHa || 79.86}
             isOpen={openSections.supporting}
             onToggleOpen={() => toggleSection('supporting')}
-            onMethodChange={(m) => handleMethodChange('supporting', m)}
             onOpenImportModal={handleOpenImport}
           />
         )}
@@ -392,14 +429,13 @@ const DataValuationPageContent: React.FC = () => {
             projectId={currentProject.id}
             prefixLetter="D"
             serviceId="cultural"
-            serviceName="Cultural Services (Jasa Budaya & Rekreasi)"
+            serviceName="Cultural Services"
             methodId={areaConfig.selectedMethods?.cultural || 'tcm'}
             areaId={selectedAreaId}
             areaName={currentArea?.name || 'Area'}
             areaHa={currentArea?.areaHa || 79.86}
             isOpen={openSections.cultural}
             onToggleOpen={() => toggleSection('cultural')}
-            onMethodChange={(m) => handleMethodChange('cultural', m)}
             onOpenImportModal={handleOpenImport}
           />
         )}
@@ -434,7 +470,9 @@ const DataValuationPageContent: React.FC = () => {
       <ExcelImportModal
         isOpen={importModalConfig.isOpen}
         onClose={() => setImportModalConfig(prev => ({ ...prev, isOpen: false }))}
+        serviceId={importModalConfig.serviceId}
         serviceName={importModalConfig.serviceName}
+        methodId={importModalConfig.methodId}
         methodName={importModalConfig.methodName}
         categoryName={importModalConfig.categoryName}
         onConfirmImport={handleConfirmImportRows}

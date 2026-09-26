@@ -5,8 +5,13 @@ import { calculateRowTotal, calculateRowQuantity } from './formulas';
 import { getMethodSchema } from '../types/methodSchemas';
 import { parseIndonesianNumber } from './formatter';
 
-// Safe resolver for SheetJS loaded via index.html or npm
+import * as XLSX from 'xlsx';
+
+// Safe resolver for SheetJS
 const getXLSX = () => {
+  if (XLSX && XLSX.utils) {
+    return XLSX;
+  }
   if (typeof window !== 'undefined' && (window as any).XLSX) {
     return (window as any).XLSX;
   }
@@ -83,7 +88,26 @@ export const downloadContextTemplate = (
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, fileName);
+
+  // Guarantee explicit .xlsx extension
+  const safeFileName = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
+
+  try {
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', safeFileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    XLSX.writeFile(wb, safeFileName);
+  }
 };
 
 /**
@@ -161,33 +185,118 @@ export const validateAndParseExcel = async (
           }
         }
 
-        // Cek ketidaksesuaian template
-        const normExpectedServ = expectedService.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const normExpectedMeth = expectedMethod.toLowerCase().replace(/[^a-z0-9]/g, '');
+        // Helper normalisasi string untuk perbandingan fleksibel
+        const normalizeStr = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        if (detectedService && detectedService.toLowerCase().replace(/[^a-z0-9]/g, '') !== normExpectedServ) {
-          return resolve({
-            isCompatible: false,
-            mismatchReason: `File tidak sesuai dengan data ${expectedService}. Silakan gunakan template ${expectedService}.`,
-            totalRows: 0,
-            validRowsCount: 0,
-            errorRowsCount: 0,
-            errors: [],
-            validRows: [],
-            allRowsPreview: [],
-            systemColumnsCount: 0,
-            detectedCustomColumns: []
-          });
+        const normExpectedServ = normalizeStr(expectedService);
+        const normExpectedMeth = normalizeStr(expectedMethod);
+        const normExpectedCat = normalizeStr(expectedCategory);
+
+        // Validasi kecocokan service jika terdeteksi
+        if (detectedService) {
+          const normDetServ = normalizeStr(detectedService);
+          const isServiceMatch =
+            normDetServ === normExpectedServ ||
+            normExpectedServ.includes(normDetServ) ||
+            normDetServ.includes(normExpectedServ);
+
+          if (!isServiceMatch) {
+            return resolve({
+              isCompatible: false,
+              mismatchReason: `File ini terdeteksi untuk data "${detectedService}", sedangkan halaman ini membutuhkan data "${expectedService}". Silakan periksa kembali file atau gunakan tombol "Download Template".`,
+              totalRows: 0,
+              validRowsCount: 0,
+              errorRowsCount: 0,
+              errors: [],
+              validRows: [],
+              allRowsPreview: [],
+              systemColumnsCount: 0,
+              detectedCustomColumns: []
+            });
+          }
+        }
+
+        // Validasi kecocokan method jika terdeteksi
+        if (detectedMethod) {
+          const normDetMeth = normalizeStr(detectedMethod);
+          const isMethodMatch =
+            normDetMeth === normExpectedMeth ||
+            normExpectedMeth.includes(normDetMeth) ||
+            normDetMeth.includes(normExpectedMeth);
+
+          if (!isMethodMatch) {
+            return resolve({
+              isCompatible: false,
+              mismatchReason: `File ini terdeteksi untuk metode "${detectedMethod}", sedangkan metode aktif yang dipilih adalah "${expectedMethod}". Silakan gunakan template metode yang sesuai.`,
+              totalRows: 0,
+              validRowsCount: 0,
+              errorRowsCount: 0,
+              errors: [],
+              validRows: [],
+              allRowsPreview: [],
+              systemColumnsCount: 0,
+              detectedCustomColumns: []
+            });
+          }
+        }
+
+        // Validasi kecocokan category jika provisioning (flora vs fauna)
+        if (normExpectedServ.includes('provisioning') && detectedCategory) {
+          const normDetCat = normalizeStr(detectedCategory);
+          if (normDetCat && (normDetCat === 'flora' || normDetCat === 'fauna') && normDetCat !== normExpectedCat) {
+            return resolve({
+              isCompatible: false,
+              mismatchReason: `File ini berisi data "${detectedCategory}", sedangkan Anda sedang membuka modal import untuk "${expectedCategory}". Silakan gunakan opsi import yang sesuai.`,
+              totalRows: 0,
+              validRowsCount: 0,
+              errorRowsCount: 0,
+              errors: [],
+              validRows: [],
+              allRowsPreview: [],
+              systemColumnsCount: 0,
+              detectedCustomColumns: []
+            });
+          }
         }
 
         // Identify header row and schema system columns
         const headerRowIndex = metaLine.startsWith('#CONTEXT:') ? 1 : 0;
         const headerRow: any[] = rawAoa[headerRowIndex] || [];
         const schema = getMethodSchema(expectedService, expectedMethod, expectedCategory.toLowerCase());
-        const systemCols = schema.columns.filter(c => !c.isTotal && c.type !== 'readonly_calculated' && c.key !== 'totalNilai');
+        const allSchemaCols = schema.columns;
+        const systemCols = allSchemaCols.filter(c => !c.isTotal && c.type !== 'readonly_calculated' && c.key !== 'totalNilai');
         const systemColumnsCount = systemCols.length;
 
-        // Detect any additional custom columns present in header beyond system columns
+        // Buat pemetaan index kolom Excel -> key kolom skema
+        const headerIndexToColKey: Record<number, string> = {};
+        const matchedSchemaKeys = new Set<string>();
+
+        // 1. Cocokkan header Excel dengan definisi kolom di skema
+        for (let c = 0; c < headerRow.length; c++) {
+          const rawHeader = String(headerRow[c] || '').trim();
+          if (!rawHeader) continue;
+          const normH = normalizeStr(rawHeader);
+
+          // Coba cari kecocokan persis atau parsial dengan label skema
+          const matchedCol = allSchemaCols.find(sc => {
+            const normLabel = normalizeStr(sc.label);
+            return normLabel === normH || normH.includes(normLabel) || normLabel.includes(normH);
+          });
+
+          if (matchedCol) {
+            headerIndexToColKey[c] = matchedCol.key;
+            matchedSchemaKeys.add(matchedCol.key);
+          }
+        }
+
+        // Fallback jika header tidak cocok sama sekali (misal user edit label), gunakan posisi default skema
+        if (matchedSchemaKeys.size === 0) {
+          allSchemaCols.forEach((sc, idx) => {
+            headerIndexToColKey[idx] = sc.key;
+          });
+        }
+
+        // Deteksi kolom custom tambahan
         const detectedCustomColumns: DetectedCustomColumn[] = [];
         const customColHeaderIndices: { headerIdx: number; colDef: DetectedCustomColumn }[] = [];
 
@@ -195,8 +304,12 @@ export const validateAndParseExcel = async (
           const rawHeader = String(headerRow[c] || '').trim();
           if (!rawHeader) continue;
 
-          // Check if this header matches any system column label
-          const isSystem = systemCols.some(sc => sc.label.toLowerCase() === rawHeader.toLowerCase());
+          const isSystem = allSchemaCols.some(sc => {
+            const normLabel = normalizeStr(sc.label);
+            const normH = normalizeStr(rawHeader);
+            return normLabel === normH || normH.includes(normLabel) || normLabel.includes(normH);
+          });
+
           if (!isSystem && c >= 1) { // Skip index 0 (No)
             const rawKey = rawHeader.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
             const key = `c_${rawKey || 'col'}_${c}`;
@@ -220,60 +333,81 @@ export const validateAndParseExcel = async (
 
         rowsToProcess.forEach((r, idx) => {
           const rowNum = idx + 1;
-          const itemName = String(r[1] || '').trim();
-          const prodRaw = r[2];
-          const satuan = String(r[3] || 'm³/ha').trim();
-          const hargaRaw = r[4];
-          const luasHaRaw = r[5];
-          const sumberData = String(r[6] || '').trim();
-          const catatan = String(r[7] || '').trim();
 
-          const prod = parseIndonesianNumber(prodRaw);
-          const harga = parseIndonesianNumber(hargaRaw);
-          const luas = parseIndonesianNumber(luasHaRaw) ?? 79.86;
+          // Buat template row default dari skema
+          const partialRow: Record<string, any> = schema.defaultNewRow ? schema.defaultNewRow(rowNum, 79.86) : {
+            id: `IMP-${Date.now()}-${idx}`,
+            no: rowNum,
+            item: '',
+            luasHa: 79.86,
+          };
+          partialRow.id = `IMP-${Date.now()}-${idx}`;
+          partialRow.no = rowNum;
 
-          let rowError: string | null = null;
+          // Isi field berdasarkan pemetaan kolom header
+          Object.entries(headerIndexToColKey).forEach(([cIdxStr, colKey]) => {
+            const cIdx = Number(cIdxStr);
+            const rawVal = r[cIdx];
+            if (rawVal === undefined || rawVal === '') return;
 
-          if (!itemName) {
-            rowError = 'Nama jenis flora/fauna tidak boleh kosong';
-            errors.push({ row: rowNum, column: 'Jenis Flora', message: rowError });
-          } else if (harga === null || harga <= 0) {
-            rowError = 'Harga/Unit harus berupa nilai numerik valid > 0';
-            errors.push({ row: rowNum, column: 'Harga/Unit', message: rowError });
-          }
-
-          // Extract values for detected custom columns
-          const customValues: Record<string, any> = {};
-          customColHeaderIndices.forEach(({ headerIdx, colDef }) => {
-            const rawVal = r[headerIdx];
-            if (rawVal !== undefined && rawVal !== '') {
-              customValues[colDef.key] = rawVal;
+            const colDef = allSchemaCols.find(c => c.key === colKey);
+            if (colDef && colDef.type === 'number') {
+              const numVal = parseIndonesianNumber(rawVal);
+              if (numVal !== null) {
+                partialRow[colKey] = numVal;
+              }
+            } else {
+              partialRow[colKey] = String(rawVal).trim();
             }
           });
 
-          const partialRow: Record<string, any> = {
-            id: `IMP-${Date.now()}-${idx}`,
-            no: rowNum,
-            item: itemName || `Baris ${rowNum} (Kosong)`,
-            produktivitas: prod,
-            satuan: satuan,
-            hargaUnit: harga,
-            luasHa: luas,
-            source: sumberData,
-            note: catatan,
-            ...customValues,
-            status: rowError ? 'invalid' : 'valid',
-            validationError: rowError || undefined
-          };
+          // Extract values for detected custom columns
+          customColHeaderIndices.forEach(({ headerIdx, colDef }) => {
+            const rawVal = r[headerIdx];
+            if (rawVal !== undefined && rawVal !== '') {
+              partialRow[colDef.key] = rawVal;
+            }
+          });
 
-          const calculatedTotal = calculateRowTotal(partialRow as any);
-          const calculatedQty = calculateRowQuantity(partialRow as any);
+          let rowError: string | null = null;
 
-          const finalRow: SpreadsheetRow = {
-            ...partialRow as SpreadsheetRow,
-            jumlah: calculatedQty,
-            totalNilai: calculatedTotal
-          };
+          // 1. Validasi: Kolom Nama / Item utama wajib diisi
+          const itemCol = allSchemaCols.find(c => c.key === 'item');
+          const itemName = String(partialRow.item || '').trim();
+          if (!itemName) {
+            rowError = `${itemCol?.label || 'Nama Item'} tidak boleh kosong`;
+            errors.push({ row: rowNum, column: itemCol?.label || 'Item/Komoditas', message: rowError });
+          }
+
+          // 2. Validasi kolom numerik utama (jika ada nilai yang diinput negatif atau tidak valid)
+          if (!rowError) {
+            for (const col of allSchemaCols) {
+              if (col.type === 'number' && !col.isTotal && col.key !== 'no' && col.key !== 'jumlah') {
+                const val = partialRow[col.key];
+                if (val !== null && val !== undefined && typeof val === 'number') {
+                  if (isNaN(val) || val < 0) {
+                    rowError = `Nilai ${col.label} tidak valid (${val})`;
+                    errors.push({ row: rowNum, column: col.label, message: rowError });
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          // Hitung otomatis quantity & total nilai menggunakan skema kalkulator metode terkait
+          const calc = schema.calculateRow(partialRow);
+          partialRow.totalNilai = (partialRow.totalNilai !== undefined && partialRow.totalNilai !== null && !isNaN(Number(partialRow.totalNilai)) && Number(partialRow.totalNilai) > 0)
+            ? Number(partialRow.totalNilai)
+            : calc.total;
+          if (calc.quantity !== undefined && (partialRow.jumlah === undefined || partialRow.jumlah === null)) {
+            partialRow.jumlah = calc.quantity;
+          }
+
+          partialRow.status = rowError ? 'invalid' : 'valid';
+          partialRow.validationError = rowError || undefined;
+
+          const finalRow = partialRow as SpreadsheetRow;
 
           if (rowError) {
             allRowsPreview.push({ ...finalRow, hasError: true, errorMsg: rowError });
