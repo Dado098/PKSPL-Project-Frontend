@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
 import { useSpreadsheet } from '../context/SpreadsheetContext';
@@ -16,7 +16,8 @@ import {
   Layers,
   SlidersHorizontal,
   CheckCircle2,
-  Info
+  Info,
+  MapPin
 } from 'lucide-react';
 
 const DataValuationPageContent: React.FC = () => {
@@ -26,7 +27,10 @@ const DataValuationPageContent: React.FC = () => {
     activeProject,
     activeProjectId,
     setActiveProjectId,
-    landCovers,
+    landCovers: defaultLandCovers,
+    indices: defaultIndices,
+    getProjectLandCovers,
+    getProjectIndices,
     getAreaConfig,
     updateAreaConfig,
   } = useProject();
@@ -39,15 +43,13 @@ const DataValuationPageContent: React.FC = () => {
   const routeProjId = params.projectId || activeProjectId;
   const currentProject = projects.find(p => p.id === routeProjId || p.code === routeProjId) || activeProject;
 
-  // Sync activeProjectId if param is different
-  useEffect(() => {
-    if (params.projectId && params.projectId !== activeProjectId) {
-      const found = projects.find(p => p.id === params.projectId || p.code === params.projectId);
-      if (found) {
-        setActiveProjectId(found.id);
-      }
-    }
-  }, [params.projectId, activeProjectId, projects, setActiveProjectId]);
+  const landCovers = useMemo(() => {
+    return (getProjectLandCovers ? getProjectLandCovers(routeProjId) : defaultLandCovers) || defaultLandCovers || [];
+  }, [getProjectLandCovers, routeProjId, defaultLandCovers]);
+
+  const indices = useMemo(() => {
+    return (getProjectIndices ? getProjectIndices(routeProjId) : defaultIndices) || defaultIndices || [];
+  }, [getProjectIndices, routeProjId, defaultIndices]);
 
   // Selected area from query param or first land cover
   const queryArea = searchParams.get('area');
@@ -58,6 +60,25 @@ const DataValuationPageContent: React.FC = () => {
 
   const currentArea = landCovers.find(lc => lc.id === selectedAreaId) || landCovers[0];
   const areaConfig = getAreaConfig(selectedAreaId);
+
+  // Filter state for separated Index & Land Cover
+  const [selectedIndexCode, setSelectedIndexCode] = useState<string>('ALL');
+
+  // Filtered land covers based on selected index
+  const availableLandCovers = useMemo(() => {
+    if (selectedIndexCode === 'ALL') return landCovers;
+    return landCovers.filter(lc => {
+      const matchIdx = indices.find(
+        i => i.id === lc.indexId || i.code === lc.indexCode || i.name === lc.indexName
+      );
+      return (
+        lc.indexId === selectedIndexCode ||
+        lc.indexCode === selectedIndexCode ||
+        matchIdx?.code === selectedIndexCode ||
+        matchIdx?.id === selectedIndexCode
+      );
+    });
+  }, [landCovers, indices, selectedIndexCode]);
 
   // Accordion state: controls which sections are expanded on this single page
   const [openSections, setOpenSections] = useState<Record<EcosystemServiceId, boolean>>({
@@ -109,8 +130,50 @@ const DataValuationPageContent: React.FC = () => {
     });
   };
 
+  const handleIndexChange = (newIndexCode: string) => {
+    setSelectedIndexCode(newIndexCode);
+    if (newIndexCode === 'ALL') return;
+
+    // Find land covers under this index
+    const matchingLcs = landCovers.filter(lc => {
+      const matchIdx = indices.find(
+        i => i.id === lc.indexId || i.code === lc.indexCode || i.name === lc.indexName
+      );
+      return (
+        lc.indexId === newIndexCode ||
+        lc.indexCode === newIndexCode ||
+        matchIdx?.code === newIndexCode ||
+        matchIdx?.id === newIndexCode
+      );
+    });
+
+    if (matchingLcs.length > 0 && !matchingLcs.some(lc => lc.id === selectedAreaId)) {
+      handleAreaChange(matchingLcs[0].id);
+    }
+  };
+
   const handleAreaChange = (newAreaId: string) => {
-    setSearchParams({ area: newAreaId });
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('area', newAreaId);
+      return next;
+    });
+
+    const targetLc = landCovers.find(lc => lc.id === newAreaId);
+    if (targetLc && selectedIndexCode !== 'ALL') {
+      const matchIdx = indices.find(
+        i => i.id === targetLc.indexId || i.code === targetLc.indexCode || i.name === targetLc.indexName
+      );
+      const isStillInSelected =
+        targetLc.indexId === selectedIndexCode ||
+        targetLc.indexCode === selectedIndexCode ||
+        matchIdx?.code === selectedIndexCode ||
+        matchIdx?.id === selectedIndexCode;
+
+      if (!isStillInSelected) {
+        setSelectedIndexCode(targetLc.indexCode || matchIdx?.code || 'ALL');
+      }
+    }
   };
 
   const handleBiotaChange = (newBiota: 'flora' | 'fauna') => {
@@ -274,27 +337,84 @@ const DataValuationPageContent: React.FC = () => {
         </button>
       </div>
 
-      {/* 2. Area Selector Bar & Active Services Badges */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-3">
-          <span className="text-slate-700 font-bold uppercase text-[11px] tracking-wider">
-            Area Tutupan Lahan:
-          </span>
-          <select
-            value={selectedAreaId}
-            onChange={(e) => handleAreaChange(e.target.value)}
-            className="bg-slate-50 border border-slate-300 rounded px-3 py-1.5 text-slate-900 font-bold focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer"
-          >
-            {landCovers.map(lc => (
-              <option key={lc.id} value={lc.id}>
-                {lc.name} ({formatNumber(lc.areaHa)} ha) — {lc.indexCode || lc.code}
-              </option>
-            ))}
-          </select>
+      {/* 2. Filter Bar: Indeks & Tutupan Lahan Terpisah + Jasa Aktif */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col xl:flex-row xl:items-center justify-between gap-4 text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Filter 1: INDEKS */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-600 font-bold uppercase text-[11px] tracking-wider flex items-center gap-1.5 shrink-0">
+              <Layers className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Indeks:</span>
+            </span>
+            <select
+              value={selectedIndexCode}
+              onChange={(e) => handleIndexChange(e.target.value)}
+              className="bg-slate-50 hover:bg-slate-100/90 border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none cursor-pointer transition-colors text-xs"
+            >
+              <option value="ALL">Semua Indeks ({indices.length})</option>
+              {indices.map(idx => {
+                const count = landCovers.filter(lc => {
+                  return lc.indexId === idx.id || lc.indexCode === idx.code || lc.indexName === idx.name;
+                }).length;
+                return (
+                  <option key={idx.id} value={idx.code || idx.id}>
+                    {idx.code} — {idx.name} {count > 0 ? `(${count} Area)` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <span className="text-slate-300 hidden sm:inline">|</span>
+
+          {/* Filter 2: TUTUPAN LAHAN */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-700 font-bold uppercase text-[11px] tracking-wider flex items-center gap-1.5 shrink-0">
+              <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Tutupan Lahan:</span>
+            </span>
+            <select
+              value={selectedAreaId}
+              onChange={(e) => handleAreaChange(e.target.value)}
+              className="bg-slate-50 hover:bg-slate-100/90 border border-slate-300 rounded-lg px-3 py-1.5 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none cursor-pointer transition-colors text-xs min-w-[210px]"
+            >
+              {availableLandCovers.length === 0 ? (
+                <option value="" disabled>Tidak ada tutupan lahan</option>
+              ) : (
+                availableLandCovers.map(lc => {
+                  const matchIdx = indices.find(
+                    i => i.id === lc.indexId || i.code === lc.indexCode || i.name === lc.indexName
+                  );
+                  const idxLabel = lc.indexCode || matchIdx?.code;
+                  return (
+                    <option key={lc.id} value={lc.id}>
+                      {lc.name} ({formatNumber(lc.areaHa)} Ha){selectedIndexCode === 'ALL' && idxLabel ? ` — ${idxLabel}` : ''}
+                    </option>
+                  );
+                })
+              )}
+            </select>
+          </div>
+
+          {/* Current Area Info Badge */}
+          {currentArea && (
+            <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-600">
+              <span>Luas:</span>
+              <strong className="text-slate-900 font-mono">{formatNumber(currentArea.areaHa, 2)} Ha</strong>
+              {currentArea.indexCode && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className="font-mono text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60 text-[10px]">
+                    {currentArea.indexCode}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Active service badges & Accordion Expand/Collapse Controls */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap border-t xl:border-t-0 pt-2 xl:pt-0 border-slate-100 justify-between xl:justify-end">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-slate-400 text-[11px]">Jasa Aktif:</span>
             {activeServices.provisioning && (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
 import { useSpreadsheet } from '../context/SpreadsheetContext';
@@ -28,8 +29,13 @@ import {
   Music,
   TableProperties,
   ChevronDown,
-  Hash
+  Hash,
+  Eye,
+  ChevronRight,
+  X,
+  ExternalLink
 } from 'lucide-react';
+import { getMethodSchema } from '../types/methodSchemas';
 import {
   ResponsiveContainer,
   BarChart,
@@ -41,6 +47,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Sector,
   LineChart,
   Line,
   CartesianGrid,
@@ -144,8 +151,75 @@ const AnalyticsPageContent: React.FC = () => {
   const [filterIndexId,     setFilterIndexId]     = useState<string>('ALL');
   const [filterLandCoverId, setFilterLandCoverId] = useState<string>('ALL');
   const [filterService,     setFilterService]     = useState<string>('ALL');
+  const [activePieIndex,    setActivePieIndex]    = useState<number | null>(null);
+  const [selectedRowDetail, setSelectedRowDetail] = useState<{
+    id: string;
+    label: string;
+    value: number;
+    row: Record<string, any>;
+    serviceId: EcosystemServiceId;
+    methodId: string;
+    biota?: string;
+    lcId: string;
+    lcName: string;
+    lcAreaHa: number;
+  } | null>(null);
+  const [expandedLandCovers, setExpandedLandCovers] = useState<Record<string, boolean>>({});
+  const [collapsedServices, setCollapsedServices] = useState<Record<string, boolean>>({});
+
+  // Lock body scroll and handle ESC key when row detail modal is open
+  useEffect(() => {
+    if (!selectedRowDetail) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedRowDetail(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [selectedRowDetail]);
+
+  // Custom active shape with smooth animated pop-out for Donut Pie
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
+    return (
+      <g>
+        <text x={cx} y={cy - 6} dy={0} textAnchor="middle" fill="#0f172a" className="font-bold text-xs">
+          {payload.short}
+        </text>
+        <text x={cx} y={cy + 14} dy={0} textAnchor="middle" fill="#64748b" className="font-mono text-[10px]">
+          {`${(percent * 100).toFixed(1)}%`}
+        </text>
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius - 4}
+          outerRadius={outerRadius + 8}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          className="transition-all duration-300 drop-shadow-md"
+        />
+        <Sector
+          cx={cx}
+          cy={cy}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          innerRadius={outerRadius + 11}
+          outerRadius={outerRadius + 13}
+          fill={fill}
+          opacity={0.6}
+        />
+      </g>
+    );
+  };
 
   // Reset tutupan lahan ketika indeks berubah
+  const [activeBarMethod,   setActiveBarMethod]   = useState<string | null>(null);
+
   useEffect(() => {
     setFilterLandCoverId('ALL');
   }, [filterIndexId]);
@@ -258,25 +332,49 @@ const AnalyticsPageContent: React.FC = () => {
         const isActive = cfg?.activeServices?.[sId] ?? true;
         const method  = cfg?.selectedMethods?.[sId] || '';
         const biota   = sId === 'provisioning' ? (cfg?.biota || 'flora') : 'none';
-        const rows    = getRows(effectiveProjId, lc.id, sId, method, biota);
-        const items   = rows
-          .filter(r => (r.totalNilai || 0) > 0)
-          .map(r => ({
-            label : r.item || r.komoditas || r.area || r.fungsiPendukung || r.namaAktivitas || `Baris ${r.no}`,
-            value : Number(r.totalNilai) || 0,
+
+        // Retrieve rows - for provisioning check both flora and fauna
+        let rawRows: (Record<string, any> & { _biota?: string })[] = [];
+        if (sId === 'provisioning') {
+          const floraRows = getRows(effectiveProjId, lc.id, sId, method, 'flora').map(r => ({ ...r, _biota: 'flora' }));
+          const faunaRows = getRows(effectiveProjId, lc.id, sId, method, 'fauna').map(r => ({ ...r, _biota: 'fauna' }));
+          rawRows = [...floraRows, ...faunaRows];
+          if (rawRows.length === 0) {
+            rawRows = getRows(effectiveProjId, lc.id, sId, method, biota).map(r => ({ ...r, _biota: biota }));
+          }
+        } else {
+          rawRows = getRows(effectiveProjId, lc.id, sId, method, biota).map(r => ({ ...r, _biota: biota }));
+        }
+
+        const items = rawRows
+          .filter(r => (Number(r.totalNilai) || 0) > 0 || r.item || r.komoditas || r.spesies)
+          .map((r, idx) => ({
+            id: r.id || `${lc.id}-${sId}-${idx}`,
+            label: r.item || r.komoditas || r.spesies || r.area || r.fungsiPendukung || r.namaAktivitas || `Baris ${r.no || idx + 1}`,
+            value: Number(r.totalNilai) || 0,
+            row: r,
+            serviceId: sId,
+            methodId: method,
+            biota: r._biota || biota,
+            lcId: lc.id,
+            lcName: lc.name,
+            lcAreaHa: lc.areaHa,
           }));
+
         const subtotal = items.reduce((s, i) => s + i.value, 0);
+
         return {
+          entryKey  : `${lc.id}_${sId}`,
           lcId      : lc.id,
           lcName    : lc.name,
           lcAreaHa  : lc.areaHa,
           serviceId : sId,
           serviceMeta: meta,
           method,
+          biota,
           isActive,
           itemCount : items.length,
-          items     : items.slice(0, 5),
-          hasMore   : items.length > 5,
+          items,
           subtotal,
         };
       }).filter(d => d.isActive);
@@ -592,21 +690,34 @@ const AnalyticsPageContent: React.FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
+                    activeIndex={activePieIndex !== null ? activePieIndex : undefined}
+                    activeShape={renderActiveShape}
                     data={serviceContributions}
                     cx="50%" cy="50%"
                     innerRadius={50} outerRadius={80}
                     paddingAngle={3} dataKey="nominal"
-                    animationDuration={900}
+                    animationDuration={1000}
                     animationEasing="ease-out"
+                    onMouseEnter={(_, index) => setActivePieIndex(index)}
+                    onMouseLeave={() => setActivePieIndex(null)}
                   >
                     {serviceContributions.map((s, i) => (
-                      <Cell key={i} fill={s.color} className="transition-all duration-300 hover:opacity-85 cursor-pointer" />
+                      <Cell
+                        key={i}
+                        fill={s.color}
+                        className="transition-all duration-300 hover:opacity-90 cursor-pointer"
+                      />
                     ))}
                   </Pie>
                   <Tooltip formatter={tooltipIDR} />
                   <Legend
                     verticalAlign="bottom" height={36} iconType="circle"
                     formatter={val => <span className="text-xs text-slate-600 font-medium">{val}</span>}
+                    onMouseEnter={(e: any) => {
+                      const idx = serviceContributions.findIndex(s => s.short === e.value || s.label === e.value);
+                      if (idx >= 0) setActivePieIndex(idx);
+                    }}
+                    onMouseLeave={() => setActivePieIndex(null)}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -620,16 +731,33 @@ const AnalyticsPageContent: React.FC = () => {
 
           {/* Legend breakdown */}
           <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-xs">
-            {serviceContributions.map(s => (
-              <div key={s.id} className="p-2 bg-slate-50 rounded border border-slate-200/80 hover:bg-slate-100/70 hover:border-slate-300 transition-all duration-200 flex items-start gap-2">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-0.5" style={{ backgroundColor: s.color }} />
-                <div className="min-w-0">
-                  <div className="font-semibold text-slate-800 truncate">{s.code}. {s.short}</div>
-                  <div className="font-mono text-slate-500 text-[10px]">{formatIDR(s.nominal)}</div>
+            {serviceContributions.map((s, idx) => {
+              const isSelected = activePieIndex === idx;
+              return (
+                <div
+                  key={s.id}
+                  onMouseEnter={() => setActivePieIndex(idx)}
+                  onMouseLeave={() => setActivePieIndex(null)}
+                  className={`p-2 rounded border transition-all duration-200 flex items-start gap-2 cursor-pointer ${
+                    isSelected
+                      ? 'bg-slate-100 border-slate-400 shadow-xs -translate-y-0.5 scale-[1.02]'
+                      : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100/70 hover:border-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full shrink-0 mt-0.5 transition-transform duration-200 ${
+                      isSelected ? 'scale-125' : ''
+                    }`}
+                    style={{ backgroundColor: s.color }}
+                  />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-800 truncate">{s.code}. {s.short}</div>
+                    <div className="font-mono text-slate-500 text-[10px]">{formatIDR(s.nominal)}</div>
+                  </div>
+                  <div className="ml-auto font-bold text-slate-900 shrink-0">{formatNumber(s.percentage, 1)}%</div>
                 </div>
-                <div className="ml-auto font-bold text-slate-900 shrink-0">{formatNumber(s.percentage, 1)}%</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -668,10 +796,26 @@ const AnalyticsPageContent: React.FC = () => {
                     ]}
                     labelFormatter={(label) => `Metode: ${label}`}
                   />
-                  <Bar dataKey="nominal" radius={[4, 4, 0, 0]} animationDuration={1000} animationEasing="ease-out">
-                    {methodByServiceData.map((entry, i) => (
-                      <Cell key={i} fill={entry.fill} className="transition-all duration-300 hover:opacity-85 cursor-pointer" />
-                    ))}
+                  <Bar
+                    dataKey="nominal"
+                    radius={[6, 6, 0, 0]}
+                    animationDuration={1100}
+                    animationEasing="ease-out"
+                    onMouseEnter={(entry: any) => setActiveBarMethod(entry.methodKey)}
+                    onMouseLeave={() => setActiveBarMethod(null)}
+                  >
+                    {methodByServiceData.map((entry, i) => {
+                      const isHovered = activeBarMethod === entry.methodKey;
+                      const hasHover = activeBarMethod !== null;
+                      return (
+                        <Cell
+                          key={i}
+                          fill={entry.fill}
+                          opacity={hasHover ? (isHovered ? 1 : 0.4) : 1}
+                          className="transition-all duration-300 cursor-pointer"
+                        />
+                      );
+                    })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -688,15 +832,23 @@ const AnalyticsPageContent: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 text-[10px]">
               {SERVICE_IDS.map(sId => {
                 const meta = SERVICE_META[sId];
-                const count = methodByServiceData.filter(m => m.serviceId === sId).length;
+                const matchingMethods = methodByServiceData.filter(m => m.serviceId === sId);
+                const count = matchingMethods.length;
                 if (count === 0) return null;
+                const isServiceHovered = matchingMethods.some(m => m.methodKey === activeBarMethod);
                 return (
                   <span
                     key={sId}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-medium border transition-all duration-200 hover:scale-105 cursor-default"
+                    onMouseEnter={() => {
+                      if (matchingMethods[0]) setActiveBarMethod(matchingMethods[0].methodKey);
+                    }}
+                    onMouseLeave={() => setActiveBarMethod(null)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded font-medium border transition-all duration-200 cursor-pointer ${
+                      isServiceHovered ? 'scale-105 shadow-xs brightness-110 font-bold' : 'hover:scale-105'
+                    }`}
                     style={{
-                      borderColor: `${meta.color}40`,
-                      backgroundColor: `${meta.color}10`,
+                      borderColor: `${meta.color}50`,
+                      backgroundColor: `${meta.color}15`,
                       color: meta.color,
                     }}
                   >
@@ -756,9 +908,30 @@ const AnalyticsPageContent: React.FC = () => {
               Rekap data yang telah dimasukkan pada CalculationPage — setiap jasa, metode, dan item yang digunakan.
             </p>
           </div>
-          <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded flex items-center gap-2 self-start sm:self-auto">
-            <span className="font-semibold text-slate-700">Area:</span>
-            <span>{filterLandCoverId === 'ALL' ? (filterIndexId === 'ALL' ? 'Seluruh Area' : `Indeks terpilih`) : relevantLandCovers[0]?.name} ({formatNumber(totalAreaHa, 2)} Ha)</span>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setCollapsedServices({ provisioning: false, regulating: false, supporting: false, cultural: false })}
+                className="px-2 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:bg-white rounded transition-colors cursor-pointer"
+                title="Buka semua rincian jasa"
+              >
+                Buka Semua
+              </button>
+              <span className="text-slate-300">|</span>
+              <button
+                type="button"
+                onClick={() => setCollapsedServices({ provisioning: true, regulating: true, supporting: true, cultural: true })}
+                className="px-2 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:bg-white rounded transition-colors cursor-pointer"
+                title="Ciutkan semua jasa agar minimalis"
+              >
+                Ciutkan Semua
+              </button>
+            </div>
+            <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded flex items-center gap-2">
+              <span className="font-semibold text-slate-700">Area:</span>
+              <span>{filterLandCoverId === 'ALL' ? (filterIndexId === 'ALL' ? 'Seluruh Area' : `Indeks terpilih`) : relevantLandCovers[0]?.name} ({formatNumber(totalAreaHa, 2)} Ha)</span>
+            </div>
           </div>
         </div>
 
@@ -771,13 +944,18 @@ const AnalyticsPageContent: React.FC = () => {
               const Icon = meta.icon;
               const totalItems = entries.reduce((s, e) => s + e.itemCount, 0);
               const totalVal   = entries.reduce((s, e) => s + e.subtotal, 0);
+              const isCollapsed = !!collapsedServices[sId];
 
               return (
                 <div key={sId} className={`rounded-lg border ${meta.borderClass} overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300`}>
-                  {/* Header jasa */}
-                  <div className={`px-4 py-2.5 flex items-center justify-between ${meta.bgClass} transition-colors`}>
+                  {/* Header jasa - interaktif collapse/expand */}
+                  <div
+                    onClick={() => setCollapsedServices(prev => ({ ...prev, [sId]: !prev[sId] }))}
+                    className={`px-4 py-2.5 flex items-center justify-between ${meta.bgClass} select-none cursor-pointer hover:opacity-95 transition-opacity`}
+                    title={isCollapsed ? `Klik untuk membuka rincian ${meta.label}` : `Klik untuk menciutkan ${meta.label}`}
+                  >
                     <div className="flex items-center gap-2">
-                      <Icon className={`w-4 h-4 ${meta.labelClass} transition-transform duration-300 hover:rotate-6 hover:scale-110`} />
+                      <Icon className={`w-4 h-4 ${meta.labelClass}`} />
                       <span className={`font-bold text-sm ${meta.textClass}`}>
                         {meta.code}. {meta.label}
                       </span>
@@ -785,58 +963,103 @@ const AnalyticsPageContent: React.FC = () => {
                         {totalItems} item
                       </span>
                     </div>
-                    <span className={`font-mono font-bold text-sm ${meta.textClass}`}>
-                      {formatIDR(totalVal)}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className={`font-mono font-bold text-sm ${meta.textClass}`}>
+                        {formatIDR(totalVal)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCollapsedServices(prev => ({ ...prev, [sId]: !prev[sId] }));
+                        }}
+                        className={`p-1.5 rounded-md text-slate-600 hover:text-slate-900 bg-white/80 hover:bg-white border ${meta.borderClass} shadow-2xs transition-all cursor-pointer flex items-center gap-1.5`}
+                        title={isCollapsed ? `Buka rincian ${meta.label}` : `Ciutkan ${meta.label}`}
+                      >
+                        <span className="text-[10px] font-semibold hidden sm:inline px-0.5">
+                          {isCollapsed ? 'Buka' : 'Ciutkan'}
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`} />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Per land cover */}
-                  <div className="divide-y divide-slate-100">
-                    {entries.map((entry, eIdx) => (
-                      <div key={eIdx} className="px-4 py-3 bg-white">
-                        <div className="flex items-center justify-between mb-2 text-xs">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="font-semibold text-slate-700">{entry.lcName}</span>
-                            <span className="text-slate-400">{formatNumber(entry.lcAreaHa, 2)} Ha</span>
+                  {/* Per land cover (tampil jika tidak dicollapse) */}
+                  {!isCollapsed && (
+                    <div className="divide-y divide-slate-100">
+                      {entries.map((entry, eIdx) => {
+                      const isExpanded = !!expandedLandCovers[entry.entryKey];
+                      const displayItems = isExpanded ? entry.items : entry.items.slice(0, 5);
+                      const hasMore = entry.items.length > 5;
+
+                      return (
+                        <div key={eIdx} className="px-4 py-3 bg-white">
+                          <div className="flex items-center justify-between mb-2 text-xs">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="font-semibold text-slate-700">{entry.lcName}</span>
+                              <span className="text-slate-400">{formatNumber(entry.lcAreaHa, 2)} Ha</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-[10px] font-medium border border-slate-200">
+                                Metode: {entry.method || '—'}
+                              </span>
+                              <span className="font-mono font-bold text-slate-800 text-xs">
+                                {formatIDR(entry.subtotal)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-[10px] font-medium border border-slate-200">
-                              Metode: {entry.method || '—'}
-                            </span>
-                            <span className="font-mono font-bold text-slate-800 text-xs">
-                              {formatIDR(entry.subtotal)}
-                            </span>
-                          </div>
+
+                          {entry.itemCount > 0 ? (
+                            <div className="space-y-1">
+                              {displayItems.map((item, iIdx) => (
+                                <div
+                                  key={item.id || iIdx}
+                                  onClick={() => setSelectedRowDetail(item)}
+                                  className="flex items-center justify-between text-[11px] bg-slate-50 hover:bg-blue-50/80 hover:border-blue-300 border border-slate-100 rounded-md px-2.5 py-2 transition-all duration-150 cursor-pointer group/row"
+                                  title={`Klik untuk melihat detail kalkulasi & parameter ${item.label}`}
+                                >
+                                  <div className="flex items-center gap-2 truncate max-w-[65%]">
+                                    <span className="text-slate-400 group-hover/row:text-blue-600 font-mono text-[10px] w-4 shrink-0">
+                                      {iIdx + 1}.
+                                    </span>
+                                    <span className="text-slate-700 group-hover/row:text-blue-900 font-medium truncate">
+                                      {item.label}
+                                    </span>
+                                    {item.biota && item.biota !== 'none' && (
+                                      <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200/70 text-slate-600 capitalize shrink-0">
+                                        {item.biota}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="font-mono text-slate-800 group-hover/row:text-blue-950 font-semibold">
+                                      {formatIDR(item.value)}
+                                    </span>
+                                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover/row:text-blue-600 transition-transform group-hover/row:translate-x-0.5" />
+                                  </div>
+                                </div>
+                              ))}
+
+                              {hasMore && (
+                                <div
+                                  onClick={() => setExpandedLandCovers(prev => ({ ...prev, [entry.entryKey]: !isExpanded }))}
+                                  className="w-full text-[11px] text-blue-600 hover:text-blue-800 font-medium text-center py-1.5 rounded hover:bg-blue-50/60 cursor-pointer transition-colors select-none"
+                                >
+                                  {isExpanded
+                                    ? '▲ Sembunyikan sebagian'
+                                    : `▼ +${entry.items.length - 5} objek lainnya (klik untuk melihat)`}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-slate-400 italic">Belum ada data input untuk area ini.</div>
+                          )}
                         </div>
-
-                        {entry.itemCount > 0 ? (
-                          <div className="space-y-1">
-                            {entry.items.map((item, iIdx) => (
-                              <div
-                                key={iIdx}
-                                className="flex items-center justify-between text-[11px] bg-slate-50 hover:bg-slate-100/90 rounded px-2.5 py-1.5 transition-all duration-200 hover:translate-x-1"
-                              >
-                                <span className="text-slate-700 font-medium truncate max-w-[60%]" title={item.label}>
-                                  {iIdx + 1}. {item.label}
-                                </span>
-                                <span className="font-mono text-slate-800 font-semibold shrink-0">
-                                  {formatIDR(item.value)}
-                                </span>
-                              </div>
-                            ))}
-                            {entry.hasMore && (
-                              <div className="text-[10px] text-slate-400 text-center pt-1">
-                                + {entry.items.length > 5 ? '…' : ''} (tampilkan di CalculationPage)
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-[11px] text-slate-400 italic">Belum ada data input untuk area ini.</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                      );
+                    })}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1174,6 +1397,187 @@ const AnalyticsPageContent: React.FC = () => {
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
+
+      {/* ── MODAL DETAIL BARIS OBJEK VALUASI ────────────────────────────── */}
+      {selectedRowDetail && typeof document !== 'undefined' && createPortal((() => {
+        const item = selectedRowDetail;
+        const meta = SERVICE_META[item.serviceId];
+        const Icon = meta.icon;
+        const schema = getMethodSchema(item.serviceId, item.methodId, item.biota);
+        const r = item.row;
+
+        return (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+            onClick={() => setSelectedRowDetail(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-[94vw] max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-150 my-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header Modal */}
+              <div className={`px-6 py-4 border-b border-slate-200 flex items-start justify-between ${meta.bgClass}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`p-2.5 rounded-xl bg-white shadow-2xs border ${meta.borderClass} shrink-0 mt-0.5`}>
+                    <Icon className={`w-5 h-5 ${meta.labelClass}`} />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${meta.labelClass} bg-white/80 border ${meta.borderClass}`}>
+                        {meta.code}. {meta.label}
+                      </span>
+                      {item.biota && item.biota !== 'none' && (
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          {item.biota}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-600 bg-white/80 px-2 py-0.5 rounded border border-slate-200">
+                        {item.lcName} ({formatNumber(item.lcAreaHa, 2)} Ha)
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 mt-1">
+                      {item.label}
+                    </h3>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Metode: <strong>{schema?.methodName || item.methodId || 'Standard'}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedRowDetail(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition-colors cursor-pointer shrink-0"
+                  title="Tutup"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Nilai Utama KPI Card */}
+              <div className="px-6 py-4 bg-slate-50/70 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-500 font-medium">Total Nilai Ekonomi Objek:</span>
+                  <div className="text-xl font-mono font-bold text-blue-950 mt-1">
+                    {formatIDR(item.value)}
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">per tahun pada area {item.lcName}</span>
+                </div>
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-500 font-medium">Metode &amp; Formula:</span>
+                  <div className="text-xs font-semibold text-slate-800 mt-1">
+                    {schema?.methodName || item.methodId || 'Standard'}
+                  </div>
+                  <p className="text-[10px] text-blue-700 font-mono mt-1 line-clamp-2">
+                    {schema?.formulaDescription || 'Total = Nilai Satuan × Kuantitas'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Rincian Parameter Tabel */}
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
+                    <TableProperties className="w-4 h-4 text-slate-400" />
+                    <span>Rincian Parameter &amp; Variabel Perhitungan</span>
+                  </h4>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-[11px]">
+                        <tr>
+                          <th className="py-2.5 px-4">Parameter / Kolom</th>
+                          <th className="py-2.5 px-4 text-right w-48">Nilai / Input</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {schema?.columns
+                          ?.filter(col => col.key !== 'no' && col.key !== 'id')
+                          ?.map(col => {
+                            const val = r[col.key];
+                            const isCurrency = col.isTotal || col.key === 'totalNilai' || col.key.toLowerCase().includes('harga') || col.key.toLowerCase().includes('biaya');
+
+                            return (
+                              <tr
+                                key={col.key}
+                                className={col.isTotal ? 'bg-blue-50/50 font-bold' : 'hover:bg-slate-50/70 transition-colors'}
+                              >
+                                <td className="py-2.5 px-4 text-slate-700">
+                                  <div className="font-medium">
+                                    {col.label} {col.unit ? <span className="text-slate-400 font-normal text-[11px]">({col.unit})</span> : null}
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-mono">{col.key}</span>
+                                </td>
+                                <td className={`py-2.5 px-4 text-right ${col.isTotal ? 'font-mono font-bold text-blue-900 text-sm' : 'text-slate-800'}`}>
+                                  {isCurrency
+                                    ? formatIDR(Number(val) || 0)
+                                    : col.type === 'number'
+                                    ? formatNumber(Number(val) || 0)
+                                    : (val !== undefined && val !== null && String(val).trim() !== '' ? String(val) : '—')}
+                                </td>
+                              </tr>
+                            );
+                          })}
+
+                        {/* Jika ada kolom extra di luar skema standar */}
+                        {Object.entries(r)
+                          .filter(([k]) => !['id', 'no', '_biota', 'createdAt', 'updatedAt'].includes(k) && !schema?.columns?.some(c => c.key === k))
+                          .map(([k, val]) => (
+                            <tr key={k} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="py-2.5 px-4 text-slate-700">
+                                <div className="font-medium capitalize">{k.replace(/([A-Z])/g, ' $1')}</div>
+                                <span className="text-[10px] text-slate-400 font-mono">{k}</span>
+                              </td>
+                              <td className="py-2.5 px-4 text-right text-slate-800">
+                                {typeof val === 'number' ? formatNumber(val) : String(val || '—')}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Info Box Formula */}
+                {schema?.formulaDescription && (
+                  <div className="p-3 bg-blue-50/60 border border-blue-200/80 rounded-lg text-xs text-blue-900 flex items-start gap-2">
+                    <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold block">Model Matematika / Rumus:</span>
+                      <span className="font-mono text-[11px] text-blue-800">{schema.formulaDescription}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Modal */}
+              <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetArea = item.lcId;
+                    const targetService = item.serviceId;
+                    setSelectedRowDetail(null);
+                    navigate(`/peneliti/projects/${effectiveProjId}/valuation-data?area=${targetArea}&service=${targetService}`);
+                  }}
+                  className="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1.5 cursor-pointer underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Buka di Halaman Data Valuasi</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedRowDetail(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-lg text-xs transition-colors cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
     </div>
   );
 };
