@@ -105,7 +105,7 @@ const AnalyticsPageContent: React.FC = () => {
         if (m && m !== filterMethod) return sum;
       }
       const m = cfg?.selectedMethods ? cfg.selectedMethods[sId] : undefined;
-      const sub = getServiceSubtotal(effectiveProjId, lc.id, sId, m || '', sId === 'provisioning' ? (cfg?.biota || 'flora') : undefined);
+      const sub = getServiceSubtotal(effectiveProjId, lc.id, sId, m || '', sId === 'provisioning' ? (cfg?.biota || 'flora') : 'none');
       if (sub > 0) return sum + sub;
 
       // Fallback to pre-calculated serviceDetails if available on polygon

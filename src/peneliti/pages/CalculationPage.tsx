@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from '../context/ProjectContext';
 import { useSpreadsheet } from '../context/SpreadsheetContext';
 import { getMethodSchema } from '../types/methodSchemas';
@@ -19,7 +19,13 @@ import {
   ShieldCheck,
   TreePine,
   Sparkles,
-  Compass
+  Compass,
+  Filter,
+  Bookmark,
+  CheckSquare,
+  Square,
+  RotateCcw,
+  Check
 } from 'lucide-react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
@@ -31,12 +37,18 @@ interface RowFormulaBreakdown {
   formulaText: string;
   resultValue: number;
   source: string;
-  areaName?: string;
+  areaId: string;
+  areaName: string;
+  areaHa: number;
+  indexCode: string;
+  indexName: string;
+  methodName: string;
+  formulaDescription: string;
 }
 
 const CalculationPageContent: React.FC = () => {
   const params = useParams<{ projectId?: string }>();
-  const { projects, activeProject, activeProjectId, setActiveProjectId, landCovers, getAreaConfig } = useProject();
+  const { projects, activeProject, activeProjectId, setActiveProjectId, landCovers, indices, getAreaConfig } = useProject();
   const { getServiceSubtotal, getGrandTotalForArea, getRows } = useSpreadsheet();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -53,27 +65,167 @@ const CalculationPageContent: React.FC = () => {
     }
   }, [params.projectId, activeProjectId, projects, setActiveProjectId]);
 
-  // Area filter: 'ALL' or specific landcover id
-  const selectedAreaId = searchParams.get('area') || 'ALL';
+  // List of unique indices associated with the project's land covers
+  const availableIndices = useMemo(() => {
+    const map = new Map<string, {
+      code: string;
+      name: string;
+      id: string;
+      landCoverIds: string[];
+      totalAreaHa: number;
+    }>();
 
-  const handleSelectArea = (areaId: string) => {
-    if (areaId === 'ALL') {
+    // 1. Populate from indices registered in project
+    (indices || []).forEach(idx => {
+      if (!idx.code) return;
+      map.set(idx.code, {
+        code: idx.code,
+        name: idx.name || idx.code,
+        id: String(idx.id),
+        landCoverIds: [],
+        totalAreaHa: 0,
+      });
+    });
+
+    // 2. Correlate with project land covers
+    landCovers.forEach(lc => {
+      const code = lc.indexCode || 'NON-INDEX';
+      const existing = map.get(code);
+      if (existing) {
+        if (!existing.landCoverIds.includes(lc.id)) {
+          existing.landCoverIds.push(lc.id);
+          existing.totalAreaHa += lc.areaHa || 0;
+        }
+      } else {
+        map.set(code, {
+          code,
+          name: lc.indexName || (code === 'NON-INDEX' ? 'Tanpa Indeks' : code),
+          id: lc.indexId || code,
+          landCoverIds: [lc.id],
+          totalAreaHa: lc.areaHa || 0,
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [indices, landCovers]);
+
+  // Read URL area parameter if any
+  const urlArea = searchParams.get('area');
+
+  // Multi-select state: array of selected index codes and selected land cover IDs
+  const [selectedIndexCodes, setSelectedIndexCodes] = useState<string[]>([]);
+  const [selectedLandCoverIds, setSelectedLandCoverIds] = useState<string[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Initialize selection when land covers or activeProjectId change
+  useEffect(() => {
+    if (landCovers.length > 0) {
+      if (urlArea && urlArea !== 'ALL') {
+        const matched = landCovers.find(lc => lc.id === urlArea);
+        if (matched) {
+          setSelectedLandCoverIds([matched.id]);
+          setSelectedIndexCodes(matched.indexCode ? [matched.indexCode] : []);
+          setIsInitialized(true);
+          return;
+        }
+      }
+      // Default: select all
+      setSelectedIndexCodes(availableIndices.map(i => i.code));
+      setSelectedLandCoverIds(landCovers.map(lc => lc.id));
+      setIsInitialized(true);
+    }
+  }, [activeProjectId, landCovers, availableIndices, urlArea]);
+
+  // Handlers for index selection toggle
+  const handleToggleIndex = (indexCode: string) => {
+    const isCurrentlySelected = selectedIndexCodes.includes(indexCode);
+    const indexInfo = availableIndices.find(i => i.code === indexCode);
+    const relatedLcIds = indexInfo ? indexInfo.landCoverIds : [];
+
+    if (isCurrentlySelected) {
+      // Deselect index and all its land covers
+      setSelectedIndexCodes(prev => prev.filter(c => c !== indexCode));
+      setSelectedLandCoverIds(prev => prev.filter(id => !relatedLcIds.includes(id)));
+    } else {
+      // Select index and all its land covers
+      setSelectedIndexCodes(prev => [...prev, indexCode]);
+      setSelectedLandCoverIds(prev => Array.from(new Set([...prev, ...relatedLcIds])));
+    }
+
+    if (searchParams.has('area')) {
       searchParams.delete('area');
       setSearchParams(searchParams);
-    } else {
-      setSearchParams({ area: areaId });
     }
   };
+
+  // Handlers for land cover selection toggle
+  const handleToggleLandCover = (lcId: string) => {
+    const isCurrentlySelected = selectedLandCoverIds.includes(lcId);
+    let nextLcIds: string[];
+
+    if (isCurrentlySelected) {
+      nextLcIds = selectedLandCoverIds.filter(id => id !== lcId);
+    } else {
+      nextLcIds = [...selectedLandCoverIds, lcId];
+    }
+    setSelectedLandCoverIds(nextLcIds);
+
+    // Sync parent index states: an index is selected if at least one of its land covers is selected
+    const nextIndexCodes = availableIndices
+      .filter(idx => idx.landCoverIds.some(id => nextLcIds.includes(id)))
+      .map(idx => idx.code);
+    setSelectedIndexCodes(nextIndexCodes);
+
+    if (searchParams.has('area')) {
+      searchParams.delete('area');
+      setSearchParams(searchParams);
+    }
+  };
+
+  const handleSelectAll = () => {
+    setSelectedIndexCodes(availableIndices.map(i => i.code));
+    setSelectedLandCoverIds(landCovers.map(lc => lc.id));
+    if (searchParams.has('area')) {
+      searchParams.delete('area');
+      setSearchParams(searchParams);
+    }
+  };
+
+  const handleClearAll = () => {
+    setSelectedIndexCodes([]);
+    setSelectedLandCoverIds([]);
+    if (searchParams.has('area')) {
+      searchParams.delete('area');
+      setSearchParams(searchParams);
+    }
+  };
+
+  const handleSelectAllIndices = () => {
+    handleSelectAll();
+  };
+
+  const handleClearIndices = () => {
+    handleClearAll();
+  };
+
+  const handleSelectAllLandCovers = () => {
+    handleSelectAll();
+  };
+
+  const handleClearLandCovers = () => {
+    handleClearAll();
+  };
+
+  const isAllSelected = selectedLandCoverIds.length === landCovers.length && landCovers.length > 0;
 
   // Active modal state for [ Lihat Detail Perhitungan ]
   const [detailModalService, setDetailModalService] = useState<EcosystemServiceId | null>(null);
 
   // Filtered land covers based on selected scope
-  const targetLandCovers = selectedAreaId === 'ALL'
-    ? landCovers
-    : landCovers.filter(lc => lc.id === selectedAreaId);
-
-  const currentArea = landCovers.find(lc => lc.id === selectedAreaId);
+  const targetLandCovers = useMemo(() => {
+    return landCovers.filter(lc => selectedLandCoverIds.includes(lc.id));
+  }, [landCovers, selectedLandCoverIds]);
 
   // Total Luas in scope
   const totalLuasScope = targetLandCovers.reduce((s, c) => s + c.areaHa, 0);
@@ -85,28 +237,29 @@ const CalculationPageContent: React.FC = () => {
   const provTotal = targetLandCovers.reduce((sum, lc) => {
     const cfg = getAreaConfig(lc.id);
     if (!cfg.activeServices.provisioning) return sum;
-    const sub = getServiceSubtotal(activeProjectId, lc.id, 'provisioning', cfg.selectedMethods.provisioning, 'flora');
-    return sum + sub;
+    const subFlora = getServiceSubtotal(activeProjectId, lc.id, 'provisioning', cfg.selectedMethods.provisioning, 'flora');
+    const subFauna = getServiceSubtotal(activeProjectId, lc.id, 'provisioning', cfg.selectedMethods.provisioning, 'fauna');
+    return sum + subFlora + subFauna;
   }, 0);
 
   const regTotal = targetLandCovers.reduce((sum, lc) => {
     const cfg = getAreaConfig(lc.id);
     if (!cfg.activeServices.regulating) return sum;
-    const sub = getServiceSubtotal(activeProjectId, lc.id, 'regulating', cfg.selectedMethods.regulating);
+    const sub = getServiceSubtotal(activeProjectId, lc.id, 'regulating', cfg.selectedMethods.regulating, 'none');
     return sum + sub;
   }, 0);
 
   const suppTotal = targetLandCovers.reduce((sum, lc) => {
     const cfg = getAreaConfig(lc.id);
     if (!cfg.activeServices.supporting) return sum;
-    const sub = getServiceSubtotal(activeProjectId, lc.id, 'supporting', cfg.selectedMethods.supporting);
+    const sub = getServiceSubtotal(activeProjectId, lc.id, 'supporting', cfg.selectedMethods.supporting, 'none');
     return sum + sub;
   }, 0);
 
   const cultTotal = targetLandCovers.reduce((sum, lc) => {
     const cfg = getAreaConfig(lc.id);
     if (!cfg.activeServices.cultural) return sum;
-    const sub = getServiceSubtotal(activeProjectId, lc.id, 'cultural', cfg.selectedMethods.cultural);
+    const sub = getServiceSubtotal(activeProjectId, lc.id, 'cultural', cfg.selectedMethods.cultural, 'none');
     return sum + sub;
   }, 0);
 
@@ -119,7 +272,7 @@ const CalculationPageContent: React.FC = () => {
   }, 0);
 
   // Representative method schemas
-  const refAreaId = selectedAreaId !== 'ALL' ? selectedAreaId : (landCovers[0]?.id || 'lc-01');
+  const refAreaId = targetLandCovers[0]?.id || landCovers[0]?.id || 'lc-01';
   const refConfig = getAreaConfig(refAreaId);
 
   const provSchema = getMethodSchema('provisioning', refConfig.selectedMethods.provisioning, 'flora');
@@ -133,7 +286,12 @@ const CalculationPageContent: React.FC = () => {
       const cfg = getAreaConfig(lc.id);
       if (!cfg.activeServices[serviceId]) return acc;
       const mId = cfg.selectedMethods[serviceId];
-      const r = getRows(activeProjectId, lc.id, serviceId, mId, serviceId === 'provisioning' ? 'flora' : undefined);
+      if (serviceId === 'provisioning') {
+        const rf = getRows(activeProjectId, lc.id, serviceId, mId, 'flora');
+        const rfa = getRows(activeProjectId, lc.id, serviceId, mId, 'fauna');
+        return acc + rf.length + rfa.length;
+      }
+      const r = getRows(activeProjectId, lc.id, serviceId, mId, 'none');
       return acc + r.length;
     }, 0);
   };
@@ -147,7 +305,24 @@ const CalculationPageContent: React.FC = () => {
       if (!cfg.activeServices[serviceId]) return;
 
       const mId = cfg.selectedMethods[serviceId];
-      const rawRows = getRows(activeProjectId, lc.id, serviceId, mId, serviceId === 'provisioning' ? 'flora' : undefined);
+      const schema = getMethodSchema(
+        serviceId,
+        mId,
+        serviceId === 'provisioning' ? 'flora' : 'none'
+      );
+
+      const matchingIdx = (indices || []).find(
+        idx => idx.id === lc.indexId || idx.code === lc.indexCode || idx.name === lc.indexName
+      );
+      const indexCode = lc.indexCode || matchingIdx?.code || 'NON-INDEX';
+      const indexName = matchingIdx?.name || lc.indexName || (indexCode === 'NON-INDEX' ? 'Tanpa Indeks' : `Indeks ${indexCode}`);
+
+      const rawRows = serviceId === 'provisioning'
+        ? [
+            ...getRows(activeProjectId, lc.id, serviceId, mId, 'flora'),
+            ...getRows(activeProjectId, lc.id, serviceId, mId, 'fauna')
+          ]
+        : getRows(activeProjectId, lc.id, serviceId, mId, 'none');
 
       rawRows.forEach((r, idx) => {
         let params = '';
@@ -155,20 +330,19 @@ const CalculationPageContent: React.FC = () => {
         const total = Number(r.totalNilai) || 0;
 
         if (serviceId === 'provisioning') {
-          if (mId === 'effect-on-production') {
+          if (mId === 'effect-production') {
             const q = Number(r.outputQty) || 0;
             const p = Number(r.hargaOutput) || 0;
             const c = Number(r.biayaTambahan) || 0;
             params = `Output: ${formatNumber(q)} kg | Margin: Rp ${formatNumber(Math.max(0, p - c))}`;
             formulaText = `${formatNumber(q)} kg × (Rp ${formatNumber(p)} - Rp ${formatNumber(c)}) = ${formatIDR(total)}`;
           } else {
-            // Market Price Flora
+            // Market Price (Flora/Fauna)
             const prod = Number(r.produktivitas) || 0;
             const luas = Number(r.luasHa) || lc.areaHa;
             const harga = Number(r.hargaUnit) || 0;
-            const vol = Number(r.jumlah) || (prod * luas);
-            params = `Prod: ${formatNumber(prod)} m³/ha | Luas: ${formatNumber(luas)} ha | Harga: Rp ${formatNumber(harga)}/m³`;
-            formulaText = `${formatNumber(prod)} m³/ha × ${formatNumber(luas)} ha × Rp ${formatNumber(harga)} = ${formatIDR(total)}`;
+            params = `Prod: ${formatNumber(prod)} kg/ha | Luas: ${formatNumber(luas)} ha | Harga: Rp ${formatNumber(harga)}/kg`;
+            formulaText = `${formatNumber(prod)} kg/ha × ${formatNumber(luas)} ha × Rp ${formatNumber(harga)} = ${formatIDR(total)}`;
           }
         } else if (serviceId === 'regulating') {
           if (mId === 'carbon-storage') {
@@ -177,39 +351,59 @@ const CalculationPageContent: React.FC = () => {
             const harga = Number(r.hargaKarbon) || 0;
             params = `Stok: ${formatNumber(c)} ton C/ha | Luas: ${formatNumber(luas)} ha | Harga: Rp ${formatNumber(harga)}/ton`;
             formulaText = `${formatNumber(c)} ton C/ha × ${formatNumber(luas)} ha × 3.67 (CO₂e) × Rp ${formatNumber(harga)} = ${formatIDR(total)}`;
-          } else if (mId === 'damage-cost') {
-            const prob = Number(r.probabilitas) || 0;
+          } else if (mId === 'avoided-cost') {
             const aset = Number(r.nilaiAset) || 0;
-            params = `Probabilitas: ${prob}% | Nilai Aset: Rp ${formatNumber(aset)}`;
-            formulaText = `${prob}% × Rp ${formatNumber(aset)} = ${formatIDR(total)}`;
+            const prob = Number(r.probabilitasBencana) || 0;
+            params = `Nilai Aset: Rp ${formatNumber(aset)} | Probabilitas: ${prob}`;
+            formulaText = `Rp ${formatNumber(aset)} × ${prob} = ${formatIDR(total)}`;
+          } else if (mId === 'hpm') {
+            const unit = Number(r.jumlahUnit) || 0;
+            const premi = Number(r.hargaLingkungan) || 0;
+            params = `Unit: ${formatNumber(unit)} | Premi: Rp ${formatNumber(premi)}/unit`;
+            formulaText = `${formatNumber(unit)} unit × Rp ${formatNumber(premi)} = ${formatIDR(total)}`;
           } else {
-            // Replacement Cost
+            // Replacement Cost (default)
             const pjg = Number(r.panjangUnit) || 0;
             const bPengganti = Number(r.biayaPengganti) || 0;
             const bMaint = Number(r.biayaPemeliharaan) || 0;
-            params = `Panjang: ${formatNumber(pjg)} m | Biaya: Rp ${formatNumber(bPengganti)}/m | Maint: Rp ${formatNumber(bMaint)}`;
+            params = `Panjang: ${formatNumber(pjg)} m | Biaya Seawall: Rp ${formatNumber(bPengganti)}/m | Maint: Rp ${formatNumber(bMaint)}`;
             formulaText = `(${formatNumber(pjg)} m × Rp ${formatNumber(bPengganti)}) + Rp ${formatNumber(bMaint)} = ${formatIDR(total)}`;
           }
         } else if (serviceId === 'supporting') {
-          const luas = Number(r.luasHa) || lc.areaHa;
-          const k = Number(r.kontribusiPerHa) || 0;
-          const ef = Number(r.efektivitas) || 100;
-          params = `Luas: ${formatNumber(luas)} ha | Kontribusi: Rp ${formatNumber(k)}/ha | Efektivitas: ${ef}%`;
-          formulaText = `${formatNumber(luas)} ha × Rp ${formatNumber(k)}/ha × (${ef}%) = ${formatIDR(total)}`;
+          if (mId === 'nutrient-cycling') {
+            const laju = Number(r.lajuSedimentasi) || 0;
+            const luas = Number(r.luasHa) || lc.areaHa;
+            const nilai = Number(r.nilaiKonservasi) || 0;
+            params = `Laju: ${formatNumber(laju)} ton/ha/th | Luas: ${formatNumber(luas)} ha | Nilai: Rp ${formatNumber(nilai)}/ton`;
+            formulaText = `${formatNumber(laju)} ton/ha/th × ${formatNumber(luas)} ha × Rp ${formatNumber(nilai)} = ${formatIDR(total)}`;
+          } else {
+            // Nursery Ground (default)
+            const luas = Number(r.luasHa) || lc.areaHa;
+            const k = Number(r.kontribusiPerHa) || 0;
+            const ef = Number(r.efektivitas) || 100;
+            params = `Luas: ${formatNumber(luas)} ha | Nilai Rekrutmen: Rp ${formatNumber(k)}/ha | Kerapatan: ${ef}%`;
+            formulaText = `${formatNumber(luas)} ha × Rp ${formatNumber(k)}/ha × (${ef}/100) = ${formatIDR(total)}`;
+          }
         } else if (serviceId === 'cultural') {
           if (mId === 'cvm') {
             const pop = Number(r.populasi) || 0;
             const wtp = Number(r.wtp) || 0;
             const bProg = Number(r.biayaProgram) || 0;
-            params = `Populasi: ${formatNumber(pop)} KK | WTP: Rp ${formatNumber(wtp)}/KK | Biaya: Rp ${formatNumber(bProg)}`;
+            params = `Populasi: ${formatNumber(pop)} KK | WTP: Rp ${formatNumber(wtp)}/KK/th | Biaya: Rp ${formatNumber(bProg)}`;
             formulaText = `(${formatNumber(pop)} KK × Rp ${formatNumber(wtp)}) - Rp ${formatNumber(bProg)} = ${formatIDR(total)}`;
           } else if (mId === 'choice-experiment') {
             const resp = Number(r.responden) || 0;
-            const mwtp = Number(r.mwtp) || 0;
-            params = `Responden: ${formatNumber(resp)} | MWTP: Rp ${formatNumber(mwtp)}`;
-            formulaText = `${formatNumber(resp)} responden × Rp ${formatNumber(mwtp)} = ${formatIDR(total)}`;
+            const mwtp = Number(r.nilaiMarginal) || 0;
+            const biayaSkema = Number(r.biayaSkema) || 0;
+            params = `Responden: ${formatNumber(resp)} | Nilai Marginal: Rp ${formatNumber(mwtp)} | Biaya Skema: Rp ${formatNumber(biayaSkema)}`;
+            formulaText = `${formatNumber(resp)} × Rp ${formatNumber(mwtp)} - Rp ${formatNumber(biayaSkema)} = ${formatIDR(total)}`;
+          } else if (mId === 'hpm') {
+            const unit = Number(r.jumlahUnit) || 0;
+            const premi = Number(r.hargaLingkungan) || 0;
+            params = `Unit: ${formatNumber(unit)} | Premi: Rp ${formatNumber(premi)}/unit`;
+            formulaText = `${formatNumber(unit)} unit × Rp ${formatNumber(premi)} = ${formatIDR(total)}`;
           } else {
-            // TCM
+            // TCM (default)
             const q = Number(r.kunjungan) || 0;
             const bp = Number(r.biayaPerjalanan) || 0;
             const bt = Number(r.biayaTiket) || 0;
@@ -225,7 +419,13 @@ const CalculationPageContent: React.FC = () => {
           formulaText,
           resultValue: total,
           source: r.source || r.dasarRujukan || 'Survei & Rujukan PKSPL',
+          areaId: lc.id,
           areaName: lc.name,
+          areaHa: lc.areaHa,
+          indexCode,
+          indexName,
+          methodName: schema.methodName,
+          formulaDescription: schema.formulaDescription,
         });
       });
     });
@@ -233,7 +433,14 @@ const CalculationPageContent: React.FC = () => {
     return breakdownList;
   };
 
-  // 4 Cards configuration
+  // Determine which services are active in the current scope
+  // For ALL areas: service shown if active in at least one area
+  // For specific area: service shown only if active in that area
+  const isServiceActiveInScope = (serviceId: EcosystemServiceId): boolean => {
+    return targetLandCovers.some(lc => getAreaConfig(lc.id).activeServices[serviceId]);
+  };
+
+  // 4 Cards configuration — only include active services
   const calculationCards = [
     {
       id: 'provisioning' as EcosystemServiceId,
@@ -244,7 +451,7 @@ const CalculationPageContent: React.FC = () => {
       bgColor: 'bg-cyan-50/30',
       icon: TreePine,
       method: provSchema.methodName,
-      formulaSnippet: 'Total = Produktivitas (m³/ha) × Luas (ha) × Harga Unit (Rp)',
+      formulaSnippet: provSchema.formulaDescription,
       subtotal: provTotal,
       rowCount: getRowCount('provisioning'),
       type: 'Direct Use Value',
@@ -258,7 +465,7 @@ const CalculationPageContent: React.FC = () => {
       bgColor: 'bg-blue-50/30',
       icon: ShieldCheck,
       method: regSchema.methodName,
-      formulaSnippet: 'Total = (Panjang Pantai × Biaya Tanggul) + Pemeliharaan / Stok C',
+      formulaSnippet: regSchema.formulaDescription,
       subtotal: regTotal,
       rowCount: getRowCount('regulating'),
       type: 'Indirect Use Value',
@@ -272,7 +479,7 @@ const CalculationPageContent: React.FC = () => {
       bgColor: 'bg-purple-50/30',
       icon: Coins,
       method: suppSchema.methodName,
-      formulaSnippet: 'Total = Luas Habitat (ha) × Kontribusi Ekologis (Rp/ha) × Efektivitas',
+      formulaSnippet: suppSchema.formulaDescription,
       subtotal: suppTotal,
       rowCount: getRowCount('supporting'),
       type: 'Ecosystem Function',
@@ -286,12 +493,12 @@ const CalculationPageContent: React.FC = () => {
       bgColor: 'bg-amber-50/30',
       icon: Compass,
       method: cultSchema.methodName,
-      formulaSnippet: 'Total = Kunjungan (org/th) × (Biaya Travel + Tiket Masuk)',
+      formulaSnippet: cultSchema.formulaDescription,
       subtotal: cultTotal,
       rowCount: getRowCount('cultural'),
       type: 'Direct & Option Value',
     }
-  ];
+  ].filter(card => isServiceActiveInScope(card.id));
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
@@ -314,7 +521,7 @@ const CalculationPageContent: React.FC = () => {
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
           <button
-            onClick={() => navigate(`/peneliti/projects/${activeProjectId}/valuation-data${selectedAreaId !== 'ALL' ? `?area=${selectedAreaId}` : ''}`)}
+            onClick={() => navigate(`/peneliti/projects/${activeProjectId}/valuation-data${targetLandCovers.length === 1 ? `?area=${targetLandCovers[0].id}` : ''}`)}
             className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4 text-slate-500" />
@@ -348,37 +555,241 @@ const CalculationPageContent: React.FC = () => {
         </div>
 
         <button
-          onClick={() => navigate(`/peneliti/projects/${activeProjectId}/valuation-data${selectedAreaId !== 'ALL' ? `?area=${selectedAreaId}` : ''}`)}
+          onClick={() => navigate(`/peneliti/projects/${activeProjectId}/valuation-data${targetLandCovers.length === 1 ? `?area=${targetLandCovers[0].id}` : ''}`)}
           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded text-xs transition-colors whitespace-nowrap self-start sm:self-auto cursor-pointer shadow-2xs"
         >
           Buka Data Valuasi
         </button>
       </div>
 
-      {/* 3. Scope & Area Selector */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-blue-600" />
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-            Cakupan Analisis Area:
-          </span>
+      {/* 3. Scope & Area Multi-Select Filter (Filter Indeks lalu Filter Tutupan Lahan) */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+        {/* Filter Card Header */}
+        <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
+              <Filter className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Cakupan Analisis Area & Filter Bertingkat:
+                </span>
+                {isAllSelected ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>Semua Area ({formatNumber(projectTotalLuas)} ha)</span>
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-bold border border-blue-200">
+                    Filter Kustom: {targetLandCovers.length} Tutupan Lahan ({formatNumber(totalLuasScope)} ha)
+                  </span>
+                )}
+              </div>
+              <p className="text-[11.5px] text-slate-500 mt-0.5">
+                Pilih satu atau beberapa indeks dan tutupan lahan untuk menghitung subtotal dan TEV secara otomatis.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                isAllSelected
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>Pilih Semua Area</span>
+            </button>
+
+            {!isAllSelected && (
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1"
+                title="Reset ke Semua Area"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedAreaId}
-            onChange={(e) => handleSelectArea(e.target.value)}
-            className="text-xs bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-          >
-            <option value="ALL">
-              🌍 Semua Area — Agregasi Menyeluruh Proyek ({formatNumber(projectTotalLuas)} ha)
-            </option>
-            {landCovers.map((lc) => (
-              <option key={lc.id} value={lc.id}>
-                📍 {lc.name} ({formatNumber(lc.areaHa)} ha) — {lc.indexCode}
-              </option>
-            ))}
-          </select>
+        {/* 2-Column Responsive Layout: Filter Indeks -> Filter Tutupan Lahan */}
+        <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
+          {/* Kolom 1: Filter Indeks */}
+          <div className="space-y-3 lg:pr-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                <Bookmark className="w-4 h-4 text-blue-600" />
+                <span>1. Filter Indeks (Bisa Multi-Select)</span>
+                <span className="text-[11px] font-normal text-slate-500">
+                  ({selectedIndexCodes.length}/{availableIndices.length} terpilih)
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px]">
+                <button
+                  type="button"
+                  onClick={handleSelectAllIndices}
+                  className="text-blue-600 hover:underline font-semibold cursor-pointer"
+                >
+                  Pilih Semua
+                </button>
+                <span className="text-slate-300">•</span>
+                <button
+                  type="button"
+                  onClick={handleClearIndices}
+                  className="text-slate-500 hover:underline cursor-pointer"
+                >
+                  Kosongkan
+                </button>
+              </div>
+            </div>
+
+            {/* List of indices */}
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {availableIndices.map((idx) => {
+                const isSelected = selectedIndexCodes.includes(idx.code);
+                return (
+                  <div
+                    key={idx.code}
+                    onClick={() => handleToggleIndex(idx.code)}
+                    className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'bg-blue-50/80 border-blue-300 text-blue-950 font-semibold shadow-2xs'
+                        : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 opacity-80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                        isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="truncate">
+                        <span className="font-mono font-bold text-blue-700 mr-2">{idx.code}</span>
+                        <span className="text-slate-900 truncate">{idx.name}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 text-[11px] font-mono text-slate-500">
+                      <span>{idx.landCoverCount} Tutupan</span>
+                      <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">
+                        {formatNumber(idx.totalAreaHa)} ha
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {availableIndices.length === 0 && (
+                <div className="text-center py-4 text-xs text-slate-400">
+                  Tidak ada indeks terdaftar pada proyek ini.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Kolom 2: Filter Tutupan Lahan */}
+          <div className="space-y-3 pt-4 lg:pt-0 lg:pl-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                <Layers className="w-4 h-4 text-emerald-600" />
+                <span>2. Filter Tutupan Lahan (Bisa Multi-Select)</span>
+                <span className="text-[11px] font-normal text-slate-500">
+                  ({selectedLandCoverIds.length}/{landCovers.length} terpilih)
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px]">
+                <button
+                  type="button"
+                  onClick={handleSelectAllLandCovers}
+                  className="text-blue-600 hover:underline font-semibold cursor-pointer"
+                >
+                  Pilih Semua
+                </button>
+                <span className="text-slate-300">•</span>
+                <button
+                  type="button"
+                  onClick={handleClearLandCovers}
+                  className="text-slate-500 hover:underline cursor-pointer"
+                >
+                  Kosongkan
+                </button>
+              </div>
+            </div>
+
+            {/* List of land covers */}
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {landCovers.map((lc) => {
+                const isSelected = selectedLandCoverIds.includes(lc.id);
+                return (
+                  <div
+                    key={lc.id}
+                    onClick={() => handleToggleLandCover(lc.id)}
+                    className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950 font-semibold shadow-2xs'
+                        : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 opacity-80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                        isSelected ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="truncate">
+                        <span className="text-slate-900 truncate">{lc.name}</span>
+                        <span className="ml-2 font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                          {lc.indexCode || 'NON-INDEX'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 text-[11px] font-mono text-slate-500">
+                      <span className="capitalize text-[10.5px] text-slate-400">
+                        {lc.type.replace('_', ' ')}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200 font-bold text-slate-700">
+                        {formatNumber(lc.areaHa)} ha
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {landCovers.length === 0 && (
+                <div className="text-center py-4 text-xs text-slate-400">
+                  Tidak ada tutupan lahan terdaftar pada proyek ini.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Live Active Filter Summary Footer */}
+        <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-slate-600 flex-wrap">
+            <span className="font-semibold text-slate-700">Ringkasan Seleksi:</span>
+            <span className="font-mono font-bold text-blue-700">{targetLandCovers.length}</span> Tutupan Lahan
+            <span className="text-slate-300">•</span>
+            <span className="font-mono font-bold text-indigo-700">{selectedIndexCodes.length}</span> Indeks
+            <span className="text-slate-300">•</span>
+            <span className="font-mono font-bold text-emerald-700">{formatNumber(totalLuasScope)}</span> ha
+            <span className="text-slate-300">•</span>
+            <span className="text-slate-500">
+              ({projectTotalLuas > 0 ? ((totalLuasScope / projectTotalLuas) * 100).toFixed(1) : 0}% dari Luas Proyek)
+            </span>
+          </div>
+          <div className="flex items-center gap-2 font-mono text-xs">
+            <span className="text-slate-500 font-sans">Subtotal TEV Terpilih:</span>
+            <strong className="text-blue-900 font-bold text-sm bg-blue-100/70 px-2 py-0.5 rounded">
+              {formatIDR(tevScope)}
+            </strong>
+          </div>
         </div>
       </div>
 
@@ -390,13 +801,15 @@ const CalculationPageContent: React.FC = () => {
             <div className="text-xs font-bold uppercase tracking-wider text-blue-300 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-300" />
               <span>
-                {selectedAreaId === 'ALL'
+                {isAllSelected
                   ? 'Grand Total Economic Value (TEV) — Seluruh Kawasan Proyek'
-                  : `Total Economic Value (TEV) — ${currentArea?.name}`}
+                  : targetLandCovers.length === 1
+                  ? `Total Economic Value (TEV) — ${targetLandCovers[0]?.name}`
+                  : `Total Economic Value (TEV) — Filter Kustom (${targetLandCovers.length} Tutupan Lahan, ${selectedIndexCodes.length} Indeks)`}
               </span>
             </div>
             <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-blue-200 text-xs font-mono">
-              {targetLandCovers.length} Area Spasial
+              {targetLandCovers.length} Tutupan Lahan ({selectedIndexCodes.length} Indeks)
             </span>
           </div>
 
@@ -426,7 +839,7 @@ const CalculationPageContent: React.FC = () => {
               <div>
                 <span className="opacity-70">Total Variabel:</span>{' '}
                 <strong className="text-white font-mono">
-                  {getRowCount('provisioning') + getRowCount('regulating') + getRowCount('supporting') + getRowCount('cultural')} baris
+                  {calculationCards.reduce((sum, card) => sum + card.rowCount, 0)} baris
                 </strong>
               </div>
             </div>
@@ -436,21 +849,22 @@ const CalculationPageContent: React.FC = () => {
           <div className="pt-3 border-t border-white/10 flex flex-wrap items-center gap-2 text-xs font-mono text-blue-200">
             <span className="font-bold text-white">TEV</span>
             <span>=</span>
-            <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-cyan-200">
-              Direct ({formatIDR(provTotal)})
-            </span>
-            <span>+</span>
-            <span className="bg-blue-500/20 px-2 py-0.5 rounded text-blue-200">
-              Indirect ({formatIDR(regTotal)})
-            </span>
-            <span>+</span>
-            <span className="bg-purple-500/20 px-2 py-0.5 rounded text-purple-200">
-              Supporting ({formatIDR(suppTotal)})
-            </span>
-            <span>+</span>
-            <span className="bg-amber-500/20 px-2 py-0.5 rounded text-amber-200">
-              Cultural ({formatIDR(cultTotal)})
-            </span>
+            {calculationCards.map((card, idx) => (
+              <React.Fragment key={card.id}>
+                {idx > 0 && <span>+</span>}
+                <span className={`px-2 py-0.5 rounded ${
+                  card.id === 'provisioning' ? 'bg-cyan-500/20 text-cyan-200' :
+                  card.id === 'regulating'   ? 'bg-blue-500/20 text-blue-200' :
+                  card.id === 'supporting'   ? 'bg-purple-500/20 text-purple-200' :
+                                              'bg-amber-500/20 text-amber-200'
+                }`}>
+                  {card.category} ({formatIDR(card.subtotal)})
+                </span>
+              </React.Fragment>
+            ))}
+            {calculationCards.length === 0 && (
+              <span className="text-blue-300 italic">Belum ada jasa yang diaktifkan</span>
+            )}
           </div>
         </div>
       </div>
@@ -571,23 +985,27 @@ const CalculationPageContent: React.FC = () => {
                 const areaTotal = getGrandTotalForArea(activeProjectId, lc.id, cfg.activeServices, cfg.selectedMethods, 'flora');
                 const percent = projectGrandTEV > 0 ? ((areaTotal / projectGrandTEV) * 100).toFixed(1) : '0.0';
                 const activeServiceList = (Object.keys(cfg.activeServices) as (keyof typeof cfg.activeServices)[]).filter(s => cfg.activeServices[s]);
-                const isSelected = selectedAreaId === lc.id;
+                const isSelected = selectedLandCoverIds.includes(lc.id);
 
                 return (
                   <tr
                     key={lc.id}
-                    className={`hover:bg-blue-50/40 transition-colors ${isSelected ? 'bg-blue-50/60 font-semibold' : ''}`}
+                    className={`hover:bg-blue-50/40 transition-colors ${isSelected ? 'bg-blue-50/60 font-semibold' : 'opacity-70'}`}
                   >
                     <td className="py-3 px-4 font-semibold text-slate-900">
-                      <div className="flex items-center gap-1.5">
-                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>}
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition-colors ${
+                          isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
+                        }`}>
+                          {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                        </div>
                         <span>{lc.name}</span>
                       </div>
-                      <div className="text-[11px] text-slate-400 font-normal capitalize">
+                      <div className="text-[11px] text-slate-400 font-normal capitalize ml-5">
                         {lc.type.replace('_', ' ')}
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-mono font-semibold text-blue-700">{lc.indexCode}</td>
+                    <td className="py-3 px-4 font-mono font-semibold text-blue-700">{lc.indexCode || 'NON-INDEX'}</td>
                     <td className="py-3 px-4 text-right font-mono">{formatNumber(lc.areaHa)}</td>
                     <td className="py-3 px-4 text-slate-600">
                       <div className="flex flex-wrap gap-1">
@@ -606,20 +1024,61 @@ const CalculationPageContent: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-center">
                       <button
-                        onClick={() => handleSelectArea(isSelected ? 'ALL' : lc.id)}
-                        className={`text-[11px] px-2 py-1 rounded font-semibold cursor-pointer ${
+                        onClick={() => handleToggleLandCover(lc.id)}
+                        className={`text-[11px] px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors flex items-center justify-center gap-1 mx-auto ${
                           isSelected
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
                         }`}
                       >
-                        {isSelected ? 'Reset Filter' : 'Filter Area'}
+                        {isSelected ? 'Terpilih' : '+ Sertakan'}
                       </button>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr className="bg-blue-50/80 border-t-2 border-blue-200 font-bold text-slate-900 text-xs">
+                <td className="py-3 px-4" colSpan={2}>
+                  Subtotal Area Terpilih ({targetLandCovers.length} Tutupan Lahan)
+                </td>
+                <td className="py-3 px-4 text-right font-mono">
+                  {formatNumber(totalLuasScope)}
+                </td>
+                <td></td>
+                <td className="py-3 px-4 text-right font-mono text-blue-900 font-extrabold text-sm">
+                  {formatIDR(tevScope)}
+                </td>
+                <td className="py-3 px-4 text-right font-mono text-blue-900 font-bold">
+                  {projectGrandTEV > 0 ? ((tevScope / projectGrandTEV) * 100).toFixed(1) : '0.0'}%
+                </td>
+                <td className="py-3 px-4 text-center">
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-[10px] text-blue-600 hover:underline font-semibold cursor-pointer"
+                  >
+                    Pilih Semua
+                  </button>
+                </td>
+              </tr>
+              <tr className="bg-slate-800 text-white font-bold text-xs">
+                <td className="py-3 px-4" colSpan={2}>
+                  Grand Total Seluruh Proyek ({landCovers.length} Tutupan Lahan)
+                </td>
+                <td className="py-3 px-4 text-right font-mono">
+                  {formatNumber(projectTotalLuas)}
+                </td>
+                <td></td>
+                <td className="py-3 px-4 text-right font-mono text-emerald-400 font-extrabold text-sm">
+                  {formatIDR(projectGrandTEV)}
+                </td>
+                <td className="py-3 px-4 text-right font-mono text-emerald-400">
+                  100%
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -645,29 +1104,97 @@ const CalculationPageContent: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* 8. MODAL DETAIL PERHITUNGAN (Formula Breakdown Per Row) */}
+      {/* 8. MODAL DETAIL PERHITUNGAN (Formula Breakdown Per Tutupan Lahan) */}
       {/* ========================================================================= */}
       {detailModalService && (() => {
         const activeCard = calculationCards.find(c => c.id === detailModalService);
         const breakdownRows = getBreakdownRows(detailModalService);
         const totalBreakdown = breakdownRows.reduce((acc, r) => acc + r.resultValue, 0);
 
+        // Kelompokkan baris berdasarkan Indeks, lalu di dalam indeks dikelompokkan berdasarkan Tutupan Lahan
+        interface LandCoverGroup {
+          areaId: string;
+          areaName: string;
+          areaHa: number;
+          methodName: string;
+          formulaDescription: string;
+          rows: RowFormulaBreakdown[];
+          subtotal: number;
+        }
+
+        interface IndexGroup {
+          indexCode: string;
+          indexName: string;
+          landCovers: LandCoverGroup[];
+          subtotal: number;
+          totalHa: number;
+        }
+
+        const groupedByIndex: IndexGroup[] = [];
+
+        breakdownRows.forEach(row => {
+          let idxGroup = groupedByIndex.find(g => g.indexCode === row.indexCode);
+          if (!idxGroup) {
+            idxGroup = {
+              indexCode: row.indexCode,
+              indexName: row.indexName,
+              landCovers: [],
+              subtotal: 0,
+              totalHa: 0,
+            };
+            groupedByIndex.push(idxGroup);
+          }
+          idxGroup.subtotal += row.resultValue;
+
+          let lcGroup = idxGroup.landCovers.find(l => l.areaId === row.areaId);
+          if (!lcGroup) {
+            lcGroup = {
+              areaId: row.areaId,
+              areaName: row.areaName,
+              areaHa: row.areaHa,
+              methodName: row.methodName,
+              formulaDescription: row.formulaDescription,
+              rows: [],
+              subtotal: 0,
+            };
+            idxGroup.landCovers.push(lcGroup);
+            idxGroup.totalHa += row.areaHa;
+          }
+          lcGroup.rows.push(row);
+          lcGroup.subtotal += row.resultValue;
+        });
+
+        // Nomor baris global
+        let globalRowNo = 0;
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-[90vw] max-w-[90vw] max-h-[92vh] flex flex-col overflow-hidden border border-slate-200">
               {/* Modal Header */}
               <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600">
                     <Calculator className="w-4 h-4" />
-                    <span>Breakdown Formula Matematis Per Baris</span>
+                    <span>Breakdown Formula Matematis Per Indeks & Tutupan Lahan</span>
                   </div>
                   <h3 className="text-base md:text-lg font-bold text-slate-900 mt-0.5">
                     {activeCard?.category} ({activeCard?.nameId})
                   </h3>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    Metode: <strong>{activeCard?.method}</strong> • Cakupan:{' '}
-                    <strong>{selectedAreaId === 'ALL' ? 'Semua Area Proyek' : currentArea?.name}</strong>
+                  <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span>
+                      Cakupan:{' '}
+                      <strong>
+                        {isAllSelected ? 'Semua Area Proyek' : `${targetLandCovers.length} Tutupan Lahan Terpilih`}
+                      </strong>
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold text-[11px]">
+                      {groupedByIndex.length} Indeks
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold text-[11px]">
+                      {breakdownRows.length} Komponen Dihitung
+                    </span>
                   </div>
                 </div>
 
@@ -679,24 +1206,11 @@ const CalculationPageContent: React.FC = () => {
                 </button>
               </div>
 
-              {/* Scientific Formula Schema Header */}
-              <div className="px-6 py-3 bg-blue-50/60 border-b border-blue-100 flex items-center justify-between flex-wrap gap-2 text-xs font-mono text-blue-900">
-                <div>
-                  <span className="font-bold text-slate-700 font-sans text-xs mr-2">Formula Perhitungan:</span>
-                  <span className="bg-white px-2.5 py-1 rounded border border-blue-200 font-semibold">
-                    {activeCard?.formulaSnippet}
-                  </span>
-                </div>
-                <div className="text-[11px] text-blue-700 font-sans">
-                  Nilai dihitung otomatis tanpa pembulatan prematur
-                </div>
-              </div>
-
-              {/* Rows Breakdown Table */}
+              {/* Rows Breakdown Table — grouped by Index then by Land Cover */}
               <div className="p-6 overflow-y-auto space-y-4 flex-1">
                 {breakdownRows.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 text-xs">
-                    Belum ada baris data yang dimasukkan untuk jasa ini pada area yang dipilih.
+                    Belum ada baris data yang dimasukkan untuk jasa ini pada indeks / tutupan lahan yang dipilih.
                   </div>
                 ) : (
                   <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
@@ -705,49 +1219,157 @@ const CalculationPageContent: React.FC = () => {
                         <tr className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200 text-[11px] uppercase">
                           <th className="py-3 px-3 w-10 text-center">No</th>
                           <th className="py-3 px-4 min-w-[200px]">Komponen / Spesies</th>
-                          {selectedAreaId === 'ALL' && <th className="py-3 px-3 w-28">Area Spasial</th>}
-                          <th className="py-3 px-4 min-w-[240px]">Penjabaran Rumus Matematis</th>
+                          <th className="py-3 px-4 min-w-[260px]">Penjabaran Rumus Matematis</th>
                           <th className="py-3 px-4 text-right min-w-[160px]">Subtotal (Rp)</th>
                           <th className="py-3 px-4 min-w-[150px]">Dasar Rujukan</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {breakdownRows.map((row) => (
-                          <tr key={row.no} className="hover:bg-slate-50/70">
-                            <td className="py-3 px-3 text-center font-mono text-slate-400">{row.no}</td>
-                            <td className="py-3 px-4 font-semibold text-slate-900">
-                              {row.item}
-                              <div className="text-[10.5px] text-slate-500 font-normal font-mono mt-0.5">
-                                {row.parameters}
-                              </div>
-                            </td>
-                            {selectedAreaId === 'ALL' && (
-                              <td className="py-3 px-3 text-slate-600 text-[11px]">
-                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                                  {row.areaName}
-                                </span>
-                              </td>
-                            )}
-                            <td className="py-3 px-4">
-                              <span className="font-mono text-[11px] bg-slate-50 text-blue-900 px-2.5 py-1 rounded border border-slate-200 inline-block font-semibold">
-                                {row.formulaText}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                              {formatIDR(row.resultValue)}
-                            </td>
-                            <td className="py-3 px-4 text-slate-500 text-[11px] italic">
-                              {row.source}
-                            </td>
-                          </tr>
-                        ))}
+                      <tbody>
+                        {groupedByIndex.map((idxGroup) => {
+                          const percentOfIndexTotal = totalBreakdown > 0
+                            ? ((idxGroup.subtotal / totalBreakdown) * 100).toFixed(1)
+                            : '0.0';
+
+                          return (
+                            <React.Fragment key={idxGroup.indexCode}>
+                              {/* 1. Header Indeks */}
+                              <tr className="bg-slate-800 text-white font-bold text-xs border-t-2 border-slate-900">
+                                <td colSpan={5} className="py-3 px-4">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                      <Bookmark className="w-4 h-4 text-blue-400" />
+                                      <span className="font-mono bg-blue-500/20 text-blue-200 px-2.5 py-0.5 rounded border border-blue-400/30 font-bold text-[11px]">
+                                        {idxGroup.indexCode}
+                                      </span>
+                                      <span className="text-sm font-bold tracking-tight text-white">
+                                        {idxGroup.indexName}
+                                      </span>
+                                      <span className="text-slate-300 font-normal text-[11px] ml-1">
+                                        ({idxGroup.landCovers.length} Tutupan Lahan • {formatNumber(idxGroup.totalHa)} ha)
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs font-mono">
+                                      <span className="text-slate-300 font-sans text-[11px]">
+                                        Kontribusi: {percentOfIndexTotal}%
+                                      </span>
+                                      <span className="text-emerald-300 font-bold text-xs bg-white/10 px-2.5 py-1 rounded border border-white/15">
+                                        Subtotal Indeks: {formatIDR(idxGroup.subtotal)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* 2. Tutupan Lahan di dalam Indeks */}
+                              {idxGroup.landCovers.map((lcGroup) => {
+                                const percentOfLc = idxGroup.subtotal > 0
+                                  ? ((lcGroup.subtotal / idxGroup.subtotal) * 100).toFixed(1)
+                                  : '0.0';
+
+                                return (
+                                  <React.Fragment key={`${idxGroup.indexCode}-${lcGroup.areaId}`}>
+                                    {/* Heading Tutupan Lahan dengan Formula Perhitungan tersemat */}
+                                    <tr className="bg-slate-100/90 border-y border-slate-300 text-slate-800 font-semibold text-xs">
+                                      <td colSpan={5} className="py-2.5 px-4">
+                                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+                                          <div className="flex items-center gap-2">
+                                            <Layers className="w-3.5 h-3.5 text-emerald-700" />
+                                            <span className="font-bold text-slate-900 tracking-wide text-xs">
+                                              Tutupan Lahan: {lcGroup.areaName}
+                                            </span>
+                                            <span className="text-slate-500 font-mono text-[11px]">
+                                              ({formatNumber(lcGroup.areaHa)} ha • {lcGroup.rows.length} komponen)
+                                            </span>
+                                          </div>
+
+                                          {/* Formula Perhitungan dipindahkan di sini */}
+                                          <div className="flex items-center gap-2.5 flex-wrap">
+                                            <div className="flex items-center gap-1.5 bg-white border border-blue-200 px-2.5 py-1 rounded-md text-blue-900 font-mono text-[11px] shadow-2xs">
+                                              <span className="font-sans font-bold text-blue-700 text-[10px] uppercase">
+                                                Formula Perhitungan:
+                                              </span>
+                                              <span className="font-semibold text-blue-950">
+                                                {lcGroup.formulaDescription}
+                                              </span>
+                                            </div>
+                                            <span className="text-[11px] font-mono text-slate-700 bg-slate-200/80 px-2 py-0.5 rounded font-semibold">
+                                              Subtotal: {formatIDR(lcGroup.subtotal)} ({percentOfLc}%)
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+
+                                    {/* Baris Komponen di dalam Tutupan Lahan ini */}
+                                    {lcGroup.rows.map((row) => {
+                                      globalRowNo += 1;
+                                      return (
+                                        <tr
+                                          key={`${idxGroup.indexCode}-${lcGroup.areaId}-${row.no}`}
+                                          className="hover:bg-slate-50/80 border-b border-slate-100 transition-colors"
+                                        >
+                                          <td className="py-3 px-3 text-center font-mono text-slate-400">
+                                            {globalRowNo}
+                                          </td>
+                                          <td className="py-3 px-4 font-semibold text-slate-900">
+                                            {row.item}
+                                            {row.parameters && (
+                                              <div className="text-[10.5px] text-slate-500 font-normal font-mono mt-0.5">
+                                                {row.parameters}
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td className="py-3 px-4">
+                                            <span className="font-mono text-[11px] bg-slate-50 text-blue-900 px-2.5 py-1 rounded border border-slate-200 inline-block font-semibold">
+                                              {row.formulaText}
+                                            </span>
+                                          </td>
+                                          <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                                            {formatIDR(row.resultValue)}
+                                          </td>
+                                          <td className="py-3 px-4 text-slate-500 text-[11px] italic">
+                                            {row.source}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+
+                                    {/* Subtotal per Tutupan Lahan */}
+                                    <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700">
+                                      <td colSpan={3} className="py-2 px-4 text-right font-sans">
+                                        Subtotal Tutupan Lahan ({lcGroup.areaName}):
+                                      </td>
+                                      <td className="py-2 px-4 text-right font-mono font-bold text-slate-900">
+                                        {formatIDR(lcGroup.subtotal)}
+                                      </td>
+                                      <td></td>
+                                    </tr>
+                                  </React.Fragment>
+                                );
+                              })}
+
+                              {/* Subtotal per Indeks jika ada lebih dari 1 tutupan lahan */}
+                              {idxGroup.landCovers.length > 1 && (
+                                <tr className="bg-slate-200/70 border-b-2 border-slate-300 text-xs font-bold text-slate-900">
+                                  <td colSpan={3} className="py-2.5 px-4 text-right">
+                                    Total Nilai Indeks {idxGroup.indexCode} ({idxGroup.indexName}):
+                                  </td>
+                                  <td className="py-2.5 px-4 text-right font-mono font-extrabold text-blue-950">
+                                    {formatIDR(idxGroup.subtotal)}
+                                  </td>
+                                  <td></td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold text-xs">
-                          <td colSpan={selectedAreaId === 'ALL' ? 4 : 3} className="py-3 px-4 text-right text-slate-700">
-                            Total Subtotal {activeCard?.nameId}:
+                        <tr className="bg-slate-900 text-white font-bold text-xs">
+                          <td colSpan={3} className="py-3.5 px-4 text-right">
+                            Grand Total — {activeCard?.category} ({activeCard?.nameId}) ({groupedByIndex.length} Indeks • {breakdownRows.length} Komponen):
                           </td>
-                          <td className="py-3 px-4 text-right font-mono text-sm text-blue-900">
+                          <td className="py-3.5 px-4 text-right font-mono text-sm text-emerald-400 font-extrabold">
                             {formatIDR(totalBreakdown)}
                           </td>
                           <td></td>
@@ -765,7 +1387,7 @@ const CalculationPageContent: React.FC = () => {
                   <button
                     onClick={() => {
                       setDetailModalService(null);
-                      navigate(`/peneliti/projects/${activeProjectId}/valuation-data?area=${selectedAreaId !== 'ALL' ? selectedAreaId : 'lc-01'}&service=${detailModalService}`);
+                      navigate(`/peneliti/projects/${activeProjectId}/valuation-data${targetLandCovers.length === 1 ? `?area=${targetLandCovers[0].id}` : ''}&service=${detailModalService}`);
                     }}
                     className="text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
                   >

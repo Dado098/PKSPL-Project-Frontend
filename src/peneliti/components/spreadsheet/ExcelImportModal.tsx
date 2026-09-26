@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { validateAndParseExcel, ParseResult, DetectedCustomColumn } from '../../utils/excelEngine';
 import { SpreadsheetRow } from '../../types/spreadsheet';
+import { getMethodSchema } from '../../types/methodSchemas';
 import { formatIDR } from '../../utils/formatter';
 import {
   UploadCloud,
@@ -17,7 +18,9 @@ import {
 interface ExcelImportModalProps {
   isOpen: boolean;
   onClose: () => void;
+  serviceId?: string;
   serviceName: string;
+  methodId?: string;
   methodName: string;
   categoryName?: string;
   onConfirmImport: (validRows: any[], newCustomColumns?: DetectedCustomColumn[]) => void;
@@ -26,9 +29,11 @@ interface ExcelImportModalProps {
 export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
   isOpen,
   onClose,
+  serviceId,
   serviceName,
+  methodId,
   methodName,
-  categoryName = 'Flora',
+  categoryName,
   onConfirmImport,
 }) => {
   const [file, setFile] = useState<File | null>(null);
@@ -38,7 +43,13 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 
   if (!isOpen) return null;
 
-  const expectedTemplateName = `${serviceName}_${methodName}_${categoryName}.xlsx`;
+  const resolvedService = serviceId || serviceName;
+  const resolvedMethod = methodId || methodName;
+  const resolvedCategory = categoryName || (resolvedService.toLowerCase().includes('provisioning') ? 'Flora' : 'General');
+
+  const schema = getMethodSchema(resolvedService, resolvedMethod, resolvedCategory.toLowerCase());
+  const expectedTemplateName = schema?.templateFileName || `${serviceName}_${methodName}_${resolvedCategory}.xlsx`;
+  const systemCols = (schema?.columns || []).filter(c => c.key !== 'no');
 
   const handleProcessFile = async (uploadedFile: File) => {
     setFile(uploadedFile);
@@ -49,9 +60,9 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
     try {
       const parseRes = await validateAndParseExcel(
         uploadedFile,
-        serviceName,
-        methodName,
-        categoryName
+        resolvedService,
+        resolvedMethod,
+        resolvedCategory
       );
       setResult(parseRes);
     } catch (err: any) {
@@ -66,7 +77,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
     if (f) handleProcessFile(f);
   };
 
-  // Demo Simulation: simulate correct template upload with 48 rows (46 valid, 2 error) + 2 custom columns
+  // Demo Simulation: simulate correct template upload using current method schema + custom columns
   const handleSimulateValidImport = () => {
     setLoading(true);
     setTimeout(() => {
@@ -75,37 +86,46 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
         { key: 'c_tanggal_survei', label: 'Tanggal Survei', type: 'date' }
       ];
 
-      // Mock 48 rows: 46 valid, 2 with errors
+      // Base rows from schema initial rows or generated rows
+      const baseSamples = (schema?.initialRows && schema.initialRows.length > 0)
+        ? schema.initialRows
+        : [
+            schema.defaultNewRow(1, 79.86),
+            schema.defaultNewRow(2, 79.86)
+          ];
+
       const validRows: any[] = [];
       const allRows: any[] = [];
       const errors = [
-        { row: 14, column: 'Harga/Unit', message: 'Harga unit tidak boleh 0 atau kosong' },
-        { row: 32, column: 'Jenis Flora', message: 'Nama jenis komoditas flora tidak boleh kosong' },
+        { row: 14, column: systemCols[0]?.label || 'Item', message: `${systemCols[0]?.label || 'Nama Item'} tidak boleh kosong` },
       ];
 
-      for (let i = 1; i <= 48; i++) {
+      const totalSimRows = 16;
+      for (let i = 1; i <= totalSimRows; i++) {
         const isErr14 = i === 14;
-        const isErr32 = i === 32;
-        const hasErr = isErr14 || isErr32;
+        const sampleIdx = (i - 1) % baseSamples.length;
+        const baseRow = { ...baseSamples[sampleIdx] };
 
         const row: Record<string, any> = {
+          ...baseRow,
           id: `IMP-SIM-${i}`,
           no: i,
-          item: isErr32 ? '' : `Spesies Tegakan ${i} (${i % 2 === 0 ? 'Rhizophora' : 'Bruguiera'})`,
-          produktivitas: Number((20 + (i % 15) * 1.8).toFixed(2)),
-          satuan: 'm³/ha',
-          hargaUnit: isErr14 ? 0 : 1500000 + (i * 25000),
-          jumlah: Number((79.86 * (20 + (i % 15) * 1.8)).toFixed(2)),
-          luasHa: 79.86,
-          totalNilai: isErr14 ? 0 : Math.round(79.86 * (20 + (i % 15) * 1.8) * (1500000 + (i * 25000))),
-          source: 'Survei Lapangan Terpadu 2025',
-          c_lokasi_sampel: `Stasiun ${1 + (i % 5)} - Teluk Benoa`,
+          item: isErr14 ? '' : (baseRow.item ? `${baseRow.item} #${i}` : `Data Komponen ${i}`),
+          luasHa: baseRow.luasHa ?? 79.86,
+          source: baseRow.source || 'Survei Lapangan Terpadu 2025',
+          c_lokasi_sampel: `Stasiun ${1 + (i % 4)} - Area Riset`,
           c_tanggal_survei: '2025-05-12',
-          status: hasErr ? 'invalid' : 'valid',
-          validationError: isErr14 ? 'Harga unit bernilai 0' : isErr32 ? 'Nama jenis kosong' : undefined
+          status: isErr14 ? 'invalid' : 'valid',
+          validationError: isErr14 ? `${systemCols[0]?.label || 'Item'} kosong` : undefined
         };
 
-        if (hasErr) {
+        const calc = schema.calculateRow(row);
+        row.totalNilai = isErr14 ? 0 : calc.total;
+        if (calc.quantity !== undefined) {
+          row.jumlah = calc.quantity;
+        }
+
+        if (isErr14) {
           allRows.push({ ...row, hasError: true, errorMsg: row.validationError });
         } else {
           validRows.push(row);
@@ -115,13 +135,13 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 
       setResult({
         isCompatible: true,
-        totalRows: 48,
-        validRowsCount: 46,
-        errorRowsCount: 2,
+        totalRows: totalSimRows,
+        validRowsCount: validRows.length,
+        errorRowsCount: errors.length,
         errors,
         validRows,
         allRowsPreview: allRows,
-        systemColumnsCount: 7,
+        systemColumnsCount: systemCols.length,
         detectedCustomColumns
       });
       setFile(new File([''], expectedTemplateName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
@@ -129,13 +149,13 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
     }, 600);
   };
 
-  // Demo Simulation: simulate wrong template upload (e.g. Regulating file uploaded in Provisioning)
+  // Demo Simulation: simulate wrong template upload
   const handleSimulateMismatchImport = () => {
     setLoading(true);
     setTimeout(() => {
       setResult({
         isCompatible: false,
-        mismatchReason: `File tidak sesuai dengan data ${serviceName}. Silakan gunakan template ${serviceName}.`,
+        mismatchReason: `File ini terdeteksi bukan untuk metode "${schema?.methodName || methodName}". Silakan gunakan template resmi "${expectedTemplateName}".`,
         totalRows: 0,
         validRowsCount: 0,
         errorRowsCount: 0,
@@ -145,7 +165,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
         systemColumnsCount: 0,
         detectedCustomColumns: []
       });
-      setFile(new File([''], 'Regulating_ReplacementCost.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      setFile(new File([''], 'File_Metode_Lain.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
       setLoading(false);
     }, 500);
   };
@@ -159,13 +179,33 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-2xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-lg border border-slate-200 shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden text-sm">
+      <div className="bg-white rounded-lg border border-slate-200 shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden text-sm">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">Import Data Spreadsheet Excel</h3>
-            <div className="text-xs text-slate-500 mt-0.5">
-              Target Konteks: <strong className="text-blue-700">{serviceName} → {methodName} → {categoryName}</strong>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-slate-800 text-sm">Import Data Spreadsheet Excel</h3>
+              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                {schema?.methodName || methodName}
+              </span>
+            </div>
+            <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+              <span>Target Konteks:</span>
+              <strong className="text-slate-800 font-semibold">{serviceName}</strong>
+              <span className="text-slate-300">•</span>
+              <strong className="text-blue-700 font-semibold">{schema?.methodName || methodName}</strong>
+              {categoryName && categoryName !== 'General' && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
+                    categoryName.toLowerCase() === 'fauna'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                      : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  }`}>
+                    {categoryName}
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded transition-colors cursor-pointer">
@@ -175,14 +215,56 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-5 flex-1 overflow-y-auto space-y-4">
-          {/* Context Notice */}
-          <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-md text-xs text-blue-800 flex items-start gap-2.5">
-            <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <strong>Validasi Konteks Ketat:</strong> Sistem hanya menerima file template dengan struktur resmi:
-              <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 ml-1 font-bold">
-                {expectedTemplateName}
-              </span>
+          {/* Method Context Card */}
+          <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-blue-950 text-xs">
+                    Metode Valuasi: {schema?.methodName || methodName}
+                  </div>
+                  <div className="text-[11px] text-blue-800 mt-0.5">
+                    {schema?.subtitle}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-[10px] text-slate-500 block">Template Resmi:</span>
+                <span className="font-mono bg-white px-2 py-0.5 rounded border border-blue-200 font-bold text-blue-900 text-[11px]">
+                  {expectedTemplateName}
+                </span>
+              </div>
+            </div>
+
+            {schema?.formulaDescription && (
+              <div className="pt-2 border-t border-blue-200/80 text-[11px] text-blue-900 flex items-center gap-1.5">
+                <span className="font-semibold text-blue-950">Rumus Kalkulasi:</span>
+                <code className="bg-white/80 px-2 py-0.5 rounded border border-blue-200/60 font-mono text-blue-800 text-[10px]">
+                  {schema.formulaDescription}
+                </code>
+              </div>
+            )}
+
+            {/* Expected Columns Pill List */}
+            <div className="pt-2 border-t border-blue-200/80">
+              <div className="text-[10px] font-semibold text-blue-950 mb-1">
+                Struktur Kolom Sesuai Metode ({systemCols.length} Kolom):
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {systemCols.map((c) => (
+                  <span
+                    key={c.key}
+                    className={`px-2 py-0.5 rounded text-[10px] border ${
+                      c.isTotal || c.type === 'readonly_calculated'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {c.label} {c.unit ? `(${c.unit})` : ''}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -198,10 +280,10 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
             <label htmlFor="excel-file-input" className="cursor-pointer flex flex-col items-center">
               <UploadCloud className="w-9 h-9 text-blue-600 mb-1.5" />
               <span className="text-xs font-semibold text-slate-800">
-                Pilih atau seret file spreadsheet (.xlsx) ke sini
+                Pilih atau seret berkas {expectedTemplateName} ke sini
               </span>
               <span className="text-[11px] text-slate-500 mt-0.5">
-                Pastikan template diunduh dari halaman ini
+                Format didukung: spreadsheet Excel (.xlsx) dengan baris metadata resmi
               </span>
             </label>
 
@@ -214,14 +296,14 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
                 className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <Sparkles className="w-3 h-3 text-emerald-600" />
-                Simulasi File Sesuai + Custom Kolom
+                Simulasi File Sesuai Metode
               </button>
               <button
                 type="button"
                 onClick={handleSimulateMismatchImport}
                 className="px-2.5 py-1 rounded bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
               >
-                Simulasi File Salah
+                Simulasi Mismatch Metode
               </button>
             </div>
           </div>
@@ -229,7 +311,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
           {loading && (
             <div className="p-4 bg-slate-50 border border-slate-200 rounded text-center text-xs text-slate-600 flex items-center justify-center gap-2">
               <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              <span>Menganalisis metadata template, tipe data, kolom sistem, dan kolom custom...</span>
+              <span>Menganalisis metadata template, tipe data, dan mencocokkan rumus metode {schema?.methodName}...</span>
             </div>
           )}
 
@@ -331,55 +413,84 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
               )}
 
               {/* Table Preview */}
-              <div className="border border-slate-200 rounded-md overflow-hidden max-h-56 overflow-y-auto text-xs">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-100 text-slate-700 sticky top-0 font-semibold border-b border-slate-200 text-[11px]">
-                    <tr>
-                      <th className="py-2 px-2.5 w-12 text-center">No</th>
-                      <th className="py-2 px-2.5">Jenis {categoryName}</th>
-                      <th className="py-2 px-2.5 text-right">Produktivitas</th>
-                      <th className="py-2 px-2.5 text-right">Harga Unit (Rp)</th>
-                      {result.detectedCustomColumns?.map((col) => (
-                        <th key={col.key} className="py-2 px-2.5 bg-purple-50 text-purple-900">
-                          {col.label} <span className="text-[9px] font-normal text-purple-600">(Custom)</span>
-                        </th>
-                      ))}
-                      <th className="py-2 px-2.5 text-center w-20">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {result.allRowsPreview.slice(0, 15).map((r) => (
-                      <tr key={r.id} className={r.hasError ? 'bg-rose-50/70 text-rose-900' : 'hover:bg-slate-50'}>
-                        <td className="py-1.5 px-2.5 text-center font-mono text-slate-500">{r.no}</td>
-                        <td className="py-1.5 px-2.5 font-medium">{r.item || <em className="text-rose-500">(Kosong)</em>}</td>
-                        <td className="py-1.5 px-2.5 text-right font-mono">{r.produktivitas || '-'}</td>
-                        <td className="py-1.5 px-2.5 text-right font-mono">{r.hargaUnit ? formatIDR(r.hargaUnit) : <span className="text-rose-600 font-bold">0</span>}</td>
-                        {result.detectedCustomColumns?.map((col) => (
-                          <td key={col.key} className="py-1.5 px-2.5 bg-purple-50/20 text-slate-700">
-                            {String(r[col.key] || '-')}
-                          </td>
+              {(() => {
+                const previewCols = (schema?.columns || []).filter(c => c.key !== 'no');
+
+                return (
+                  <div className="border border-slate-200 rounded-md overflow-hidden max-h-56 overflow-y-auto text-xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-slate-100 text-slate-700 sticky top-0 font-semibold border-b border-slate-200 text-[11px]">
+                        <tr>
+                          <th className="py-2 px-2.5 w-12 text-center">No</th>
+                          {previewCols.map((c) => (
+                            <th
+                              key={c.key}
+                              className={`py-2 px-2.5 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'}`}
+                            >
+                              {c.label}
+                            </th>
+                          ))}
+                          {result.detectedCustomColumns?.map((col) => (
+                            <th key={col.key} className="py-2 px-2.5 bg-purple-50 text-purple-900">
+                              {col.label} <span className="text-[9px] font-normal text-purple-600">(Custom)</span>
+                            </th>
+                          ))}
+                          <th className="py-2 px-2.5 text-center w-20">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {result.allRowsPreview.slice(0, 15).map((r) => (
+                          <tr key={r.id} className={r.hasError ? 'bg-rose-50/70 text-rose-900' : 'hover:bg-slate-50'}>
+                            <td className="py-1.5 px-2.5 text-center font-mono text-slate-500">{r.no}</td>
+                            {previewCols.map((c) => {
+                              const val = (r as any)[c.key];
+                              let displayVal: any = val ?? '-';
+                              if (c.key === 'totalNilai' || c.type === 'readonly_calculated') {
+                                displayVal = val ? formatIDR(val) : 'Rp 0';
+                              } else if (c.key.toLowerCase().includes('harga') || c.key.toLowerCase().includes('nilai')) {
+                                displayVal = typeof val === 'number' ? formatIDR(val) : (val || '-');
+                              }
+                              return (
+                                <td
+                                  key={c.key}
+                                  className={`py-1.5 px-2.5 ${
+                                    c.align === 'right' ? 'text-right font-mono' :
+                                    c.align === 'center' ? 'text-center' :
+                                    'font-medium'
+                                  }`}
+                                >
+                                  {c.key === 'item' && !val ? <em className="text-rose-500">(Kosong)</em> : String(displayVal)}
+                                </td>
+                              );
+                            })}
+                            {result.detectedCustomColumns?.map((col) => (
+                              <td key={col.key} className="py-1.5 px-2.5 bg-purple-50/20 text-slate-700">
+                                {String(r[col.key] || '-')}
+                              </td>
+                            ))}
+                            <td className="py-1.5 px-2.5 text-center">
+                              {r.hasError ? (
+                                <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-semibold text-[10px]">
+                                  Error
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold text-[10px]">
+                                  Valid
+                                </span>
+                              )}
+                            </td>
+                          </tr>
                         ))}
-                        <td className="py-1.5 px-2.5 text-center">
-                          {r.hasError ? (
-                            <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-semibold text-[10px]">
-                              Error
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold text-[10px]">
-                              Valid
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {result.allRowsPreview.length > 15 && (
-                  <div className="py-1.5 text-center bg-slate-50 text-[11px] text-slate-500 border-t border-slate-200">
-                    Menampilkan 15 dari {result.allRowsPreview.length} baris preview
+                      </tbody>
+                    </table>
+                    {result.allRowsPreview.length > 15 && (
+                      <div className="py-1.5 text-center bg-slate-50 text-[11px] text-slate-500 border-t border-slate-200">
+                        Menampilkan 15 dari {result.allRowsPreview.length} baris preview
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
           )}
         </div>

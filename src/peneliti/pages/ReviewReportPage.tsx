@@ -287,7 +287,8 @@ const ReviewReportPageContent: React.FC = () => {
   const getFilledRowsForService = (
     serviceId: EcosystemServiceId,
     area: typeof currentArea,
-    storedRows: any[]
+    storedRows: any[],
+    biota?: 'flora' | 'fauna'
   ) => {
     const hasValidValues = Array.isArray(storedRows) && storedRows.some(r => Number(r.totalNilai || r.total || 0) > 0);
     if (hasValidValues) {
@@ -299,32 +300,37 @@ const ReviewReportPageContent: React.FC = () => {
     const areaHa = Number(area?.areaHa) || 50;
 
     if (serviceId === 'provisioning') {
-      const v1 = Math.round(detailVal * 0.65);
-      const v2 = Math.max(0, detailVal - v1);
-      return [
-        {
-          id: `${area?.id || 'area'}-prov-1`,
-          item: isCoral ? 'Hasil Tangkapan Ikan Karang (Kerapu/Kakap)' : 'Hasil Perikanan & Tangkapan Kepiting Bakau',
-          produktivitas: isCoral ? '380' : '520',
-          satuan: 'kg/ha/th',
-          hargaUnit: isCoral ? 85000 : 125000,
-          volumeOutput: isCoral ? Math.round(380 * areaHa) : Math.round(520 * areaHa),
-          luasHa: areaHa,
-          totalNilai: v1,
-          source: 'Survei Pasar & TPI Daerah 2026'
-        },
-        {
-          id: `${area?.id || 'area'}-prov-2`,
-          item: isCoral ? 'Bibit Transplantasi & Benih Biota Karang' : 'Biomassa Kayu Bakau & Benih Tambak',
-          produktivitas: isCoral ? '120' : '45',
-          satuan: isCoral ? 'koloni/ha' : 'm³/ha',
-          hargaUnit: isCoral ? 65000 : 2850000,
-          volumeOutput: isCoral ? Math.round(120 * areaHa) : Math.round(45 * areaHa),
-          luasHa: areaHa,
-          totalNilai: v2,
-          source: 'Catatan Kelompok Nelayan Lokal PKSPL'
-        }
-      ];
+      if (biota === 'fauna') {
+        const v1 = Math.round(detailVal * 0.40);
+        return [
+          {
+            id: `${area?.id || 'area'}-prov-fauna-1`,
+            item: isCoral ? 'Hasil Tangkapan Ikan Karang (Kerapu/Kakap)' : 'Kepiting Bakau (Scylla serrata)',
+            produktivitas: isCoral ? '380' : '450',
+            satuan: 'kg/ha/th',
+            hargaUnit: isCoral ? 85000 : 125000,
+            volumeOutput: isCoral ? Math.round(380 * areaHa) : Math.round(450 * areaHa),
+            luasHa: areaHa,
+            totalNilai: v1,
+            source: 'Survei Pasar & TPI Daerah 2026'
+          }
+        ];
+      } else {
+        const v2 = Math.round(detailVal * 0.60);
+        return [
+          {
+            id: `${area?.id || 'area'}-prov-flora-1`,
+            item: isCoral ? 'Bibit Transplantasi & Benih Biota Karang' : 'Tegakan Rhizophora apiculata & Bakau Minyak',
+            produktivitas: isCoral ? '120' : '45.20',
+            satuan: isCoral ? 'koloni/ha' : 'm³/ha',
+            hargaUnit: isCoral ? 65000 : 1710000,
+            volumeOutput: isCoral ? Math.round(120 * areaHa) : Math.round(45.2 * areaHa),
+            luasHa: areaHa,
+            totalNilai: v2,
+            source: 'Survei Inventarisasi Lapangan 2026'
+          }
+        ];
+      }
     }
 
     if (serviceId === 'regulating') {
@@ -410,7 +416,9 @@ const ReviewReportPageContent: React.FC = () => {
         return sum;
       }
       const m = cfg?.selectedMethods ? cfg.selectedMethods[sId] : undefined;
-      const sub = getServiceSubtotal(effectiveProjId, lc.id, sId, m || '', sId === 'provisioning' ? (cfg?.biota || 'flora') : undefined);
+      const sub = sId === 'provisioning'
+        ? (getServiceSubtotal(effectiveProjId, lc.id, sId, m || '', 'flora') + getServiceSubtotal(effectiveProjId, lc.id, sId, m || '', 'fauna'))
+        : getServiceSubtotal(effectiveProjId, lc.id, sId, m || '', 'none');
       if (sub > 0) return sum + sub;
 
       // Fallback to pre-calculated serviceDetails if available on polygon
@@ -1491,10 +1499,17 @@ const ReviewReportPageContent: React.FC = () => {
         <div className="space-y-4">
           {/* A. PROVISIONING SERVICES TABLE */}
           {currentAreaConfig.activeServices.provisioning && (() => {
-            const pRowsRaw = getRows(effectiveProjId, selectedAreaId, 'provisioning', currentAreaConfig.selectedMethods.provisioning, 'flora');
-            const pSubRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'provisioning', currentAreaConfig.selectedMethods.provisioning, 'flora');
-            const pRows = getFilledRowsForService('provisioning', currentArea, pRowsRaw);
-            const pSub = pSubRaw > 0 ? pSubRaw : (currentArea?.serviceDetails?.find(d => d.serviceId === 'provisioning')?.value || pRows.reduce((s: number, r: any) => s + (r.totalNilai || 0), 0));
+            const pFloraRowsRaw = getRows(effectiveProjId, selectedAreaId, 'provisioning', currentAreaConfig.selectedMethods.provisioning, 'flora');
+            const pFaunaRowsRaw = getRows(effectiveProjId, selectedAreaId, 'provisioning', currentAreaConfig.selectedMethods.provisioning, 'fauna');
+            const pSubFloraRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'provisioning', currentAreaConfig.selectedMethods.provisioning, 'flora');
+            const pSubFaunaRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'provisioning', currentAreaConfig.selectedMethods.provisioning, 'fauna');
+
+            const pFloraRows = getFilledRowsForService('provisioning', currentArea, pFloraRowsRaw, 'flora');
+            const pFaunaRows = getFilledRowsForService('provisioning', currentArea, pFaunaRowsRaw, 'fauna');
+            const totalItems = pFloraRows.length + pFaunaRows.length;
+
+            const pSubRaw = pSubFloraRaw + pSubFaunaRaw;
+            const pSub = pSubRaw > 0 ? pSubRaw : (currentArea?.serviceDetails?.find(d => d.serviceId === 'provisioning')?.value || [...pFloraRows, ...pFaunaRows].reduce((s: number, r: any) => s + (r.totalNilai || 0), 0));
 
             return (
               <div className="border border-cyan-200 rounded-xl overflow-hidden bg-white shadow-2xs">
@@ -1511,7 +1526,7 @@ const ReviewReportPageContent: React.FC = () => {
                         Provisioning Services (Jasa Penyediaan)
                       </span>
                       <div className="text-[11px] text-slate-500">
-                        Metode: Market Price • {pRows.length} baris data
+                        Metode: Market Price • {totalItems} baris data ({pFloraRows.length} Flora, {pFaunaRows.length} Fauna)
                       </div>
                     </div>
                   </div>
@@ -1550,8 +1565,55 @@ const ReviewReportPageContent: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {pRows.map((r, idx) => (
-                          <tr key={r.id || idx} className="hover:bg-slate-50/60">
+                        {/* A.1 Flora Sub-header Row */}
+                        <tr className="bg-emerald-50/80 font-bold text-emerald-950 text-[11px] uppercase tracking-wider select-none border-y border-emerald-200">
+                          <td colSpan={9} className="py-2 px-3">
+                            <span className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 ring-2 ring-emerald-200"></span>
+                              A.1 Flora — {pFloraRows.length} item
+                            </span>
+                          </td>
+                        </tr>
+                        {pFloraRows.map((r, idx) => (
+                          <tr key={r.id || `flora-${idx}`} className="hover:bg-slate-50/60">
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                            <td className="py-2.5 px-3 font-semibold text-slate-900">{r.item || r.namaKomoditas}</td>
+                            <td className="py-2.5 px-3 text-right font-mono">{r.produktivitas || '-'}</td>
+                            <td className="py-2.5 px-3 text-center text-slate-500">{r.satuan}</td>
+                            <td className="py-2.5 px-3 text-right font-mono">{formatIDR(r.hargaUnit || r.hargaKomoditas || 0)}</td>
+                            <td className="py-2.5 px-3 text-right font-mono">{r.volumeOutput || r.jumlah || '-'}</td>
+                            <td className="py-2.5 px-3 text-right font-mono">{r.luasHa || currentArea.areaHa}</td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{formatIDR(r.totalNilai || 0)}</td>
+                            <td className="py-2.5 px-3 text-slate-500 text-[11px] italic">{r.source || 'Survei Peneliti'}</td>
+                          </tr>
+                        ))}
+
+                        {/* Pemisah Sedikit Antara Flora & Fauna */}
+                        <tr className="bg-slate-100/90 border-y-2 border-slate-300 select-none">
+                          <td colSpan={9} className="py-2 px-3 text-center">
+                            <div className="flex items-center justify-center gap-3">
+                              <div className="h-px bg-slate-300 flex-1"></div>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                Pemisah Kategori Biota (Flora & Fauna)
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                              </span>
+                              <div className="h-px bg-slate-300 flex-1"></div>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* A.2 Fauna Sub-header Row */}
+                        <tr className="bg-amber-50/80 font-bold text-amber-950 text-[11px] uppercase tracking-wider select-none border-y border-amber-200">
+                          <td colSpan={9} className="py-2 px-3">
+                            <span className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-600 ring-2 ring-amber-200"></span>
+                              A.2 Fauna — {pFaunaRows.length} item
+                            </span>
+                          </td>
+                        </tr>
+                        {pFaunaRows.map((r, idx) => (
+                          <tr key={r.id || `fauna-${idx}`} className="hover:bg-slate-50/60">
                             <td className="py-2.5 px-3 text-center font-mono text-slate-400">{idx + 1}</td>
                             <td className="py-2.5 px-3 font-semibold text-slate-900">{r.item || r.namaKomoditas}</td>
                             <td className="py-2.5 px-3 text-right font-mono">{r.produktivitas || '-'}</td>
@@ -1573,8 +1635,8 @@ const ReviewReportPageContent: React.FC = () => {
 
           {/* B. REGULATING SERVICES TABLE */}
           {currentAreaConfig.activeServices.regulating && (() => {
-            const rRowsRaw = getRows(effectiveProjId, selectedAreaId, 'regulating', currentAreaConfig.selectedMethods.regulating);
-            const rSubRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'regulating', currentAreaConfig.selectedMethods.regulating);
+            const rRowsRaw = getRows(effectiveProjId, selectedAreaId, 'regulating', currentAreaConfig.selectedMethods.regulating, 'none');
+            const rSubRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'regulating', currentAreaConfig.selectedMethods.regulating, 'none');
             const rRows = getFilledRowsForService('regulating', currentArea, rRowsRaw);
             const rSub = rSubRaw > 0 ? rSubRaw : (currentArea?.serviceDetails?.find(d => d.serviceId === 'regulating')?.value || rRows.reduce((s: number, r: any) => s + (r.totalNilai || 0), 0));
 
@@ -1649,8 +1711,8 @@ const ReviewReportPageContent: React.FC = () => {
 
           {/* C. SUPPORTING SERVICES TABLE */}
           {currentAreaConfig.activeServices.supporting && (() => {
-            const sRowsRaw = getRows(effectiveProjId, selectedAreaId, 'supporting', currentAreaConfig.selectedMethods.supporting);
-            const sSubRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'supporting', currentAreaConfig.selectedMethods.supporting);
+            const sRowsRaw = getRows(effectiveProjId, selectedAreaId, 'supporting', currentAreaConfig.selectedMethods.supporting, 'none');
+            const sSubRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'supporting', currentAreaConfig.selectedMethods.supporting, 'none');
             const sRows = getFilledRowsForService('supporting', currentArea, sRowsRaw);
             const sSub = sSubRaw > 0 ? sSubRaw : (currentArea?.serviceDetails?.find(d => d.serviceId === 'supporting')?.value || sRows.reduce((s: number, r: any) => s + (r.totalNilai || 0), 0));
 
@@ -1725,8 +1787,8 @@ const ReviewReportPageContent: React.FC = () => {
 
           {/* D. CULTURAL SERVICES TABLE */}
           {currentAreaConfig.activeServices.cultural && (() => {
-            const cRowsRaw = getRows(effectiveProjId, selectedAreaId, 'cultural', currentAreaConfig.selectedMethods.cultural);
-            const cSubRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'cultural', currentAreaConfig.selectedMethods.cultural);
+            const cRowsRaw = getRows(effectiveProjId, selectedAreaId, 'cultural', currentAreaConfig.selectedMethods.cultural, 'none');
+            const cSubRaw = getServiceSubtotal(effectiveProjId, selectedAreaId, 'cultural', currentAreaConfig.selectedMethods.cultural, 'none');
             const cRows = getFilledRowsForService('cultural', currentArea, cRowsRaw);
             const cSub = cSubRaw > 0 ? cSubRaw : (currentArea?.serviceDetails?.find(d => d.serviceId === 'cultural')?.value || cRows.reduce((s: number, r: any) => s + (r.totalNilai || 0), 0));
 
